@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Smoke-test the BigQuery data and (optionally) the Application Integration connection.
+"""Check that the BigQuery data is in place (and optionally the ADK connection to Application Integration).
 
   python scripts/verify_setup.py                  # BigQuery only
-  python scripts/verify_setup.py --integration    # also builds the ADK toolset and lists generated tool names
+  python scripts/verify_setup.py --integration    # also lists the tools ADK generates from the integration
+
+Assumes the APIs are enabled; if one is not, the script tells you which to enable.
 """
 import argparse
 import asyncio
@@ -11,30 +13,29 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-os.environ.setdefault("DATA_BACKEND", "bigquery")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from campaign_provisioner import config  # noqa: E402
-from campaign_provisioner.repositories import get_repo  # noqa: E402
+from _common import guarded, resolve_project  # noqa: E402
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--integration", action="store_true")
-    args = ap.parse_args()
+@guarded
+def run(args, project=""):
+    os.environ["GOOGLE_CLOUD_PROJECT"] = project
+    os.environ["DATA_BACKEND"] = "bigquery"
+    from campaign_provisioner import config
+    from campaign_provisioner.repositories import get_repo
 
-    if config.DATA_BACKEND != "bigquery":
-        sys.exit("DATA_BACKEND must be 'bigquery' for this check")
     repo = get_repo()
-    print(f"BigQuery dataset: {repo.ds}")
+    print(f"Project: {project}\nBigQuery dataset: {repo.ds}")
     budgets = repo.list_budgets()
-    assert budgets, "No campaigns found - run scripts/setup_bigquery.py first"
+    if not budgets:
+        sys.exit("No campaigns found. Run:  python scripts/setup_bigquery.py")
     print("\nCampaign budgets")
     for b in budgets:
         print(f"  {b['campaign_id']:<18} total {b['total_budget']:>10,.0f}  remaining {b['remaining']:>10,.0f}")
     print("\nSample stock")
     for sku in ("DEMO-KIOSK", "BOOTH-LEDWALL", "STICKER-PACK"):
-        a = repo.get_availability(sku)
-        print(f"  {sku:<14} free {a['free']}")
+        print(f"  {sku:<14} free {repo.get_availability(sku)['free']}")
     print("\nApproval tiers")
     for amount in (3000, 18000, 72000):
         p = repo.get_policy(amount)
@@ -44,11 +45,18 @@ def main():
     if args.integration:
         from google.adk.tools.application_integration_tool import ApplicationIntegrationToolset
         for trig in (config.PO_TRIGGER, config.NOTIFY_TRIGGER):
-            ts = ApplicationIntegrationToolset(project=config.PROJECT, location=config.APP_INTEGRATION_LOCATION,
+            ts = ApplicationIntegrationToolset(project=project, location=config.APP_INTEGRATION_LOCATION,
                                                integration=config.APP_INTEGRATION_NAME, triggers=[trig])
-            tools = asyncio.run(ts.get_tools())
-            print(f"Integration trigger {trig}: tools = {[t.name for t in tools]}")
+            print(f"Integration trigger {trig}: tools = {[t.name for t in asyncio.run(ts.get_tools())]}")
         print("\nApplication Integration OK (the guard matches tool names containing 'purchase_order' / 'notify')")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--project", default=None)
+    ap.add_argument("--integration", action="store_true")
+    args = ap.parse_args()
+    run(args, project=resolve_project(args.project))
 
 
 if __name__ == "__main__":

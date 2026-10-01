@@ -43,6 +43,9 @@ approver a decision is waiting.
 
 ## Build steps (Cloud Console)
 
+Prerequisite: the Application Integration API is enabled in your project. If it is not, the check script below tells you
+which API to enable.
+
 1. Console > **Application Integration**; if prompted, choose region `us-central1` and enable the API.
 2. **Create integration** named `campaign-provisioner-workflows`.
 3. Add an **API Trigger**, set its Trigger ID to `create_purchase_order`, and create the input and output variables above.
@@ -63,7 +66,13 @@ curl -s -X POST \
         "vendor_id":{"stringValue":"V-EXPOVISION"},"total_amount":{"doubleValue":18000}}}'
 ```
 
-Then check that ADK can see it: `python scripts/verify_setup.py --integration` prints the tool names it generated.
+Or let the script do both checks for you (project id from `GOOGLE_CLOUD_PROJECT` or your gcloud project):
+
+```bash
+python scripts/setup_application_integration.py          # is it there and published?
+python scripts/setup_application_integration.py --test   # run both triggers once with sample data
+python scripts/verify_setup.py --integration             # prints the tool names ADK generated
+```
 
 ## How the agent uses it
 

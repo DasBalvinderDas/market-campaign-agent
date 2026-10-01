@@ -10,8 +10,8 @@ class BigQueryRepository(Repository):
         from google.cloud import bigquery
 
         self._bq = bigquery
-        self.client = client or bigquery.Client(project=project, location=location)
-        self.ds = f"{project}.{dataset}"
+        self.client = client or bigquery.Client(project=project or None, location=location)
+        self.ds = f"{project or self.client.project}.{dataset}"
 
     # ---- plumbing
     def _param(self, name, value):

@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Create the BigQuery dataset, tables, views and demo data for The Campaign Provisioner.
 
+Assumes the BigQuery API is already enabled. The project id comes from --project, then
+GOOGLE_CLOUD_PROJECT, then your active gcloud project. If an API is not enabled the script
+tells you which one to enable.
+
 Examples
-  python scripts/setup_bigquery.py --project my-proj                # create + seed (idempotent)
-  python scripts/setup_bigquery.py --project my-proj --reset-demo   # clear demo transactions, keep reference data
-  python scripts/setup_bigquery.py --project my-proj --reset        # drop everything and rebuild
+  python scripts/setup_bigquery.py                # create + seed (idempotent)
+  python scripts/setup_bigquery.py --reset-demo   # clear demo transactions, keep reference data
+  python scripts/setup_bigquery.py --reset        # drop everything and rebuild
   python scripts/setup_bigquery.py --print-ddl > bigquery/schema.sql  # DDL only, no GCP access needed
 """
 import argparse
@@ -14,7 +18,9 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _common import guarded, resolve_project  # noqa: E402
 from campaign_provisioner.data.schema import TABLES, TRANSACTION_TABLES, VIEWS  # noqa: E402
 from campaign_provisioner.data.seed_data import SEED  # noqa: E402
 
@@ -36,7 +42,7 @@ def _json_rows(rows):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--project", default=os.getenv("GOOGLE_CLOUD_PROJECT"))
+    ap.add_argument("--project", default=None, help="defaults to GOOGLE_CLOUD_PROJECT or the gcloud project")
     ap.add_argument("--dataset", default=os.getenv("BQ_DATASET", "campaign_provisioner"))
     ap.add_argument("--location", default=os.getenv("BQ_LOCATION", "US"))
     ap.add_argument("--reset", action="store_true", help="drop all tables/views and rebuild with seed data")
@@ -47,13 +53,17 @@ def main():
     if args.print_ddl:
         print(ddl("{project}.{dataset}"))
         return
-    if not args.project:
-        sys.exit("Set --project or GOOGLE_CLOUD_PROJECT")
+    project = resolve_project(args.project)
+    run(args, project=project)
 
+
+@guarded
+def run(args, project=""):
     from google.cloud import bigquery
 
-    client = bigquery.Client(project=args.project, location=args.location)
-    ds = f"{args.project}.{args.dataset}"
+    print(f"Project: {project}")
+    client = bigquery.Client(project=project, location=args.location)
+    ds = f"{project}.{args.dataset}"
 
     if args.reset_demo:
         for t in TRANSACTION_TABLES:

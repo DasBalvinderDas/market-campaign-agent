@@ -18,7 +18,8 @@ Both modes run the same agents, prompts and approval logic.
 
 - Python 3.10+ and a Google Cloud project with billing enabled (Mode B)
 - `gcloud` CLI (Cloud Shell has it)
-- Your user or service account needs: BigQuery Data Editor, BigQuery Job User, Integrations Invoker/Viewer, Vertex AI User (the script below grants them)
+- The BigQuery, Application Integration and Vertex AI APIs enabled in the project (the scripts tell you if one is missing)
+- Your user needs BigQuery Data Editor + Job User, Application Integration Invoker + Viewer, and Vertex AI User
 
 ## 2. Install
 
@@ -42,41 +43,49 @@ lines. Then jump to **section 6** (start `adk web`). Restart `adk web` between p
 
 ## 4. Mode B: BigQuery + Application Integration
 
-### 4.1 Google Cloud setup
+The scripts assume your project's APIs are **already enabled**. If one is not, the script stops and tells you which
+API to enable, so there is nothing to memorise. For reference, you need these enabled once:
+
+| API | Used for |
+|---|---|
+| BigQuery API (`bigquery.googleapis.com`) | the data |
+| Application Integration API (`integrations.googleapis.com`) | purchase order and approver workflows |
+| Vertex AI API (`aiplatform.googleapis.com`) | Gemini (not needed if you use `GOOGLE_API_KEY`) |
+
+### 4.1 Set your project and log in (once)
 
 ```bash
-gcloud auth login
+export GOOGLE_CLOUD_PROJECT=<your-project-id>
 gcloud auth application-default login
-export PROJECT_ID=<your-project-id>
-export PRINCIPAL="user:<your-email>"
-./scripts/setup_gcp.sh            # enables APIs and grants roles
 ```
+
+The scripts use `--project`, then `GOOGLE_CLOUD_PROJECT`, then your active `gcloud` project, so in Cloud Shell the
+export is usually all you need.
 
 ### 4.2 Create the BigQuery dataset, tables, views and data
 
 ```bash
-export GOOGLE_CLOUD_PROJECT=$PROJECT_ID
-python scripts/setup_bigquery.py --project $PROJECT_ID
-```
-
-This creates dataset `campaign_provisioner` with 9 tables, 3 views and the Next 2027 seed data
-(see `bigquery/schema.sql` for the DDL). Check it:
-
-```bash
+python scripts/setup_bigquery.py
 python scripts/verify_setup.py
 ```
 
-Expected: three campaigns, stock levels and three approval tiers ($3,000 -> auto-policy, $18,000 -> Marketing Director,
-$72,000 -> VP Marketing + Finance Controller).
+The first command creates dataset `campaign_provisioner` (9 tables, 3 views) and loads the Next 2027 seed data; it is safe
+to run again. The second prints the three campaigns, stock levels and approval tiers ($3,000 -> auto-policy, $18,000 ->
+Marketing Director, $72,000 -> VP Marketing + Finance Controller).
 
-### 4.3 Build the Application Integration workflow
+### 4.3 Application Integration
 
-Follow [`integration/README.md`](../integration/README.md): one integration `campaign-provisioner-workflows` with two
-API triggers, `create_purchase_order` and `notify_approver`. Then confirm ADK can see them:
+Create the integration once in the console (about 3 minutes; the exact variables are in
+[`integration/README.md`](../integration/README.md)): integration `campaign-provisioner-workflows` in `us-central1`
+with two API triggers, `create_purchase_order` and `notify_approver`, then **Publish**. Then:
 
 ```bash
-python scripts/verify_setup.py --integration
+python scripts/setup_application_integration.py            # checks it exists and both triggers are published
+python scripts/setup_application_integration.py --test     # optional: runs both triggers once with sample data
+python scripts/verify_setup.py --integration               # confirms ADK can load them as tools
 ```
+
+If the integration or a trigger is missing, the first command prints the short checklist to fix it.
 
 ### 4.4 Configure `.env`
 
@@ -85,7 +94,7 @@ cp .env.example .env
 cp .env campaign_provisioner/.env      # adk web reads the agent folder's .env
 ```
 
-Edit `GOOGLE_CLOUD_PROJECT`, keep `DATA_BACKEND=bigquery` and `WORKFLOW_BACKEND=app_integration`.
+Set `GOOGLE_CLOUD_PROJECT`, keep `DATA_BACKEND=bigquery` and `WORKFLOW_BACKEND=app_integration`.
 
 ## 5. Starting data
 
@@ -121,7 +130,7 @@ the root agent and the sub-agents.
 **Reset before every demo run** (Mode B):
 
 ```bash
-python scripts/setup_bigquery.py --project $PROJECT_ID --reset-demo
+python scripts/setup_bigquery.py --reset-demo
 ```
 
 This clears requests, reservations, POs and the audit log, and removes every approval from the budget ledger while
@@ -205,9 +214,9 @@ BigQuery (request registered, budget rejected).
 ## 8. Check the data in BigQuery (nice for the demo)
 
 ```bash
-bq query --use_legacy_sql=false "SELECT * FROM \`$PROJECT_ID.campaign_provisioner.v_campaign_budget\`"
-bq query --use_legacy_sql=false "SELECT created_at, actor, action FROM \`$PROJECT_ID.campaign_provisioner.audit_log\` ORDER BY created_at"
-bq query --use_legacy_sql=false "SELECT * FROM \`$PROJECT_ID.campaign_provisioner.purchase_orders\`"
+bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.v_campaign_budget\`"
+bq query --use_legacy_sql=false "SELECT created_at, actor, action FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.audit_log\` ORDER BY created_at"
+bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.purchase_orders\`"
 ```
 
 ## 9. Talking points
@@ -223,7 +232,8 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$PROJECT_ID.campaign_provisione
 
 | Symptom | Fix |
 |---|---|
-| `403` / permission denied on BigQuery | Re-run `setup_gcp.sh`; run `gcloud auth application-default login` |
+| "API not enabled" message from a script | Enable the API it names (`gcloud services enable <api> --project $GOOGLE_CLOUD_PROJECT`), wait a minute, re-run |
+| Permission denied | Ask for the roles listed in the prerequisites; run `gcloud auth application-default login` |
 | `adk web` fails at start with an Application Integration error | The toolset reads the integration at start. Check the integration is **published**, the name/region in `.env`, and run `verify_setup.py --integration` |
 | Want to rehearse without the integration | Set `WORKFLOW_BACKEND=mock` (and `DATA_BACKEND=memory` for no BigQuery) |
 | Numbers differ from this guide | Run `--reset-demo` and start a new session |

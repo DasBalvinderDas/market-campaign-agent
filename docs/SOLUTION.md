@@ -58,7 +58,7 @@ campaign_provisioner/
   workflow/integration.py     Application Integration toolsets (or offline mocks)
   workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit
   sub_agents/                 inventory_agent, procurement_agent, budget_agent
-scripts/                      setup_bigquery.py, verify_setup.py, setup_gcp.sh
+scripts/                      setup_bigquery.py, setup_application_integration.py, verify_setup.py
 bigquery/schema.sql           generated DDL
 integration/README.md         Application Integration contract and build steps
 tests/                        tools, guard, policy, BigQuery repo (stub client)
@@ -138,7 +138,7 @@ BigQuery execution, Application Integration and a live Gemini model including th
 ## 9. Production notes
 
 - Use a persistent ADK session service (Vertex AI Agent Engine or a database) so pending confirmations survive restarts.
-- Run the agent under a service account with the minimum roles in `scripts/setup_gcp.sh`.
+- Run the agent under a service account with only the roles it needs (BigQuery Data Editor + Job User, Application Integration Invoker, Vertex AI User).
 - Send the audit table to Cloud Logging or a Looker dashboard; add alerting on `po_blocked` events.
 - Add Model Armor for prompt safety and IAM-based approver checks, as shown in the architecture slide.
 - Set `CAMPAIGN_MODEL` to your standard Gemini model (default `gemini-2.5-flash`).
