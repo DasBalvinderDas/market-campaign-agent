@@ -54,11 +54,12 @@ box(2.95,1.05,7.4,5.55,{fill:'FFFFFF',line:BLUE,lw:1.25});
 txt('Google Cloud ( Agent Runtime )',2.95,1.08,7.4,0.3,{b:true,sz:10});
 // root agent
 box(3.1,1.45,7.1,1.2,{fill:LIGHT});
-txt('Root Agent',3.15,1.38,0.9,0.22,{sz:8,b:true,c:'FFFFFF'}); 
+
 s.addShape(p.ShapeType.roundRect,{x:3.15,y:1.38,w:1.0,h:0.22,rectRadius:0.05,fill:{color:BLUE},line:{color:BLUE}});
 txt('Root Agent',3.15,1.38,1.0,0.22,{sz:8,b:true,c:'FFFFFF'});
-txt('Campaign Provisioner Agent (Orchestrator)',3.2,1.62,6.9,0.3,{sz:13,c:NAVY,b:true});
-['Greeting & Intent','Multi-Agent Coordination','State Coordination','Human Approval Gate','Result Aggregation'].forEach((t,i)=>card(3.25+i*1.37,2.0,1.3,0.45,t,null,{sz:8}));
+txt('Campaign Provisioner Agent (Orchestrator)',3.2,1.64,6.9,0.34,{sz:13,c:NAVY,b:true});
+box(3.25,2.02,6.8,0.5,{round:true,fill:'FFFFFF',line:LINE});
+txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:NAVY}},{text:'Greeting & Intent  \u2022  Multi-Agent Coordination  \u2022  State Coordination  \u2022  Human Approval Gate  \u2022  Result Aggregation',options:{color:INK}}],3.3,2.04,6.7,0.46,{sz:8.5});
 // sub agents
 box(3.1,2.8,7.1,2.05,{fill:'E8F0FF',line:LINE,dash:'dash'});
 s.addShape(p.ShapeType.roundRect,{x:3.15,y:2.73,w:1.0,h:0.22,rectRadius:0.05,fill:{color:BLUE},line:{color:BLUE}}); txt('3 Sub Agents',3.15,2.73,1.0,0.22,{sz:8,b:true,c:'FFFFFF'});
