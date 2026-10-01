@@ -94,7 +94,38 @@ Example: *"500 T-shirts and 5 LED displays for CMP-SPRING-LAUNCH."*
 
 `requires_human(amount)` in `tools/budget_tools.py` is the predicate. When it returns true, ADK emits a confirmation request event instead of running the tool. In `adk web` the approver sees a confirm/reject prompt. In a custom app, your UI answers the `adk_request_confirmation` function call with `confirmed: true/false`. Change the limit with `HIGH_VALUE_THRESHOLD_USD`.
 
-## 7. Running it
+## 7. Data sources, assumptions and limitations
+
+### Where the data comes from today
+
+All business data is **mock data** in `campaign_provisioner/data.py`. It was created as a placeholder for the demo and is not taken from any real system or from the source requirement.
+
+| Data | Today (mock) | Planned source |
+|---|---|---|
+| Inventory (SKU, stock, reserved) | `INVENTORY` dict | Enterprise inventory / ERP, or a BigQuery table |
+| Vendors (prices, lead times) | `VENDORS` dict | Procurement system or a BigQuery vendor table |
+| Campaign budgets (total, spent, committed) | `BUDGETS` dict | Finance system or a BigQuery budget table |
+| High-value threshold | `HIGH_VALUE_THRESHOLD_USD`, default $5,000 (arbitrary) | Finance approval policy |
+
+**Planned move to BigQuery.** If the data is later read from BigQuery, only the tool bodies in `tools/inventory_tools.py`, `procurement_tools.py` and `budget_tools.py` change (query the tables instead of the dicts). The tool names and arguments stay the same, so the root agent, sub-agents, prompts and approval gate need no change. Writes (reservations, committed budget, POs) would become inserts or updates to the matching tables, or calls to the source systems.
+
+### Assumptions
+
+- **State is in memory.** Reservations, committed budget, approvals and the audit trail reset when the server restarts and are not shared between users. Production needs a persistent session service and real systems of record.
+- **Approver identity is not verified.** The approver is whoever confirms in the ADK prompt. There is no check of who they are or whether they are authorised; add IAM or role checks for real use.
+- **Single currency (USD).** No tax, shipping, discounts or partial deliveries.
+- **Simple vendor choice.** The agent recommends the cheapest vendor unless lead time is a problem. There are no contracts, vendor onboarding or delivery-date optimisation.
+- **PO placement is simulated.** `place_purchase_order` checks the approved amount and records the PO in session state. It does not call a real procurement API.
+- **Budget is committed up front.** The approved amount is held when approved. Nothing is released if a PO is later cancelled or reduced.
+- **Threshold is a single flat limit.** The same $5,000 applies to every campaign and approver; there are no tiered approval levels.
+- **Model behaviour can vary.** Step order is enforced by prompts, so a live model may occasionally deviate. The hard guarantees are in code: no purchase order without a covering approval, and no approval beyond remaining budget.
+- **Default model is a choice, not a requirement.** `gemini-2.5-flash` is the default; set `CAMPAIGN_MODEL` to your standard model.
+
+### Not yet verified
+
+The tools and guardrails are covered by offline unit tests. The full flow with a live model, including the human confirmation prompt, has not been run and should be checked in `adk web` before relying on it.
+
+## 8. Running it
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
@@ -106,9 +137,9 @@ pytest                          # offline unit tests (no LLM needed)
 
 Try: *"Campaign CMP-LOCAL-POPUP needs 100 tote bags"* (auto-approved), then *"CMP-SPRING-LAUNCH needs 500 T-shirts and 5 LED displays"* (pauses for human approval). Full demo script: [DEMO_RUN.md](DEMO_RUN.md).
 
-## 8. Production notes
+## 9. Production notes
 
-- `data.py` is mock data held in memory. Replace the tool bodies with ERP, vendor and finance API calls (for example through MCP servers) and keep the signatures.
+- `data.py` is mock data held in memory (see section 7). Replace the tool bodies with ERP, vendor and finance API calls (for example through MCP servers) and keep the signatures.
 - Session state is in-memory by default; use a persistent session service (Vertex AI Agent Engine / database) so approvals survive restarts and pending confirmations can be resumed.
 - The default model is `gemini-2.5-flash`; set `CAMPAIGN_MODEL` to the Gemini version your organisation standardises on.
 - Add Cloud Logging for the audit trail, IAM for who may approve, and Model Armor for prompt safety, as shown in the architecture slide.
