@@ -5,6 +5,16 @@ from ..data import INVENTORY
 from .audit import audit
 
 
+def _unknown_sku(sku: str) -> dict:
+    """Error result that points the model at the real SKUs instead of letting it guess."""
+    found = find_sku(sku)
+    options = found.get("matches") or found.get("catalog")
+    return {"status": "error",
+            "message": f"'{sku}' is not a catalog SKU. Do NOT treat it as out of stock. "
+                       "Retry with one of the valid SKUs in 'valid_skus' (or ask the user).",
+            "valid_skus": options}
+
+
 def check_inventory(sku: str, quantity_needed: int) -> dict:
     """Check stock for a SKU against a requested quantity.
 
@@ -17,7 +27,7 @@ def check_inventory(sku: str, quantity_needed: int) -> dict:
     """
     item = INVENTORY.get(sku)
     if not item:
-        return {"status": "error", "message": f"Unknown SKU '{sku}'. Known: {sorted(INVENTORY)}"}
+        return _unknown_sku(sku)
     free = item["available"] - item["reserved"]
     shortfall = max(0, quantity_needed - free)
     return {"status": "ok", "sku": sku, "name": item["name"], "free_stock": free,
@@ -38,7 +48,7 @@ def reserve_inventory(request_id: str, sku: str, quantity: int, tool_context: To
     """
     item = INVENTORY.get(sku)
     if not item:
-        return {"status": "error", "message": f"Unknown SKU '{sku}'."}
+        return _unknown_sku(sku)
     free = item["available"] - item["reserved"]
     reserved = max(0, min(free, quantity))
     item["reserved"] += reserved

@@ -32,6 +32,11 @@ def test_find_sku_maps_description():
     assert inventory_tools.find_sku("zeppelin")["status"] == "no_match"
 
 
+def test_unknown_sku_returns_valid_options():
+    r = inventory_tools.check_inventory("TOTE-BAG-BRANDED", 100)
+    assert r["status"] == "error" and r["valid_skus"][0]["sku"] == "TOTE-01"
+
+
 def test_quotes_sorted_cheapest_first():
     q = procurement_tools.get_vendor_quotes("TSHIRT-M", 100)["quotes"]
     assert q[0]["vendor"] == "SwagHub"
