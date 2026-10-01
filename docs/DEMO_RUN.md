@@ -83,7 +83,7 @@ Run them in order on a fresh start, or restart between them for the exact number
 
 ### Prompt 3 - Human declines
 
-Repeat Prompt 2 (restart first, or use quantities of similar size), but click **Reject** on the confirmation.
+Before this prompt, **stop and restart `adk web` (Ctrl+C, run it again) and click New Session**. Stock, budget and approvals from Prompt 2 are still held in memory, and the chat history makes the agent answer "I've already processed this request (REQ-00x)" instead of running the flow again. Then send the Prompt 2 text again, and click **Reject** on the confirmation card (the Confirm / Reject buttons appear in the chat when the run pauses).
 
 **Expected:** nothing is committed, no PO is placed, and the root agent reports that the approval was declined and suggests alternatives (fewer displays, cheaper vendor).
 
