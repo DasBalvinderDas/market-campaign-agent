@@ -1,34 +1,39 @@
 """Tools for the Budget Agent, including the human-in-the-loop gate."""
-from google.adk.tools import FunctionTool, ToolContext
+from google.adk.tools import FunctionTool
 
-from .. import config
-from ..data import BUDGETS
+from ..repositories import get_repo
 from .audit import audit
 
 
 def check_budget(campaign_id: str) -> dict:
-    """Return budget position for a campaign.
+    """Return the budget position of a campaign (from BigQuery view v_campaign_budget).
 
     Args:
-        campaign_id: e.g. "CMP-SPRING-LAUNCH".
+        campaign_id: e.g. "NEXT27-MAIN".
     """
-    b = BUDGETS.get(campaign_id)
+    b = get_repo().get_budget(campaign_id)
     if not b:
-        return {"status": "error", "message": f"Unknown campaign '{campaign_id}'. Known: {sorted(BUDGETS)}"}
-    remaining = b["total"] - b["spent"] - b["committed"]
-    return {"status": "ok", "campaign_id": campaign_id, "total": b["total"],
-            "spent": b["spent"], "committed": b["committed"], "remaining": remaining,
-            "high_value_threshold": config.HIGH_VALUE_THRESHOLD_USD}
+        known = [x["campaign_id"] for x in get_repo().list_budgets()]
+        return {"status": "error", "message": f"Unknown campaign '{campaign_id}'. Known: {known}"}
+    return {"status": "ok", **{k: (float(v) if isinstance(v, (int, float)) else v) for k, v in b.items()}}
 
 
-def approve_budget(request_id: str, campaign_id: str, amount: float,
-                   justification: str, tool_context: ToolContext) -> dict:
-    """Approve and commit budget for a procurement request.
+def get_approval_policy(amount: float) -> dict:
+    """Look up which approval tier applies to an amount (from BigQuery table approval_policy).
 
-    Requests above the high-value threshold are paused by the framework until a
-    human confirms (see ``requires_human`` below); smaller ones are auto-approved
-    by policy. The approval is recorded in session state, and procurement refuses
-    to place any purchase order without it.
+    Args:
+        amount: Total USD to approve.
+    """
+    p = get_repo().get_policy(float(amount))
+    return {"status": "ok", "amount": amount, "tier": p["tier"],
+            "requires_human": bool(p["requires_human"]), "approver_role": p["approver_role"]}
+
+
+def approve_budget(request_id: str, campaign_id: str, amount: float, justification: str) -> dict:
+    """Approve and commit budget for a request. Writes a COMMIT entry to the budget ledger.
+
+    Amounts in a tier that requires a human are paused by the platform until a person
+    confirms (see ``requires_human``). Others are approved automatically by policy.
 
     Args:
         request_id: Campaign request id.
@@ -36,30 +41,37 @@ def approve_budget(request_id: str, campaign_id: str, amount: float,
         amount: Total USD to commit.
         justification: Why the spend is needed (shown to the human approver).
     """
-    b = BUDGETS.get(campaign_id)
-    if not b:
+    repo = get_repo()
+    budget = repo.get_budget(campaign_id)
+    if not budget:
         return {"status": "error", "message": f"Unknown campaign '{campaign_id}'."}
-    remaining = b["total"] - b["spent"] - b["committed"]
+    if not repo.get_request(request_id):
+        return {"status": "error", "message": f"Unknown request '{request_id}'."}
+    remaining = float(budget["remaining"])
     if amount > remaining:
-        audit(tool_context.state, "budget_agent", "budget_rejected_insufficient",
-              request_id=request_id, amount=amount, remaining=remaining)
+        audit(request_id, "budget_agent", "budget_rejected_insufficient", amount=amount, remaining=remaining)
         return {"status": "rejected", "reason": "Insufficient remaining budget",
                 "requested": amount, "remaining": remaining}
-    b["committed"] += amount
-    human = amount > config.HIGH_VALUE_THRESHOLD_USD
-    approvals = dict(tool_context.state.get("approvals", {}))
-    approvals[request_id] = {"campaign_id": campaign_id, "approved_amount": amount,
-                             "approved_by": "human" if human else "auto-policy"}
-    tool_context.state["approvals"] = approvals
-    audit(tool_context.state, "budget_agent", "budget_approved", request_id=request_id,
-          amount=amount, approved_by=approvals[request_id]["approved_by"])
+    policy = repo.get_policy(float(amount))
+    approved_by = f"human:{policy['approver_role']}" if policy["requires_human"] else "auto-policy"
+    repo.commit_budget(campaign_id, request_id, float(amount), approved_by)
+    audit(request_id, "budget_agent", "budget_approved", amount=amount, approved_by=approved_by,
+          tier=policy["tier"], justification=justification)
     return {"status": "approved", "request_id": request_id, "approved_amount": amount,
-            "approved_by": approvals[request_id]["approved_by"]}
+            "approved_by": approved_by, "tier": policy["tier"], "remaining_after": remaining - amount}
 
 
-def requires_human(amount: float, **_) -> bool:
-    """Confirmation predicate: True means ADK pauses and asks a human."""
-    return amount > config.HIGH_VALUE_THRESHOLD_USD
+def requires_human(amount: float, campaign_id: str = "", **_) -> bool:
+    """Confirmation predicate: True makes ADK pause and ask a human.
+
+    The tier comes from BigQuery. Amounts that exceed the remaining budget skip the
+    human prompt, because there is nothing to approve: the tool rejects them directly.
+    """
+    repo = get_repo()
+    budget = repo.get_budget(campaign_id) if campaign_id else None
+    if budget is not None and amount > float(budget["remaining"]):
+        return False
+    return bool(repo.get_policy(float(amount))["requires_human"])
 
 
 approve_budget_tool = FunctionTool(approve_budget, require_confirmation=requires_human)

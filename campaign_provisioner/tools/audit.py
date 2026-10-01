@@ -1,9 +1,6 @@
-"""Append-only audit trail kept in session state (maps to Cloud Logging in prod)."""
-from datetime import datetime, timezone
+"""Audit helper: writes to the audit_log table (BigQuery or memory)."""
+from ..repositories import get_repo
 
 
-def audit(state, actor: str, action: str, **details) -> None:
-    trail = list(state.get("audit_trail", []))
-    trail.append({"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-                  "actor": actor, "action": action, **details})
-    state["audit_trail"] = trail
+def audit(request_id, actor: str, action: str, **details) -> None:
+    get_repo().log_audit(request_id, actor, action, details)

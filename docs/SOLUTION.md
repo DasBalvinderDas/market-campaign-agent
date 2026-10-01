@@ -1,146 +1,144 @@
-# The Campaign Provisioner - Solution Guide
+# The Campaign Provisioner (Google Next 2027 edition) - Solution Guide
 
-> Autonomous agent that transforms marketing logistics by orchestrating inventory, procurement and budget approval, with human-in-the-loop controls for high-value requests.
+> Autonomous agent that orchestrates campaign inventory, procurement and budget approval on **BigQuery** data, runs its workflow actions through **Google Application Integration**, and keeps humans in the loop for high-value spend.
+
+This is the enhanced version. The first version used mock in-memory data; this one reads and writes BigQuery, calls Application Integration for actions, and applies a tiered approval policy stored in BigQuery.
 
 ## 1. The problem
 
-Running a campaign needs physical and paid materials (swag, banners, brochures, booth displays). Today that work is fragmented:
+Running a large event campaign such as Google Next 2027 needs many physical and paid items (swag, signage, booth hardware). Today the work is fragmented: stock is checked by hand, vendor quotes arrive by email, budget sign-off happens in a separate process and often after the order is discussed, and nobody has one audit trail. Launches slip, items are re-bought although stock exists, spend exceeds budget, and large purchases are approved informally.
 
-- Stock is checked manually in an inventory system.
-- Vendor quotes are collected by email and compared by hand.
-- Budget sign-off happens in a separate finance process, often after the order is already being discussed.
-- Nobody has one audit trail that shows who approved what.
+## 2. What the agent does
 
-Results: launches slip, items get re-bought although stock exists, spend goes above budget, and high-value purchases are approved informally.
-
-## 2. Why this agent was created
-
-The Campaign Provisioner takes a plain-language request ("I need 500 T-shirts and 5 LED displays for CMP-SPRING-LAUNCH") and runs the whole logistics chain in a fixed, governed order. It automates the routine work and keeps people in control of the risky decision (large spend).
+It takes a plain-language request ("NEXT27-MAIN needs 1 booth LED video wall") and runs the chain in a fixed, governed order.
 
 | Goal | How it is met |
 |---|---|
-| Remove manual chasing | Specialist sub-agents call the systems directly |
+| Remove manual chasing | Specialist sub-agents read live data from BigQuery |
 | Avoid duplicate buying | Inventory is always checked and reserved first |
 | Control spend | Budget is validated before any order |
-| Keep humans in charge of big money | Approvals above a threshold pause for a person |
-| Be auditable | Every governed action is written to an audit trail |
+| Keep humans in charge of big money | Tiered approval; high tiers pause for a named human |
+| Automate the actions | Purchase orders and approver alerts run as Application Integration workflows |
+| Be auditable | Every governed action is written to a BigQuery audit table |
 
 ## 3. Architecture
 
 A central **root agent** governs three **sub-agents** (Google ADK multi-agent hierarchy).
 
 ```
-                  campaign_provisioner  (root / orchestrator)
-                  tools: register_campaign_request, get_audit_trail
-        ┌─────────────────────┼──────────────────────┐
- inventory_agent       procurement_agent         budget_agent
- check_inventory       get_vendor_quotes         check_budget
- reserve_inventory     place_purchase_order      approve_budget  (HITL gate)
+                       campaign_provisioner  (root / orchestrator)
+        tools: register_campaign_request, get_campaign_overview, get_audit_trail
+        ┌────────────────────────┼─────────────────────────────┐
+  inventory_agent          procurement_agent              budget_agent
+  find_sku                 get_vendor_quotes              check_budget
+  check_inventory          create_purchase_order  ──┐     get_approval_policy
+  reserve_inventory        (Application Integration)│     notify_approver (Application Integration)
+  release_inventory        guard: before / after ◄──┘     approve_budget  (HITL confirmation)
+        │                         │                               │
+        └──────────── Repository (BigQuery) ◄─────────────────────┘
 ```
-
-The editable PowerPoint version of this diagram is in `docs/Campaign_Provisioner_Management_Deck.pptx` (slide 3).
 
 | Agent | Responsibility | Never does |
 |---|---|---|
 | Root `campaign_provisioner` | Understands the request, registers it, delegates in order, enforces rules, aggregates results | Specialist work itself |
-| `inventory_agent` | Checks stock, reserves available units, reports shortfall | Buy or discuss budget |
-| `procurement_agent` | Quotes vendors, recommends one, places POs once approved | Approve budget |
-| `budget_agent` | Checks funds, approves spend; high-value spend pauses for a human | Place orders |
+| `inventory_agent` | Maps descriptions to SKUs, checks stock, reserves, reports shortfall, releases on decline | Buy or discuss budget |
+| `procurement_agent` | Quotes vendors, recommends one, creates POs once approved | Approve budget |
+| `budget_agent` | Checks funds and the approval tier, alerts the approver, approves spend | Place orders |
 
 ## 4. Code layout
 
 ```
 campaign_provisioner/
-  agent.py                  root_agent (ADK entry point) and its instruction
-  config.py                 model name, HIGH_VALUE_THRESHOLD_USD (env-overridable)
-  data.py                   mock inventory / vendors / budgets (swap for real APIs)
-  sub_agents/
-    inventory_agent.py
-    procurement_agent.py
-    budget_agent.py
-  tools/
-    inventory_tools.py      check_inventory, reserve_inventory
-    procurement_tools.py    get_vendor_quotes, place_purchase_order (guarded)
-    budget_tools.py         check_budget, approve_budget + HITL wrapper
-    orchestration_tools.py  register_campaign_request, get_audit_trail
-    audit.py                audit-trail helper
-tests/test_tools.py         unit tests for tools and guardrails
-docs/                       this guide + management deck
+  agent.py                    root agent and its instruction
+  config.py                   env-driven settings (backends, dataset, integration names)
+  data/schema.py              BigQuery tables and views (single source of truth)
+  data/seed_data.py           Google Next 2027 demo data
+  repositories/               base.py (contract), bigquery_repo.py, memory_repo.py, get_repo()
+  tools/                      inventory, procurement, budget, orchestration, audit tools
+  workflow/integration.py     Application Integration toolsets (or offline mocks)
+  workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit
+  sub_agents/                 inventory_agent, procurement_agent, budget_agent
+scripts/                      setup_bigquery.py, verify_setup.py, setup_gcp.sh
+bigquery/schema.sql           generated DDL
+integration/README.md         Application Integration contract and build steps
+tests/                        tools, guard, policy, BigQuery repo (stub client)
+docs/                         this guide, DEMO_RUN.md, management deck
 ```
 
-## 5. Code flow, step by step
+## 5. Data in BigQuery
 
-Example: *"500 T-shirts and 5 LED displays for CMP-SPRING-LAUNCH."*
+| Table / view | Purpose |
+|---|---|
+| `inventory_items`, `inventory_reservations` | Catalog and on-hand stock; reservations are append-only |
+| `v_inventory_available` | on_hand minus active reservations = free stock |
+| `vendors`, `vendor_catalog` | Suppliers, unit prices, lead times |
+| `campaigns`, `budget_ledger` | Total budgets; ledger of SPEND / COMMIT / RELEASE entries |
+| `v_campaign_budget` | total, spent, committed, remaining per campaign |
+| `approval_policy` | Tiers: amount range, whether a human is needed, approver role |
+| `campaign_requests`, `purchase_orders` | Registered requests and created POs |
+| `v_request_headroom` | Approved amount minus PO total per request (used by the guard) |
+| `audit_log` | Append-only trail of every governed action |
 
-1. **Intake (root).** The root agent confirms campaign id and items, then calls `register_campaign_request` and gets `REQ-001`. The request and an audit event are stored in session state.
-2. **Inventory.** The root transfers to `inventory_agent`. It calls `check_inventory` per SKU, then `reserve_inventory` for the free units. T-shirts: 300 in stock, so 300 reserved and 200 short. LED displays: 0 in stock, so 5 short. It transfers back with the shortfall list.
-3. **Quotes.** The root transfers to `procurement_agent` (quote step). `get_vendor_quotes` returns offers sorted by total cost, with lead times. The agent recommends vendors and reports the total (for example $1,640 for 200 T-shirts plus $7,250 for 5 displays = $8,890). No order is placed yet.
-4. **Budget and approval.** The root transfers to `budget_agent`, which calls `check_budget` and then `approve_budget` with the total and a justification.
-   - **At or below the threshold** (default $5,000): approved automatically by policy (`approved_by = auto-policy`).
-   - **Above the threshold:** `approve_budget` is wrapped in ADK's `FunctionTool(require_confirmation=...)`. ADK pauses the run and asks a human to confirm or reject, showing the call arguments. Only on confirmation does the function run and record the approval (`approved_by = human`). If rejected, nothing is committed.
-   - If the amount exceeds the remaining budget, the tool returns `rejected` and the flow stops.
-5. **Ordering.** Back at the root, the budget is now approved, so it transfers to `procurement_agent` (order step). `place_purchase_order` checks session state: an approval for this `request_id` must exist and cover the cumulative PO total. Otherwise it returns `blocked`. This check is in code, so it holds even if the model misbehaves.
-6. **Result aggregation.** The root summarises reserved stock, POs (vendor, cost, lead time), remaining budget and who approved. `get_audit_trail` returns every governed action.
+Money and stock movements are **ledgers**: the agent only inserts rows and the views compute balances, so there are no
+read-modify-write updates and every change is traceable. Writes are parameterised DML inserts (values are never
+concatenated into SQL). Set it up with `scripts/setup_bigquery.py`; the DDL is in `bigquery/schema.sql`.
 
-### Governance in three layers
+## 6. Code flow, step by step
+
+Example: *"NEXT27-MAIN needs 1 booth LED video wall."*
+
+1. **Intake (root).** Confirms campaign and items, calls `register_campaign_request`, which validates the campaign in BigQuery and inserts a `campaign_requests` row and an audit event.
+2. **Inventory.** `find_sku` maps "LED video wall" to `BOOTH-LEDWALL`; `check_inventory` reads `v_inventory_available` (0 free); nothing to reserve; shortfall 1.
+3. **Quotes.** `get_vendor_quotes` reads `vendor_catalog`: ExpoVision $18,000 (21 days) vs KioskWorks $20,500 (14 days). The agent recommends one.
+4. **Budget.** `check_budget` reads `v_campaign_budget`; `get_approval_policy` reads `approval_policy`: $18,000 is tier MANAGER (Marketing Director).
+   - The agent calls the **notify_approver** Application Integration trigger so the approver is alerted.
+   - `approve_budget` is wrapped in ADK `FunctionTool(require_confirmation=requires_human)`. ADK **pauses** and asks a human to Confirm or Reject. On confirm the function inserts a COMMIT entry (`approved_by = human:Marketing Director`).
+   - AUTO tier amounts skip the pause. Amounts above the remaining budget skip it too and are rejected directly.
+5. **Order.** `create_purchase_order` is the Application Integration trigger. A `before_tool_callback` recomputes the amount from the vendor price list and checks `v_request_headroom`; with no covering approval it returns `BLOCKED`. After a successful call the `after_tool_callback` stores the PO (with the integration execution id) in `purchase_orders` and writes an audit event.
+6. **Decline path.** If the human rejects, nothing is committed, and the root asks `inventory_agent` to `release_inventory` for the request.
+7. **Summary.** The root aggregates stock, POs, remaining budget and approver; `get_audit_trail` reads `audit_log`.
+
+### Governance in four layers
 
 | Layer | Mechanism |
 |---|---|
-| Prompt | The root instruction fixes the order of steps; sub-agents must hand back to the root |
-| Platform | ADK tool confirmation pauses high-value approvals for a human |
-| Code | `place_purchase_order` hard-blocks without a covering approval; `approve_budget` rejects overspend |
+| Prompt | The root instruction fixes the order; sub-agents hand back to the root |
+| Policy | Approval tiers live in BigQuery (`approval_policy`) and decide who must approve |
+| Platform | ADK tool confirmation pauses tiers that need a human |
+| Code | The PO guard blocks orders without a covering ledger approval; `approve_budget` rejects overspend |
 
-## 6. Human-in-the-loop details
+## 7. Application Integration
 
-`requires_human(amount)` in `tools/budget_tools.py` is the predicate. When it returns true, ADK emits a confirmation request event instead of running the tool. In `adk web` the approver sees a confirm/reject prompt. In a custom app, your UI answers the `adk_request_confirmation` function call with `confirmed: true/false`. Change the limit with `HIGH_VALUE_THRESHOLD_USD`.
+Two API triggers in one integration (`campaign-provisioner-workflows`): `create_purchase_order` and `notify_approver`.
+ADK connects with `ApplicationIntegrationToolset`. Variable names are a contract; see `integration/README.md`.
+`WORKFLOW_BACKEND=mock` swaps in local functions with identical arguments for offline rehearsal.
 
-## 7. Data sources, assumptions and limitations
+## 8. Data sources, assumptions and limitations
 
-### Where the data comes from today
+**Where data comes from.** Production-style data lives in BigQuery and is created by `scripts/setup_bigquery.py`.
+The figures are **fictional demo data** (budgets, prices, stock, vendors, tier limits) and do not come from any real
+Google or customer system. `DATA_BACKEND=memory` uses the same seed data in process for offline runs and tests.
 
-All business data is **mock data** in `campaign_provisioner/data.py`. It was created as a placeholder for the demo and is not taken from any real system or from the source requirement.
+**Assumptions**
 
-| Data | Today (mock) | Planned source |
-|---|---|---|
-| Inventory (SKU, stock, reserved) | `INVENTORY` dict | Enterprise inventory / ERP, or a BigQuery table |
-| Vendors (prices, lead times) | `VENDORS` dict | Procurement system or a BigQuery vendor table |
-| Campaign budgets (total, spent, committed) | `BUDGETS` dict | Finance system or a BigQuery budget table |
-| High-value threshold | `HIGH_VALUE_THRESHOLD_USD`, default $5,000 (arbitrary) | Finance approval policy |
+- Single currency (USD); no tax, shipping, discounts or partial deliveries.
+- The vendor choice is simple (cheapest unless lead time is a problem); no contracts or delivery-date optimisation.
+- The approver is whoever confirms in the ADK prompt. Identity and authority are **not verified**; add IAM or role checks for real use. The notification tells the approver role, but the platform does not enforce who clicks.
+- The approved amount is committed up front; there is no automatic release if a PO is later cancelled (the ledger supports RELEASE entries, but no tool writes them yet).
+- The guard compares cumulative PO totals with the approved amount per request; it does not detect duplicate POs for the same item.
+- Rejected or declined requests release stock reservations only when the root agent asks the inventory agent to; this depends on the model following the instruction.
+- A single flat tier table applies to every campaign and approver.
+- Step order is enforced by prompts, so a live model can deviate. The hard guarantees are in code: no PO without a covering approval, no approval beyond remaining budget.
+- Two users working in parallel against the same BigQuery data can both see the same free stock before either reserves; there is no locking.
+- The Application Integration workflows are defined by you; the PO guard requires the documented variable names.
 
-**Planned move to BigQuery.** If the data is later read from BigQuery, only the tool bodies in `tools/inventory_tools.py`, `procurement_tools.py` and `budget_tools.py` change (query the tables instead of the dicts). The tool names and arguments stay the same, so the root agent, sub-agents, prompts and approval gate need no change. Writes (reservations, committed budget, POs) would become inserts or updates to the matching tables, or calls to the source systems.
-
-### Assumptions
-
-- **State is in memory.** Reservations, committed budget, approvals and the audit trail reset when the server restarts and are not shared between users. Production needs a persistent session service and real systems of record.
-- **Approver identity is not verified.** The approver is whoever confirms in the ADK prompt. There is no check of who they are or whether they are authorised; add IAM or role checks for real use.
-- **Single currency (USD).** No tax, shipping, discounts or partial deliveries.
-- **Simple vendor choice.** The agent recommends the cheapest vendor unless lead time is a problem. There are no contracts, vendor onboarding or delivery-date optimisation.
-- **PO placement is simulated.** `place_purchase_order` checks the approved amount and records the PO in session state. It does not call a real procurement API.
-- **Budget is committed up front.** The approved amount is held when approved. Nothing is released if a PO is later cancelled or reduced.
-- **Threshold is a single flat limit.** The same $5,000 applies to every campaign and approver; there are no tiered approval levels.
-- **Model behaviour can vary.** Step order is enforced by prompts, so a live model may occasionally deviate. The hard guarantees are in code: no purchase order without a covering approval, and no approval beyond remaining budget.
-- **Default model is a choice, not a requirement.** `gemini-2.5-flash` is the default; set `CAMPAIGN_MODEL` to your standard model.
-
-### Not yet verified
-
-The tools and guardrails are covered by offline unit tests. The full flow with a live model, including the human confirmation prompt, has not been run and should be checked in `adk web` before relying on it.
-
-## 8. Running it
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env            # add GOOGLE_API_KEY or Vertex AI settings
-adk web                         # run from the repo root, pick campaign_provisioner
-pytest                          # offline unit tests (no LLM needed)
-```
-
-Try: *"Campaign CMP-LOCAL-POPUP needs 100 tote bags"* (auto-approved), then *"CMP-SPRING-LAUNCH needs 500 T-shirts and 5 LED displays"* (pauses for human approval). Full demo script: [DEMO_RUN.md](DEMO_RUN.md).
+**Not yet verified.** Tools, policy, the guard, audit and the BigQuery repository (stub client, SQL syntax) are unit tested.
+BigQuery execution, Application Integration and a live Gemini model including the approval prompt have not been run.
 
 ## 9. Production notes
 
-- `data.py` is mock data held in memory (see section 7). Replace the tool bodies with ERP, vendor and finance API calls (for example through MCP servers) and keep the signatures.
-- Session state is in-memory by default; use a persistent session service (Vertex AI Agent Engine / database) so approvals survive restarts and pending confirmations can be resumed.
-- The default model is `gemini-2.5-flash`; set `CAMPAIGN_MODEL` to the Gemini version your organisation standardises on.
-- Add Cloud Logging for the audit trail, IAM for who may approve, and Model Armor for prompt safety, as shown in the architecture slide.
-- The tests cover tools and guardrails only; the LLM routing and the live confirmation flow should be checked with `adk web` against a real model.
+- Use a persistent ADK session service (Vertex AI Agent Engine or a database) so pending confirmations survive restarts.
+- Run the agent under a service account with the minimum roles in `scripts/setup_gcp.sh`.
+- Send the audit table to Cloud Logging or a Looker dashboard; add alerting on `po_blocked` events.
+- Add Model Armor for prompt safety and IAM-based approver checks, as shown in the architecture slide.
+- Set `CAMPAIGN_MODEL` to your standard Gemini model (default `gemini-2.5-flash`).

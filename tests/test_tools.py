@@ -1,78 +1,128 @@
-import copy
 import types
 
-import pytest
-
-from campaign_provisioner import data
-from campaign_provisioner.tools import budget_tools, inventory_tools, procurement_tools
-
-
-@pytest.fixture(autouse=True)
-def fresh_data():
-    snap = (copy.deepcopy(data.INVENTORY), copy.deepcopy(data.BUDGETS))
-    yield
-    data.INVENTORY.clear(); data.INVENTORY.update(snap[0])
-    data.BUDGETS.clear(); data.BUDGETS.update(snap[1])
+from campaign_provisioner.tools import budget_tools, inventory_tools, orchestration_tools, procurement_tools
+from campaign_provisioner.workflow import guard
+from campaign_provisioner.workflow.integration import create_purchase_order, notify_approver
 
 
-def ctx():
-    return types.SimpleNamespace(state={})
+def new_request(campaign="NEXT27-MAIN"):
+    return orchestration_tools.register_campaign_request(campaign, "test")["request_id"]
 
 
-def test_inventory_shortfall_and_reserve():
-    assert inventory_tools.check_inventory("TOTE-01", 80)["shortfall"] == 30
-    c = ctx()
-    r = inventory_tools.reserve_inventory("REQ-001", "TOTE-01", 80, c)
-    assert r["reserved"] == 50 and r["shortfall_to_procure"] == 30
-
-
-def test_find_sku_maps_description():
-    assert inventory_tools.find_sku("branded tote bags")["matches"][0]["sku"] == "TOTE-01"
-    assert inventory_tools.find_sku("led displays")["matches"][0]["sku"] == "LED-DISPLAY"
+# ---- inventory
+def test_find_sku_and_unknown_sku_hint():
+    assert inventory_tools.find_sku("hoodies")["matches"][0]["sku"] == "HOODIE-NEXT"
     assert inventory_tools.find_sku("zeppelin")["status"] == "no_match"
+    r = inventory_tools.check_inventory("LED-WALL", 1)
+    assert r["status"] == "error" and r["valid_skus"][0]["sku"] == "BOOTH-LEDWALL"
 
 
-def test_unknown_sku_returns_valid_options():
-    r = inventory_tools.check_inventory("TOTE-BAG-BRANDED", 100)
-    assert r["status"] == "error" and r["valid_skus"][0]["sku"] == "TOTE-01"
+def test_reserve_shortfall_and_release():
+    rid = new_request()
+    r = inventory_tools.reserve_inventory(rid, "DEMO-KIOSK", 6)
+    assert r["reserved"] == 2 and r["shortfall_to_procure"] == 4
+    assert inventory_tools.check_inventory("DEMO-KIOSK", 1)["free_stock"] == 0
+    assert inventory_tools.release_inventory(rid)["units_released"] == 2
+    assert inventory_tools.check_inventory("DEMO-KIOSK", 1)["free_stock"] == 2
 
 
-def test_quotes_sorted_cheapest_first():
-    q = procurement_tools.get_vendor_quotes("TSHIRT-M", 100)["quotes"]
-    assert q[0]["vendor"] == "SwagHub"
+def test_quotes_cheapest_first():
+    q = procurement_tools.get_vendor_quotes("WATER-BOTTLE", 600)["quotes"]
+    assert q[0]["vendor"] == "SwagHub" and q[0]["total"] == 3540.0
 
 
-def test_po_blocked_without_approval():
-    r = procurement_tools.place_purchase_order("REQ-001", "TSHIRT-M", 10, "V-PRINTCO", ctx())
-    assert r["status"] == "blocked"
+# ---- budget / policy
+def test_policy_tiers():
+    assert budget_tools.get_approval_policy(3540)["requires_human"] is False
+    assert budget_tools.get_approval_policy(18000)["approver_role"] == "Marketing Director"
+    assert budget_tools.get_approval_policy(72000)["tier"] == "EXECUTIVE"
 
 
-def test_small_spend_auto_approved_then_po_placed():
-    c = ctx()
-    a = budget_tools.approve_budget("REQ-001", "CMP-LOCAL-POPUP", 800.0, "tote", c)
+def test_small_spend_auto_approved():
+    rid = new_request("NEXT27-PARTNER")
+    a = budget_tools.approve_budget(rid, "NEXT27-PARTNER", 3540.0, "bottles")
     assert a["approved_by"] == "auto-policy"
-    p = procurement_tools.place_purchase_order("REQ-001", "TOTE-01", 100, "V-SWAGHUB", c)
-    assert p["status"] == "placed"
+    assert budget_tools.check_budget("NEXT27-PARTNER")["committed"] == 3540.0
 
 
-def test_po_cannot_exceed_approved_amount():
-    c = ctx()
-    budget_tools.approve_budget("REQ-001", "CMP-LOCAL-POPUP", 100.0, "x", c)
-    p = procurement_tools.place_purchase_order("REQ-001", "BANNER-XL", 5, "V-PRINTCO", c)
-    assert p["status"] == "blocked"
+def test_high_value_requires_human_unless_unfundable():
+    assert budget_tools.requires_human(18000, "NEXT27-MAIN") is True
+    assert budget_tools.requires_human(3540, "NEXT27-MAIN") is False
+    assert budget_tools.requires_human(18000, "NEXT27-DEVLOUNGE") is False  # exceeds $9,000 remaining
 
 
 def test_insufficient_budget_rejected():
-    r = budget_tools.approve_budget("REQ-002", "CMP-LOCAL-POPUP", 9000.0, "x", ctx())
-    assert r["status"] == "rejected"
+    rid = new_request("NEXT27-DEVLOUNGE")
+    r = budget_tools.approve_budget(rid, "NEXT27-DEVLOUNGE", 18000.0, "led")
+    assert r["status"] == "rejected" and r["remaining"] == 9000.0
 
 
-def test_high_value_requires_human():
-    assert budget_tools.requires_human(5000.01) is True
-    assert budget_tools.requires_human(5000.0) is False
+def test_human_tier_recorded_with_role():
+    rid = new_request()
+    a = budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000.0, "led wall")
+    assert a["approved_by"] == "human:Marketing Director"
+
+
+# ---- guard
+TOOL = types.SimpleNamespace(name="create_purchase_order")
+
+
+def po_args(rid, qty=1, sku="BOOTH-LEDWALL", vendor="V-EXPOVISION"):
+    return {"request_id": rid, "sku": sku, "quantity": qty, "vendor_id": vendor, "total_amount": 1.0}
+
+
+def test_po_blocked_without_approval():
+    rid = new_request()
+    assert guard.before_tool(TOOL, po_args(rid), None)["status"] == "BLOCKED"
+
+
+def test_po_allowed_with_approval_amount_overridden_and_recorded(repo):
+    rid = new_request()
+    budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000.0, "led wall")
+    args = po_args(rid)
+    assert guard.before_tool(TOOL, args, None) is None
+    assert args["total_amount"] == 18000.0 and args["campaign_id"] == "NEXT27-MAIN"  # model value ignored
+    resp = guard.after_tool(TOOL, args, None, create_purchase_order(**args))
+    assert resp["recorded"] and repo.t["purchase_orders"][0]["total_amount"] == 18000.0
+    # a second PO now exceeds the approval
+    assert guard.before_tool(TOOL, po_args(rid), None)["status"] == "BLOCKED"
+
+
+def test_po_cannot_exceed_approval():
+    rid = new_request()
+    budget_tools.approve_budget(rid, "NEXT27-MAIN", 4000.0, "x")
+    assert guard.before_tool(TOOL, po_args(rid), None)["status"] == "BLOCKED"
+
+
+def test_after_tool_notify_is_audited(repo):
+    guard.after_tool(types.SimpleNamespace(name="notify_approver"),
+                     {"request_id": "R", "approver_role": "Marketing Director", "amount": 1.0}, None,
+                     notify_approver("R", "C", 1.0, "Marketing Director", "s"))
+    assert repo.t["audit_log"][-1]["action"] == "approver_notified"
+
+
+def test_audit_trail_filter():
+    rid = new_request()
+    inventory_tools.reserve_inventory(rid, "STICKER-PACK", 10)
+    events = orchestration_tools.get_audit_trail(rid)["events"]
+    assert [e["action"] for e in events] == ["request_registered", "stock_reserved"]
+
+
+def test_unknown_campaign_lists_known():
+    r = orchestration_tools.register_campaign_request("NOPE", "x")
+    assert r["status"] == "error" and len(r["known_campaigns"]) == 3
 
 
 def test_agent_wiring():
     from campaign_provisioner.agent import root_agent
-    assert [a.name for a in root_agent.sub_agents] == [
-        "inventory_agent", "procurement_agent", "budget_agent"]
+    assert [a.name for a in root_agent.sub_agents] == ["inventory_agent", "procurement_agent", "budget_agent"]
+
+
+def test_adk_confirmation_predicate_receives_args():
+    import asyncio
+    tool = budget_tools.approve_budget_tool
+    ask = lambda amt, cid: asyncio.run(tool.check_require_confirmation(
+        {"request_id": "R", "campaign_id": cid, "amount": amt, "justification": "j"}, types.SimpleNamespace()))
+    assert ask(18000.0, "NEXT27-MAIN") is True
+    assert ask(3540.0, "NEXT27-MAIN") is False
+    assert ask(18000.0, "NEXT27-DEVLOUNGE") is False
