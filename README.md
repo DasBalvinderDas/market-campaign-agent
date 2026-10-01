@@ -8,7 +8,7 @@ high-value spend pauses for a named human approver.
 - Design, code flow, data and assumptions: [docs/SOLUTION.md](docs/SOLUTION.md)
 - Application Integration contract: [integration/README.md](integration/README.md)
 - BigQuery DDL: [bigquery/schema.sql](bigquery/schema.sql); setup script: `scripts/setup_bigquery.py`
-- Management deck (first version): `docs/Campaign_Provisioner_Management_Deck.pptx`
+- Management deck (updated for BigQuery + Application Integration): `docs/Campaign_Provisioner_Management_Deck.pptx`
 
 Quick start (offline rehearsal): `pip install -r requirements.txt && pytest`, then set `DATA_BACKEND=memory` and
 `WORKFLOW_BACKEND=mock` in `.env` and run `adk web`.
