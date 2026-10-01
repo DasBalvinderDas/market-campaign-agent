@@ -46,3 +46,30 @@ def reserve_inventory(request_id: str, sku: str, quantity: int, tool_context: To
           request_id=request_id, sku=sku, reserved=reserved)
     return {"status": "ok", "request_id": request_id, "sku": sku,
             "reserved": reserved, "shortfall_to_procure": quantity - reserved}
+
+
+def find_sku(description: str) -> dict:
+    """Map a free-text item description to catalog SKUs. Call this BEFORE check_inventory
+    whenever the user did not give an exact SKU. Never invent a SKU.
+
+    Args:
+        description: What the user asked for, e.g. "branded tote bags".
+
+    Returns:
+        best matching SKUs (best first), or the full catalog if nothing matches.
+    """
+    def tokens(text):
+        return {w.rstrip("s") for w in text.lower().replace("-", " ").split() if len(w) > 1}
+
+    wanted = tokens(description)
+    scored = []
+    for sku, item in INVENTORY.items():
+        score = len(wanted & tokens(f"{sku} {item['name']}"))
+        if score:
+            scored.append((score, sku, item["name"]))
+    scored.sort(reverse=True)
+    if scored:
+        return {"status": "ok", "matches": [{"sku": k, "name": n} for _, k, n in scored]}
+    return {"status": "no_match",
+            "catalog": [{"sku": k, "name": v["name"]} for k, v in INVENTORY.items()],
+            "message": "No match. Show the catalog to the user and ask which item they mean."}

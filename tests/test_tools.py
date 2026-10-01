@@ -26,6 +26,12 @@ def test_inventory_shortfall_and_reserve():
     assert r["reserved"] == 50 and r["shortfall_to_procure"] == 30
 
 
+def test_find_sku_maps_description():
+    assert inventory_tools.find_sku("branded tote bags")["matches"][0]["sku"] == "TOTE-01"
+    assert inventory_tools.find_sku("led displays")["matches"][0]["sku"] == "LED-DISPLAY"
+    assert inventory_tools.find_sku("zeppelin")["status"] == "no_match"
+
+
 def test_quotes_sorted_cheapest_first():
     q = procurement_tools.get_vendor_quotes("TSHIRT-M", 100)["quotes"]
     assert q[0]["vendor"] == "SwagHub"
