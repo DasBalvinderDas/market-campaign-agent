@@ -15,7 +15,7 @@ Results: launches slip, items get re-bought although stock exists, spend goes ab
 
 ## 2. Why this agent was created
 
-The Campaign Provisioner takes a plain-language request ("I need 500 T-shirts and 2 LED displays for CMP-SPRING-LAUNCH") and runs the whole logistics chain in a fixed, governed order. It automates the routine work and keeps people in control of the risky decision (large spend).
+The Campaign Provisioner takes a plain-language request ("I need 500 T-shirts and 5 LED displays for CMP-SPRING-LAUNCH") and runs the whole logistics chain in a fixed, governed order. It automates the routine work and keeps people in control of the risky decision (large spend).
 
 | Goal | How it is met |
 |---|---|
@@ -70,11 +70,11 @@ docs/                       this guide + management deck
 
 ## 5. Code flow, step by step
 
-Example: *"500 T-shirts and 2 LED displays for CMP-SPRING-LAUNCH."*
+Example: *"500 T-shirts and 5 LED displays for CMP-SPRING-LAUNCH."*
 
 1. **Intake (root).** The root agent confirms campaign id and items, then calls `register_campaign_request` and gets `REQ-001`. The request and an audit event are stored in session state.
-2. **Inventory.** The root transfers to `inventory_agent`. It calls `check_inventory` per SKU, then `reserve_inventory` for the free units. T-shirts: 300 in stock, so 300 reserved and 200 short. LED displays: 0 in stock, so 2 short. It transfers back with the shortfall list.
-3. **Quotes.** The root transfers to `procurement_agent` (quote step). `get_vendor_quotes` returns offers sorted by total cost, with lead times. The agent recommends vendors and reports the total (for example about $4,540). No order is placed yet.
+2. **Inventory.** The root transfers to `inventory_agent`. It calls `check_inventory` per SKU, then `reserve_inventory` for the free units. T-shirts: 300 in stock, so 300 reserved and 200 short. LED displays: 0 in stock, so 5 short. It transfers back with the shortfall list.
+3. **Quotes.** The root transfers to `procurement_agent` (quote step). `get_vendor_quotes` returns offers sorted by total cost, with lead times. The agent recommends vendors and reports the total (for example $1,640 for 200 T-shirts plus $7,250 for 5 displays = $8,890). No order is placed yet.
 4. **Budget and approval.** The root transfers to `budget_agent`, which calls `check_budget` and then `approve_budget` with the total and a justification.
    - **At or below the threshold** (default $5,000): approved automatically by policy (`approved_by = auto-policy`).
    - **Above the threshold:** `approve_budget` is wrapped in ADK's `FunctionTool(require_confirmation=...)`. ADK pauses the run and asks a human to confirm or reject, showing the call arguments. Only on confirmation does the function run and record the approval (`approved_by = human`). If rejected, nothing is committed.
@@ -104,7 +104,7 @@ adk web                         # run from the repo root, pick campaign_provisio
 pytest                          # offline unit tests (no LLM needed)
 ```
 
-Try: *"Campaign CMP-LOCAL-POPUP needs 100 tote bags"* (auto-approved), then *"CMP-SPRING-LAUNCH needs 500 T-shirts and 2 LED displays"* (pauses for human approval).
+Try: *"Campaign CMP-LOCAL-POPUP needs 100 tote bags"* (auto-approved), then *"CMP-SPRING-LAUNCH needs 500 T-shirts and 5 LED displays"* (pauses for human approval). Full demo script: [DEMO_RUN.md](DEMO_RUN.md).
 
 ## 8. Production notes
 
