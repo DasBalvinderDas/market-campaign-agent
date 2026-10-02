@@ -41,7 +41,22 @@ Typical tasks: a **Send Email** task or a **Google Chat** connector message to t
 The actual approve / reject click still happens in the ADK confirmation prompt; the notification tells the
 approver a decision is waiting.
 
-## Build steps (Cloud Console)
+## Automatic setup (recommended)
+
+```bash
+export GOOGLE_CLOUD_PROJECT=<your-project-id>
+python scripts/setup_application_integration.py            # create + publish (safe to re-run)
+python scripts/setup_application_integration.py --test     # run both triggers once with sample data
+```
+
+The script calls the Application Integration REST API (`integrations.versions.create` then `:publish`) with the contract
+above. Each trigger starts one Data Mapping task: `create_purchase_order` sets `po_number` to `PO-<request_id>-<sku>` and
+`execution_id` to the execution id; `notify_approver` sets `status` to `NOTIFIED`. It assumes the Application Integration API is
+enabled and tells you which API to enable if not. `--provision-region` is a one-time step for a region that has never used
+Application Integration. To make `notify_approver` send a real email or Chat message, add a Send Email / Google Chat task in
+the console after its mapping.
+
+## Manual alternative (Cloud Console)
 
 Prerequisite: the Application Integration API is enabled in your project. If it is not, the check script below tells you
 which API to enable.
@@ -87,8 +102,9 @@ inside Application Integration instead, see `docs/DEMO_RUN.md` section 4.2.
 
 ## Status of this guide
 
-The ADK side is covered by tests, but the integration itself must be built in your project. This guide was
-written from the product documentation and was **not** run against a live Application Integration instance.
+The ADK side and the setup script's logic are covered by offline tests, and the request body the script sends was checked
+field by field against Google's published API schema (discovery document). It has **not** been sent to a live project, so the
+first run is the real test; if it fails the script prints the API's message and you can use the manual steps above.
 The console screens and the `execute` call may differ slightly; use `verify_setup.py --integration` to confirm.
 
 ## Optional: BigQuery through an Integration Connector

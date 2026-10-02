@@ -153,17 +153,23 @@ Marketing Director, $72,000 -> VP Marketing + Finance Controller).
 
 ### 5.3 Application Integration
 
-Create the integration once in the console (about 3 minutes; the exact variables are in
-[`integration/README.md`](../integration/README.md)): integration `campaign-provisioner-workflows` in `us-central1`
-with two API triggers, `create_purchase_order` and `notify_approver`, then **Publish**. Then:
+One command creates and publishes the integration (`campaign-provisioner-workflows` in `us-central1`, two API triggers:
+`create_purchase_order` and `notify_approver`) through the Application Integration API:
 
 ```bash
-python scripts/setup_application_integration.py            # checks it exists and both triggers are published
+python scripts/setup_application_integration.py            # creates + publishes if missing, safe to re-run
 python scripts/setup_application_integration.py --test     # optional: runs both triggers once with sample data
 python scripts/verify_setup.py --integration               # confirms ADK can load them as tools
 ```
 
-If the integration or a trigger is missing, the first command prints the short checklist to fix it.
+Like the BigQuery script it uses your project id automatically, assumes the APIs are enabled, and tells you which API to
+enable if one is missing. Other options: `--check-only` (change nothing) and `--provision-region` (one-time, only if the
+script says Application Integration has not been used in this region yet).
+
+The created triggers each run one Data Mapping task: `create_purchase_order` returns `po_number` (`PO-<request id>-<sku>`)
+and an execution id, and `notify_approver` returns `status = NOTIFIED`. To send a real email or Google Chat message to the
+approver, open the integration in the console and add a Send Email / Google Chat task after the `notify_approver` mapping
+(optional; the demo works without it). Details and the manual alternative: [`integration/README.md`](../integration/README.md).
 
 ### 5.4 Configure `.env`
 
@@ -406,6 +412,7 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_
 
 | Symptom | Fix |
 |---|---|
+| Application Integration script fails with an HTTP error | Run it once with `--provision-region` if this is the first use of the region; otherwise create the integration by hand (`integration/README.md`) |
 | "API not enabled" message from a script | Enable the API it names (`gcloud services enable <api> --project $GOOGLE_CLOUD_PROJECT`), wait a minute, re-run |
 | Permission denied | Ask for the roles listed in the prerequisites; run `gcloud auth application-default login` |
 | `adk web` fails at start with an Application Integration error | The toolset reads the integration at start. Check the integration is **published**, the name/region in `.env`, and run `verify_setup.py --integration` |
@@ -420,4 +427,4 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_
 
 Tested without cloud access: the tools, tiered policy, purchase-order guard, audit trail, the BigQuery repository
 against a stub client, and the syntax of every SQL statement. **Not yet run against live services:** BigQuery execution,
-Application Integration, and a live Gemini model including the approval prompt. Run sections 5, 6 and 9 once before presenting.
+Application Integration (the setup script's request body was checked against Google's published API schema, but never sent to a real project), and a live Gemini model including the approval prompt. Run sections 5, 6 and 9 once before presenting.
