@@ -1,7 +1,7 @@
 # Demo Run - The Campaign Provisioner (Google Next 2027 edition)
 
-Step-by-step: set up the data in BigQuery, connect Application Integration, start `adk web`, and run seven
-test prompts for the Google Next 2027 campaign, including three human-in-the-loop (HITL) cases.
+Step-by-step: set up the data in BigQuery, connect Application Integration, start `adk web`, and run
+the test prompts for the Google Next 2027 campaign, with the human-in-the-loop (HITL) cases highlighted.
 
 There are two ways to run it:
 
