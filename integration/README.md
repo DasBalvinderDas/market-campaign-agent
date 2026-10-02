@@ -76,6 +76,9 @@ python scripts/verify_setup.py --integration             # prints the tool names
 
 ## How the agent uses it
 
+Today these two triggers are the action layer; the agent directs the order of the steps. To run the whole campaign flow
+inside Application Integration instead, see `docs/DEMO_RUN.md` section 4.2.
+
 - `workflow/integration.py` builds one `ApplicationIntegrationToolset` per trigger (one for the procurement agent,
   one for the budget agent).
 - `workflow/guard.py` runs **before** the PO tool: no PO unless the BigQuery budget ledger holds an approved COMMIT

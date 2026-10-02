@@ -113,6 +113,12 @@ Two API triggers in one integration (`campaign-provisioner-workflows`): `create_
 ADK connects with `ApplicationIntegrationToolset`. Variable names are a contract; see `integration/README.md`.
 `WORKFLOW_BACKEND=mock` swaps in local functions with identical arguments for offline rehearsal.
 
+**Who directs the flow.** Today the root agent directs the order of the steps, the agents read and write BigQuery
+directly, and Application Integration runs two actions (purchase order, approver alert). Directing the whole flow from
+inside Application Integration (stock, quotes, approval tier, approval, purchase order as one integration, with the agent
+as the conversational front door) is a possible next step. Both designs are compared in
+[DEMO_RUN.md section 4](DEMO_RUN.md); the second is a design only and is not built yet.
+
 ## 8. Data sources, assumptions and limitations
 
 **Where data comes from.** Production-style data lives in BigQuery and is created by `scripts/setup_bigquery.py`.
