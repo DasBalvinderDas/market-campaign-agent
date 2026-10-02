@@ -53,8 +53,8 @@ lines. Then jump to **section 8** (start `adk web`). Restart `adk web` between p
       │
       ├─► inventory_agent  ──► BigQuery   find item, read free stock, insert reservation
       ├─► procurement_agent ─► BigQuery   read vendor prices (quotes)
-      ├─► budget_agent ──────► BigQuery   read budget + approval tier
-      │        ├─► Application Integration: notify_approver   (alerts the approver)
+      ├─► budget_agent ──────► BigQuery   read budget + approval tier + approver emails
+      │        ├─► Application Integration: notify_approver   (EMAILS the approver)
       │        └─► ADK confirmation in the chat: Confirm / Reject   (the human decision)
       │             └─► BigQuery: insert COMMIT into budget_ledger
       └─► procurement_agent ─► guard (code) ─► Application Integration: create_purchase_order
@@ -68,7 +68,8 @@ lines. Then jump to **section 8** (start `adk web`). Restart `adk web` between p
 | Approval tier and who must approve | BigQuery table `approval_policy`, read by the tools |
 | The human Confirm / Reject | ADK confirmation prompt in the chat |
 | "Never order without an approved budget" | Python guard in `workflow/guard.py` (checks the BigQuery ledger) |
-| **Alerting the approver** | **Application Integration** trigger `notify_approver` |
+| Who gets the email | BigQuery table `approvers` (role -> emails), set at setup time; the guard fills it in, never the model |
+| **Emailing the approver** | **Application Integration** trigger `notify_approver` (its Send Email task) |
 | **Creating the purchase order** | **Application Integration** trigger `create_purchase_order` |
 
 So today **the campaign flow is directed by the agent, and Application Integration is the action layer** for two
@@ -119,16 +120,50 @@ The exact task names depend on what your region offers, and the flow has not bee
 
 ## 5. Mode B: BigQuery + Application Integration
 
-The scripts assume your project's APIs are **already enabled**. If one is not, the script stops and tells you which
-API to enable, so there is nothing to memorise. For reference, you need these enabled once:
+### 5.0 The one-command setup
 
-| API | Used for |
-|---|---|
-| BigQuery API (`bigquery.googleapis.com`) | the data |
-| Application Integration API (`integrations.googleapis.com`) | purchase order and approver workflows |
-| Vertex AI API (`aiplatform.googleapis.com`) | Gemini (not needed if you use `GOOGLE_API_KEY`) |
+```bash
+export GOOGLE_CLOUD_PROJECT=<your-project-id>
+gcloud auth application-default login
+python scripts/setup_all.py --approver-email "you@example.com"
+```
 
-### 5.1 Set your project and log in (once)
+That single command:
+
+1. **Checks everything first** and reports all problems in one message: every API that is not enabled (with the
+   `gcloud services enable ...` command) and any missing BigQuery permission (with the role to ask for).
+2. Creates the **BigQuery** dataset, tables, views, demo data and the approver emails.
+3. Creates and publishes the **Application Integration** workflow (purchase order + approver email).
+4. Writes `.env` and `campaign_provisioner/.env` (project, backends, locations, approver emails), keeping any other lines.
+
+What you can configure:
+
+| Setting | Flag | Default |
+|---|---|---|
+| Google Cloud project | `--project` | `GOOGLE_CLOUD_PROJECT`, else your active gcloud project |
+| Who is emailed for approvals | `--approver-email "[ROLE=]a@x.com,b@x.com"` (repeat per role) | `APPROVER_EMAILS`, else your gcloud account |
+| BigQuery dataset / location | `--dataset`, `--location` | `campaign_provisioner`, `US` |
+| Application Integration region | `--region` | `us-central1` |
+| Test email at the end | `--test` (sends one test email to `--test-email` or you) | off |
+| Skip the email task | `--no-email` | email on |
+
+Per-role example (the approval tiers use the roles "Marketing Director" and "VP Marketing + Finance Controller"):
+
+```bash
+python scripts/setup_all.py \
+  --approver-email "Marketing Director=md@example.com,md2@example.com" \
+  --approver-email "VP Marketing + Finance Controller=vp@example.com,controller@example.com"
+```
+
+Needed once in the project: the **BigQuery API** (`bigquery.googleapis.com`), the **Application Integration API**
+(`integrations.googleapis.com`) and, for Gemini on Vertex AI, `aiplatform.googleapis.com`. You do not have to remember
+them: if one is missing the script lists it and stops before changing anything. If one step fails (for example the
+integration), the other still runs and the summary says which one needs attention; re-run after fixing it.
+
+Change the approver emails later without touching the integration: re-run with `--approver-email ...`, or edit the
+`approvers` table (section 6.5). The sections below describe each part separately.
+
+### 5.1 Set your project and log in (once; only if you run the steps separately)
 
 ```bash
 export GOOGLE_CLOUD_PROJECT=<your-project-id>
@@ -143,7 +178,7 @@ export is usually all you need.
 (Details, your own data, and the table rules are in section 6.)
 
 ```bash
-python scripts/setup_bigquery.py
+python scripts/setup_bigquery.py --approver-email "you@example.com"
 python scripts/verify_setup.py
 ```
 
@@ -166,10 +201,10 @@ Like the BigQuery script it uses your project id automatically, assumes the APIs
 enable if one is missing. Other options: `--check-only` (change nothing) and `--provision-region` (one-time, only if the
 script says Application Integration has not been used in this region yet).
 
-The created triggers each run one Data Mapping task: `create_purchase_order` returns `po_number` (`PO-<request id>-<sku>`)
-and an execution id, and `notify_approver` returns `status = NOTIFIED`. To send a real email or Google Chat message to the
-approver, open the integration in the console and add a Send Email / Google Chat task after the `notify_approver` mapping
-(optional; the demo works without it). Details and the manual alternative: [`integration/README.md`](../integration/README.md).
+`create_purchase_order` returns `po_number` (`PO-<request id>-<sku>`) and an execution id. `notify_approver` builds the
+message, **sends an email** to the approvers and returns `status = NOTIFIED`. The recipients are not stored in the
+integration: the agent passes them in from the BigQuery `approvers` table, so changing an address needs no integration
+change. `--test` sends one real test email (to `--test-email`, default your gcloud account). Details and the manual alternative: [`integration/README.md`](../integration/README.md).
 
 ### 5.4 Configure `.env`
 
@@ -197,6 +232,7 @@ can then change it with ordinary SQL or CSV loads.
 | `budget_ledger` | Money movements: `SPEND` (already spent), `COMMIT` (approved), `RELEASE` (returned) | budget agent |
 | `v_campaign_budget` (view) | total, spent, committed, remaining per campaign | budget agent |
 | `approval_policy` | Spend tiers: amount range, human needed or not, approver role | budget agent |
+| `approvers` | Role -> email addresses to notify (set by the setup script, editable with SQL) | budget agent (notify step) |
 | `campaign_requests`, `purchase_orders` | Registered requests and created POs | root, procurement |
 | `v_request_headroom` (view) | Approved amount minus PO total per request | purchase-order guard |
 | `audit_log` | Every governed action | all agents |
@@ -266,7 +302,25 @@ VALUES ('BASE-9', 'NEXT27-KEYNOTE', 'BASELINE', 'SPEND', 25000.0, 'system', CURR
 - Money is in one currency (USD); stock counts are whole units.
 - The root agent only accepts campaign ids that exist in `campaigns`, and only SKUs that exist in `inventory_items`; it will not invent either.
 
-### 6.5 Check what the agent will see
+### 6.5 Approver emails
+
+The `approvers` table maps each approver role to the addresses that receive the approval email. It is filled by the
+setup script from `--approver-email`, else `APPROVER_EMAILS`, else your gcloud account. To change it later:
+
+```sql
+-- add an address
+INSERT INTO `$P.campaign_provisioner.approvers` VALUES ('Marketing Director', 'new.person@example.com', TRUE);
+-- stop notifying someone
+UPDATE `$P.campaign_provisioner.approvers` SET active = FALSE WHERE email = 'old.person@example.com';
+```
+
+Roles must match `approval_policy.approver_role` exactly. If a role has no active address, the agent continues, the
+approver can still Confirm in the chat, and the agent tells the user that no email was sent (also written to the audit
+log as `approver_email_skipped_no_recipients`). Notes: `--reset` of the BigQuery script recreates this table (pass
+`--approver-email` again); `--reset-demo` leaves it alone. The model never supplies email addresses: the platform reads
+them from this table.
+
+### 6.6 Check what the agent will see
 
 ```bash
 bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.v_campaign_budget\`"
@@ -342,9 +396,9 @@ Integration (PO number returned) and the summary shows $28,460 remaining for NEX
 > Main event NEXT27-MAIN needs 1 booth LED video wall.
 
 **Expected:** quote ExpoVision **$18,000**, 21 days. Tier MANAGER (Marketing Director). The budget agent calls the
-notify-approver workflow, then the run **pauses** with a confirmation for `approve_budget`. Click **Confirm**. The budget
+notify-approver workflow, which **emails the Marketing Director address(es)** from the `approvers` table, then the run **pauses** with a confirmation for `approve_budget`. Click **Confirm**. The budget
 is committed as `human:Marketing Director`, the PO is created, and NEXT27-MAIN remaining drops from $250,000 to $232,000.
-**Shows:** tiered approval from BigQuery, approver notification, human confirmation.
+**Shows:** tiered approval from BigQuery, an email to the configured approver, human confirmation. (In Mode A no email is sent.)
 
 ### Prompt 4 - HITL: human declines (start a **new session** for 4 and 5)
 
@@ -419,6 +473,7 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_
 | Want to rehearse without the integration | Set `WORKFLOW_BACKEND=mock` (and `DATA_BACKEND=memory` for no BigQuery) |
 | Numbers differ from this guide | Run `--reset-demo` and start a new session |
 | No approval prompt for a high amount | The amount may exceed the remaining budget (rejected directly), or the tier in `approval_policy` was changed |
+| No approval email arrives | Check `verify_setup.py` lists an address for the role, check spam, run `setup_application_integration.py --test --test-email you@example.com`, and look at the audit log for `approver_notified` / `approver_notification_failed` / `approver_email_skipped_no_recipients` |
 | Agent says "I already processed this" | Start a **New session**; the chat history is read by the model |
 | `ModuleNotFoundError: campaign_provisioner` in pytest | Keep `pytest.ini` in the repo root |
 | PO call shows BLOCKED unexpectedly | The integration's input variable names must match `integration/README.md` exactly |

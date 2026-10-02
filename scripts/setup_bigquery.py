@@ -5,6 +5,10 @@ Assumes the BigQuery API is already enabled. The project id comes from --project
 GOOGLE_CLOUD_PROJECT, then your active gcloud project. If an API is not enabled the script
 tells you which one to enable.
 
+Approver emails (who is notified when a human must approve) are stored in the BigQuery table `approvers`:
+  --approver-email "Marketing Director=a@x.com,b@x.com"   (repeatable; a bare address applies to every role)
+  or the APPROVER_EMAILS environment variable. With neither, your active gcloud account is used.
+
 Examples
   python scripts/setup_bigquery.py                # create + seed (idempotent)
   python scripts/setup_bigquery.py --reset-demo   # clear demo transactions, keep reference data
@@ -20,7 +24,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import guarded, resolve_project  # noqa: E402
+from _common import default_account_email, guarded, preflight, resolve_project  # noqa: E402
+from campaign_provisioner import approvers as approvers_cfg  # noqa: E402
 from campaign_provisioner.data.schema import TABLES, TRANSACTION_TABLES, VIEWS  # noqa: E402
 from campaign_provisioner.data.seed_data import SEED  # noqa: E402
 
@@ -40,6 +45,35 @@ def _json_rows(rows):
     return [{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in r.items()} for r in rows]
 
 
+def sync_approvers(client, ds, args):
+    """Write the approver emails to BigQuery from --approver-email / APPROVER_EMAILS (else keep, else default)."""
+    from google.cloud import bigquery
+
+    spec = ";".join(getattr(args, "approver_email", None) or []) or os.getenv("APPROVER_EMAILS", "")
+    roles = [p["approver_role"] for p in SEED["approval_policy"] if p["requires_human"]]
+    existing = next(iter(client.query(f"SELECT COUNT(*) n FROM `{ds}.approvers`").result()))["n"]
+    if spec:
+        config = approvers_cfg.parse(spec)
+    elif existing:
+        print(f"  approvers: keeping the {existing} existing row(s) (pass --approver-email to change them)")
+        return
+    else:
+        me = default_account_email()
+        if not me:
+            print("  approvers: no emails configured and no gcloud account found. Approval emails will NOT be sent "
+                  "until you run:  python scripts/setup_bigquery.py --approver-email you@example.com")
+            return
+        config = {"*": [me]}
+        print(f"  approvers: none configured, using your gcloud account {me} for every approver role")
+    rows = approvers_cfg.expand(config, roles)
+    cfg = bigquery.LoadJobConfig(
+        schema=[bigquery.SchemaField(c, typ, mode=mode) for c, typ, mode, _ in TABLES["approvers"]["columns"]],
+        write_disposition="WRITE_TRUNCATE")
+    client.load_table_from_json(rows, f"{ds}.approvers", job_config=cfg).result()
+    for role in roles:
+        print(f"  approvers: {role} -> {', '.join(r['email'] for r in rows if r['approver_role'] == role) or '(none)'}")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default=None, help="defaults to GOOGLE_CLOUD_PROJECT or the gcloud project")
@@ -47,6 +81,8 @@ def main():
     ap.add_argument("--location", default=os.getenv("BQ_LOCATION", "US"))
     ap.add_argument("--reset", action="store_true", help="drop all tables/views and rebuild with seed data")
     ap.add_argument("--reset-demo", action="store_true", help="clear demo transactions, keep reference data")
+    ap.add_argument("--approver-email", action="append", default=[], metavar="[ROLE=]EMAIL[,EMAIL]",
+                    help="who gets the approval notification email (repeatable)")
     ap.add_argument("--print-ddl", action="store_true", help="print CREATE statements and exit")
     args = ap.parse_args()
 
@@ -62,6 +98,8 @@ def run(args, project=""):
     from google.cloud import bigquery
 
     print(f"Project: {project}")
+    if not getattr(args, "skip_preflight", False):
+        preflight(project, ["bigquery.googleapis.com"])
     client = bigquery.Client(project=project, location=args.location)
     ds = f"{project}.{args.dataset}"
 
@@ -108,6 +146,7 @@ def run(args, project=""):
         client.load_table_from_json(_json_rows(rows), f"{ds}.{name}", job_config=cfg).result()
         print(f"  loaded {len(rows):>3} rows into {name}")
 
+    sync_approvers(client, ds, args)
     print("\nDone. Next: python scripts/verify_setup.py")
 
 

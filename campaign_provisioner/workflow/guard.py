@@ -3,6 +3,7 @@
 before_tool: a purchase order is blocked unless the request has an approved budget (a COMMIT in
              the BigQuery budget ledger) that still covers it. The amount is recomputed from the
              vendor price list - the model's value is ignored.
+before_tool also fills approver_emails for notify_approver from the BigQuery `approvers` table.
 after_tool:  records the PO and the notification in BigQuery and the audit log.
 """
 from ..repositories import get_repo
@@ -41,7 +42,23 @@ def _blocked(request_id, reason, **details):
             "next_step": "Route to budget_agent for approval first. Do not retry or work around."}
 
 
+def _before_notify(args):
+    """Recipients always come from the BigQuery `approvers` table, never from the model."""
+    role = args.get("approver_role", "")
+    emails = get_repo().get_approver_emails(role)
+    if not emails:
+        audit(args.get("request_id"), "budget_agent", "approver_email_skipped_no_recipients", approver_role=role)
+        return {"status": "NO_APPROVERS",
+                "reason": f"No approver email is configured for '{role}', so no email was sent.",
+                "next_step": "Continue to approve_budget (the approver can still confirm in the chat) and tell "
+                             "the user that no email was sent. Setup: scripts/setup_bigquery.py --approver-email"}
+    args["approver_emails"] = ",".join(emails)
+    return None
+
+
 def before_tool(tool, args, tool_context):
+    if _is_notify(tool):
+        return _before_notify(args)
     if not _is_po(tool):
         return None
     repo = get_repo()
@@ -81,6 +98,11 @@ def after_tool(tool, args, tool_context, tool_response):
         return {**tool_response, "po_number": str(po_number), "total_amount": args["total_amount"],
                 "recorded": True}
     if _is_notify(tool):
-        audit(args.get("request_id"), "budget_agent", "approver_notified",
-              approver_role=args.get("approver_role"), amount=args.get("amount"))
+        resp = tool_response if isinstance(tool_response, dict) else {}
+        if resp.get("status") == "NO_APPROVERS":
+            return None
+        failed = bool(resp.get("executionFailed") or _find(resp, ("error", "errorMessage")))
+        audit(args.get("request_id"), "budget_agent", "approver_notification_failed" if failed else "approver_notified",
+              approver_role=args.get("approver_role"), recipients=args.get("approver_emails"),
+              amount=args.get("amount"))
     return None

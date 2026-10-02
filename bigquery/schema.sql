@@ -55,6 +55,12 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.approval_policy` (
   approver_role STRING NOT NULL
 ) OPTIONS(description="Spend tiers: who must approve an amount. amount > min_amount AND <= max_amount.");
 
+CREATE TABLE IF NOT EXISTS `{project}.{dataset}.approvers` (
+  approver_role STRING NOT NULL OPTIONS(description="Must match approval_policy.approver_role"),
+  email STRING NOT NULL,
+  active BOOL NOT NULL OPTIONS(description="Only active rows are notified")
+) OPTIONS(description="Who is notified (email) when a role must approve. Configured at setup time; edit with SQL.");
+
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.campaign_requests` (
   request_id STRING NOT NULL,
   campaign_id STRING NOT NULL,

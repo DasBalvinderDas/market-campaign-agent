@@ -40,6 +40,10 @@ def run(args, project=""):
     for amount in (3000, 18000, 72000):
         p = repo.get_policy(amount)
         print(f"  ${amount:>6,}: {p['tier']:<10} -> {p['approver_role']}")
+    print("\nApprover emails (who is notified)")
+    for role in sorted({repo.get_policy(a)["approver_role"] for a in (18000, 72000)}):
+        emails = repo.get_approver_emails(role)
+        print(f"  {role:<36} {', '.join(emails) if emails else '(none: no email will be sent; run setup_bigquery.py --approver-email)'}")
     print("\nBigQuery OK")
 
     if args.integration:

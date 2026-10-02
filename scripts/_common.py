@@ -54,7 +54,8 @@ def explain(message: str, project: str) -> str | None:
     if "permission" in m or "access denied" in m or "403" in m or "forbidden" in m:
         return (f"Your account lacks a permission in project '{project}'. Ask for these roles:\n"
                 "  - BigQuery Data Editor (roles/bigquery.dataEditor) and BigQuery Job User (roles/bigquery.jobUser)\n"
-                "  - Application Integration Invoker + Viewer (roles/integrations.integrationInvoker, roles/integrations.viewer)\n"
+                "  - Application Integration Editor or Admin to create the integration (roles/integrations.integrationEditor / integrationAdmin)\n"
+                "  - Application Integration Invoker + Viewer to run it (roles/integrations.integrationInvoker, roles/integrations.viewer)\n"
                 "  - Vertex AI User (roles/aiplatform.user)\n"
                 f"Original error: {message[:300]}")
     return None
@@ -73,3 +74,70 @@ def guarded(fn):
                 sys.exit(f"\n{hint}")
             raise
     return wrapper
+
+
+# ---------------------------------------------------------------- preflight
+SERVICE_USAGE = "https://serviceusage.googleapis.com/v1"
+BQ_PERMISSIONS = ["bigquery.datasets.create", "bigquery.tables.create", "bigquery.tables.updateData",
+                  "bigquery.jobs.create"]
+
+
+def default_account_email() -> str | None:
+    """The email of the active gcloud account (used as the approver when none is configured)."""
+    try:
+        out = subprocess.run(["gcloud", "config", "get-value", "account"], capture_output=True, text=True,
+                             timeout=20).stdout.strip()
+        return out if "@" in out else None
+    except Exception:
+        return None
+
+
+def preflight(project: str, apis: list[str], check_bigquery_permissions: bool = True,
+              optional_apis: list[str] | None = None) -> None:
+    """Check up front that the needed APIs are enabled and BigQuery permissions exist, and report ALL
+    problems in one message. Best effort: if the check itself cannot run, the scripts' normal error
+    messages still apply."""
+    try:
+        import google.auth
+        from google.auth.transport.requests import AuthorizedSession
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        http = AuthorizedSession(creds)
+    except Exception:
+        return
+    problems = []
+    disabled = []
+    for api in (optional_apis or []):
+        try:
+            r = http.get(f"{SERVICE_USAGE}/projects/{project}/services/{api}", timeout=30)
+            if r.status_code == 200 and r.json().get("state") == "DISABLED":
+                print(f"Note: {api} is not enabled. Gemini on Vertex AI needs it "
+                      f"(gcloud services enable {api} --project {project}); not needed if you use GOOGLE_API_KEY.")
+        except Exception:
+            break
+    for api in apis:
+        try:
+            r = http.get(f"{SERVICE_USAGE}/projects/{project}/services/{api}", timeout=30)
+            if r.status_code == 200 and r.json().get("state") == "DISABLED":
+                disabled.append(api)
+        except Exception:
+            break
+    if disabled:
+        cmds = " ".join(disabled)
+        problems.append("These Google Cloud APIs are not enabled in project '" + project + "'. Please enable:\n"
+                        + "".join(f"  - {a}   (https://console.cloud.google.com/apis/library/{a}?project={project})\n"
+                                  for a in disabled)
+                        + f"  or in one command:  gcloud services enable {cmds} --project {project}")
+    if check_bigquery_permissions and "bigquery.googleapis.com" not in disabled:
+        try:
+            r = http.post(f"https://cloudresourcemanager.googleapis.com/v1/projects/{project}:testIamPermissions",
+                          json={"permissions": BQ_PERMISSIONS}, timeout=30)
+            if r.status_code == 200:
+                missing = [p for p in BQ_PERMISSIONS if p not in r.json().get("permissions", [])]
+                if missing:
+                    problems.append("Your account is missing BigQuery permissions (" + ", ".join(missing) + ").\n"
+                                    "  Ask for the roles BigQuery Data Editor (roles/bigquery.dataEditor) and "
+                                    "BigQuery Job User (roles/bigquery.jobUser) on the project.")
+        except Exception:
+            pass
+    if problems:
+        sys.exit("\n" + "\n\n".join(problems) + "\n\nFix the above, then run this script again.")

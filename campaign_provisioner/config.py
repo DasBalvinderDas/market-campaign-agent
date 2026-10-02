@@ -18,3 +18,6 @@ PO_TRIGGER = os.getenv("APP_INTEGRATION_PO_TRIGGER", "api_trigger/create_purchas
 NOTIFY_TRIGGER = os.getenv("APP_INTEGRATION_NOTIFY_TRIGGER", "api_trigger/notify_approver")
 
 EVENT_NAME = "Google Next 2027"
+
+# Approver notification emails: "Role=a@x.com,b@x.com;Other Role=c@x.com" (or just "a@x.com" for every role).
+APPROVER_EMAILS = os.getenv("APPROVER_EMAILS", "")

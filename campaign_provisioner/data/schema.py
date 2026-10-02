@@ -80,6 +80,14 @@ TABLES = {
             ("approver_role", "STRING", "REQUIRED", ""),
         ],
     },
+    "approvers": {
+        "description": "Who is notified (email) when a role must approve. Configured at setup time; edit with SQL.",
+        "columns": [
+            ("approver_role", "STRING", "REQUIRED", "Must match approval_policy.approver_role"),
+            ("email", "STRING", "REQUIRED", ""),
+            ("active", "BOOL", "REQUIRED", "Only active rows are notified"),
+        ],
+    },
     "campaign_requests": {
         "description": "Every request registered by the orchestrator.",
         "columns": [

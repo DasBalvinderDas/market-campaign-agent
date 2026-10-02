@@ -10,5 +10,8 @@ high-value spend pauses for a named human approver.
 - BigQuery DDL: [bigquery/schema.sql](bigquery/schema.sql); setup: `scripts/setup_bigquery.py`, `scripts/setup_application_integration.py` (creates the integration too)
 - Management deck (updated for BigQuery + Application Integration): `docs/Campaign_Provisioner_Management_Deck.pptx`
 
+Full setup in one command (BigQuery data, Application Integration workflow, approver emails, `.env`):
+`python scripts/setup_all.py --approver-email "you@example.com"`. It reports any API that must be enabled or permission that is missing.
+
 Quick start (offline rehearsal): `pip install -r requirements.txt && pytest`, then set `DATA_BACKEND=memory` and
 `WORKFLOW_BACKEND=mock` in `.env` and run `adk web`.

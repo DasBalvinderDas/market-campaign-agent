@@ -53,3 +53,10 @@ def test_schema_views_reference_only_defined_tables():
     for sql in schema.VIEWS.values():
         assert "{ds}" in sql
     assert {"budget_ledger", "purchase_orders"} <= set(schema.TABLES)
+
+
+def test_approver_emails_query():
+    r, c = repo([{"email": "a@x.com"}, {"email": "b@x.com"}])
+    assert r.get_approver_emails("Marketing Director") == ["a@x.com", "b@x.com"]
+    sql, params = c.calls[0]
+    assert "`proj.ds.approvers`" in sql and "AND active" in sql and params == {"role": "Marketing Director"}

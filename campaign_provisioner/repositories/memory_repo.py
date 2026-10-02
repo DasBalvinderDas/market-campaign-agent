@@ -1,6 +1,8 @@
 """In-memory repository seeded from the same data as BigQuery (offline demo + tests)."""
 import copy
 
+from .. import approvers as approvers_cfg
+from .. import config
 from ..data.seed_data import SEED
 from .base import Repository, new_id, now
 
@@ -8,6 +10,8 @@ from .base import Repository, new_id, now
 class MemoryRepository(Repository):
     def __init__(self):
         self.t = copy.deepcopy(SEED)
+        roles = [p['approver_role'] for p in self.t['approval_policy'] if p['requires_human']]
+        self.t['approvers'] = approvers_cfg.expand(approvers_cfg.parse(config.APPROVER_EMAILS), roles)
 
     # ---- inventory
     def _reserved(self, sku):
@@ -88,6 +92,9 @@ class MemoryRepository(Repository):
         ordered = sum(p["total_amount"] for p in self.t["purchase_orders"]
                       if p["request_id"] == request_id and p["status"] == "CREATED")
         return {"approved": approved, "ordered": ordered}
+
+    def get_approver_emails(self, role):
+        return [a['email'] for a in self.t['approvers'] if a['approver_role'] == role and a['active']]
 
     # ---- requests, POs, audit
     def create_request(self, campaign_id, summary):

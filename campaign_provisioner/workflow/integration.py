@@ -2,7 +2,8 @@
 
 Two integration API triggers are used:
   * create_purchase_order  - creates the PO (ERP / vendor email / approvals chat) and returns po_number
-  * notify_approver        - tells the human approver a decision is waiting (Chat / email)
+  * notify_approver        - emails the human approver that a decision is waiting (recipients come from the
+                             BigQuery table `approvers`)
 
 WORKFLOW_BACKEND=app_integration  -> ADK ApplicationIntegrationToolset (real integration)
 WORKFLOW_BACKEND=mock             -> local functions with the same argument names (offline demo/tests)
@@ -15,7 +16,8 @@ from .. import config
 
 _PO_HINT = ("Create the purchase order for an APPROVED request. Pass request_id, sku, quantity and vendor_id. "
             "The platform recomputes the amount and blocks the call if no approved budget covers it.")
-_NOTIFY_HINT = "Notify the human approver that a high-value request is waiting for a decision."
+_NOTIFY_HINT = ("Email the human approver that a high-value request is waiting for a decision. Pass request_id, "
+                "campaign_id, amount, approver_role and summary. Never pass approver_emails; the platform fills it in.")
 
 
 def create_purchase_order(request_id: str, sku: str, quantity: int, vendor_id: str,
@@ -35,18 +37,22 @@ def create_purchase_order(request_id: str, sku: str, quantity: int, vendor_id: s
             "execution_id": f"mock-{uuid.uuid4().hex[:8]}"}
 
 
-def notify_approver(request_id: str, campaign_id: str, amount: float, approver_role: str, summary: str) -> dict:
-    """Notify the human approver that a request is waiting (offline stand-in for the Application
-    Integration trigger of the same name).
+def notify_approver(request_id: str, campaign_id: str, amount: float, approver_role: str, summary: str,
+                    approver_emails: str = "") -> dict:
+    """Notify the human approver by email that a request is waiting (offline stand-in for the Application
+    Integration trigger of the same name). Do not pass approver_emails: the platform fills it in from the
+    BigQuery table `approvers`.
 
     Args:
         request_id: Campaign request id.
         campaign_id: Campaign being charged.
         amount: USD amount awaiting approval.
         approver_role: Role that must decide, from get_approval_policy.
-        summary: What is being bought and why.
+        summary: What is being bought and why (items, vendor, total).
+        approver_emails: Filled in by the platform guard.
     """
-    return {"status": "SUCCEEDED", "channel": "mock", "approver_role": approver_role}
+    return {"status": "SUCCEEDED", "channel": "mock (no email is sent)", "approver_role": approver_role,
+            "approver_emails": approver_emails}
 
 
 def _toolset(trigger: str, hint: str):

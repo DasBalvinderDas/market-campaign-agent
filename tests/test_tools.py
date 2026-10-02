@@ -1,3 +1,4 @@
+import pytest
 import types
 
 from campaign_provisioner.tools import budget_tools, inventory_tools, orchestration_tools, procurement_tools
@@ -126,3 +127,39 @@ def test_adk_confirmation_predicate_receives_args():
     assert ask(18000.0, "NEXT27-MAIN") is True
     assert ask(3540.0, "NEXT27-MAIN") is False
     assert ask(18000.0, "NEXT27-DEVLOUNGE") is False
+
+
+# ---- approver notification
+def test_notify_recipients_come_from_data_not_model(repo):
+    from campaign_provisioner.tools.audit import audit  # noqa: F401
+    repo.t["approvers"] = [{"approver_role": "Marketing Director", "email": "md@example.com", "active": True},
+                           {"approver_role": "Marketing Director", "email": "md2@example.com", "active": True},
+                           {"approver_role": "Marketing Director", "email": "old@example.com", "active": False}]
+    tool = types.SimpleNamespace(name="notify_approver")
+    args = {"request_id": "R", "approver_role": "Marketing Director", "approver_emails": "attacker@evil.com"}
+    assert guard.before_tool(tool, args, None) is None
+    assert args["approver_emails"] == "md@example.com,md2@example.com"
+
+
+def test_notify_without_recipients_is_reported_not_blocking(repo):
+    repo.t["approvers"] = []
+    tool = types.SimpleNamespace(name="notify_approver")
+    out = guard.before_tool(tool, {"request_id": "R", "approver_role": "VP Marketing + Finance Controller"}, None)
+    assert out["status"] == "NO_APPROVERS" and "no email was sent" in out["reason"]
+    assert repo.t["audit_log"][-1]["action"] == "approver_email_skipped_no_recipients"
+
+
+def test_notification_failure_is_audited(repo):
+    tool = types.SimpleNamespace(name="notify_approver")
+    guard.after_tool(tool, {"request_id": "R", "approver_emails": "a@x.com"}, None, {"executionFailed": True})
+    assert repo.t["audit_log"][-1]["action"] == "approver_notification_failed"
+
+
+def test_approver_config_parsing():
+    from campaign_provisioner import approvers as a
+    cfg = a.parse("Marketing Director=a@x.com,b@x.com;VP Marketing + Finance Controller=c@x.com;z@x.com")
+    rows = a.expand(cfg, ["Marketing Director", "VP Marketing + Finance Controller"])
+    assert [r["email"] for r in rows if r["approver_role"] == "Marketing Director"] == ["a@x.com", "b@x.com", "z@x.com"]
+    assert a.parse("me@x.com") == {"*": ["me@x.com"]}
+    with pytest.raises(ValueError):
+        a.parse("Marketing Director=not-an-email")

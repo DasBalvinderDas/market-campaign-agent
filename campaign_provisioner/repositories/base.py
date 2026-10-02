@@ -36,6 +36,8 @@ class Repository:
     def commit_budget(self, campaign_id: str, request_id: str, amount: float, approved_by: str) -> None: raise NotImplementedError
     def get_headroom(self, request_id: str) -> dict: raise NotImplementedError
 
+    def get_approver_emails(self, role: str) -> list[str]: raise NotImplementedError
+
     # ---- requests, POs, audit
     def create_request(self, campaign_id: str, summary: str) -> str: raise NotImplementedError
     def get_request(self, request_id: str) -> dict | None: raise NotImplementedError

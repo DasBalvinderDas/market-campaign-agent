@@ -75,6 +75,7 @@ docs/                         this guide, DEMO_RUN.md, management deck
 | `campaigns`, `budget_ledger` | Total budgets; ledger of SPEND / COMMIT / RELEASE entries |
 | `v_campaign_budget` | total, spent, committed, remaining per campaign |
 | `approval_policy` | Tiers: amount range, whether a human is needed, approver role |
+| `approvers` | Role -> email addresses notified for approval (configured at setup) |
 | `campaign_requests`, `purchase_orders` | Registered requests and created POs |
 | `v_request_headroom` | Approved amount minus PO total per request (used by the guard) |
 | `audit_log` | Append-only trail of every governed action |
@@ -109,7 +110,9 @@ Example: *"NEXT27-MAIN needs 1 booth LED video wall."*
 
 ## 7. Application Integration
 
-Two API triggers in one integration (`campaign-provisioner-workflows`): `create_purchase_order` and `notify_approver`.
+Two API triggers in one integration (`campaign-provisioner-workflows`): `create_purchase_order` and `notify_approver`
+(which emails the approvers listed in the BigQuery `approvers` table; the guard supplies the addresses, never the model).
+`python scripts/setup_all.py` sets up BigQuery, the integration and `.env` in one go, and reports missing APIs and permissions up front.
 ADK connects with `ApplicationIntegrationToolset`. Variable names are a contract; see `integration/README.md`.
 `WORKFLOW_BACKEND=mock` swaps in local functions with identical arguments for offline rehearsal.
 

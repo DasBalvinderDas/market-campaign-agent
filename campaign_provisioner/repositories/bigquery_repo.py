@@ -94,6 +94,11 @@ class BigQueryRepository(Repository):
         return {"approved": float(rows[0]["approved"]), "ordered": float(rows[0]["ordered"])} if rows \
             else {"approved": 0.0, "ordered": 0.0}
 
+    def get_approver_emails(self, role):
+        rows = self._run("SELECT email FROM `{ds}.approvers` WHERE approver_role = @role AND active ORDER BY email",
+                         role=role)
+        return [r["email"] for r in rows]
+
     # ---- requests, POs, audit
     def create_request(self, campaign_id, summary):
         rid = new_id("REQ")

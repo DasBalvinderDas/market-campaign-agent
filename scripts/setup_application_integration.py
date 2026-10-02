@@ -9,10 +9,11 @@ It builds integration "campaign-provisioner-workflows" with two API triggers thr
 Integration REST API:
   create_purchase_order  in: request_id, campaign_id, sku, vendor_id, quantity, total_amount
                          out: po_number (PO-<request_id>-<sku>), execution_id
-  notify_approver        in: request_id, campaign_id, approver_role, summary, amount
+  notify_approver        in: request_id, campaign_id, approver_role, approver_emails, summary, amount
                          out: status
-Each trigger runs one Data Mapping task. To send a real email or Chat message, open the integration in the
-console and add a Send Email / Google Chat task after the notify_approver mapping (optional).
+create_purchase_order runs a Data Mapping task. notify_approver builds the message, SENDS AN EMAIL to
+approver_emails (a comma-separated list the agent reads from the BigQuery table `approvers`, so the addresses
+are configured in data, not in the integration), then sets status. Use --no-email to skip the email task.
 
 Assumes the Application Integration API is already enabled. Project id: --project, else
 GOOGLE_CLOUD_PROJECT, else your active gcloud project. If an API is not enabled the script tells you which one.
@@ -26,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import explain, guarded, resolve_project  # noqa: E402
+from _common import default_account_email, explain, guarded, preflight, resolve_project  # noqa: E402
 
 NAME = os.getenv("APP_INTEGRATION_NAME", "campaign-provisioner-workflows")
 LOCATION = os.getenv("APP_INTEGRATION_LOCATION", "us-central1")
@@ -39,17 +40,21 @@ S, I, D = "STRING_VALUE", "INT_VALUE", "DOUBLE_VALUE"
 # Variable names are a contract with the agent (campaign_provisioner/workflow/guard.py).
 PO_IN = {"request_id": S, "campaign_id": S, "sku": S, "vendor_id": S, "quantity": I, "total_amount": D}
 PO_OUT = {"po_number": S, "execution_id": S}
-NOTIFY_IN = {"request_id": S, "campaign_id": S, "approver_role": S, "summary": S, "amount": D}
+NOTIFY_IN = {"request_id": S, "campaign_id": S, "approver_role": S, "approver_emails": S, "summary": S, "amount": D}
 NOTIFY_OUT = {"status": S}
 
 SAMPLE = {
     PO_TRIGGER: {"request_id": {"stringValue": "SETUP-TEST"}, "campaign_id": {"stringValue": "NEXT27-MAIN"},
                  "sku": {"stringValue": "BOOTH-LEDWALL"}, "quantity": {"intValue": "1"},
                  "vendor_id": {"stringValue": "V-EXPOVISION"}, "total_amount": {"doubleValue": 18000}},
-    NOTIFY_TRIGGER: {"request_id": {"stringValue": "SETUP-TEST"}, "campaign_id": {"stringValue": "NEXT27-MAIN"},
-                     "approver_role": {"stringValue": "Marketing Director"},
-                     "summary": {"stringValue": "Setup test, please ignore"}, "amount": {"doubleValue": 18000}},
 }
+
+
+def notify_sample(email):
+    return {"request_id": {"stringValue": "SETUP-TEST"}, "campaign_id": {"stringValue": "NEXT27-MAIN"},
+            "approver_role": {"stringValue": "Marketing Director"}, "approver_emails": {"stringValue": email},
+            "summary": {"stringValue": "Setup test, please ignore: 1 booth LED video wall, USD 18,000"},
+            "amount": {"doubleValue": 18000}}
 
 
 # ---------------------------------------------------------------- integration definition
@@ -86,8 +91,28 @@ def _trigger(number, trigger_id, start_task, inputs, outputs):
             "inputVariables": {"names": list(inputs)}, "outputVariables": {"names": list(outputs)}}
 
 
-def build_version() -> dict:
-    """The IntegrationVersion body: two API triggers, each starting one Data Mapping task."""
+def _lits(*parts):
+    return [_concat(_lit(p)) if not p.startswith("$") else _concat(_ref(p.strip("$"))) for p in parts]
+
+
+def _email_task(task_id, next_id):
+    """Send Email task. Parameter keys follow Google's published foreach-loop-send-email sample."""
+    empty = {"stringArray": {}}
+    return {"task": "EmailTask", "taskId": task_id, "displayName": "Email the approver",
+            "nextTasks": [{"taskId": next_id}], "taskExecutionStrategy": "WHEN_ALL_SUCCEED",
+            "parameters": {
+                "To": {"key": "To", "value": {"stringArray": {"stringValues": ["$recipient_list$"]}}},
+                "Cc": {"key": "Cc", "value": empty}, "Bcc": {"key": "Bcc", "value": empty},
+                "AttachmentPath": {"key": "AttachmentPath", "value": empty},
+                "Subject": {"key": "Subject", "value": {"stringValue": "$email_subject$"}},
+                "TextBody": {"key": "TextBody", "value": {"stringValue": "$email_body$"}},
+                "BodyFormat": {"key": "BodyFormat", "value": {"stringValue": "text"}},
+                "EmailConfigInput": {"key": "EmailConfigInput", "value": {
+                    "jsonValue": json.dumps({"@type": "type.googleapis.com/enterprise.crm.eventbus.proto.EmailConfig"})}}}}
+
+
+def build_version(email: bool = True) -> dict:
+    """The IntegrationVersion body: two API triggers (purchase order, notify approver)."""
     po_number = {"inputField": {"fieldType": S, "transformExpression": {
         "initialValue": {"literalValue": {"stringValue": "PO-"}},
         "transformationFunctions": [_concat(_ref("request_id")), _concat(_lit("-")), _concat(_ref("sku"))]}},
@@ -102,13 +127,37 @@ def build_version() -> dict:
     for group, kind in ((PO_IN, "IN"), (NOTIFY_IN, "IN"), (PO_OUT, "OUT"), (NOTIFY_OUT, "OUT")):
         for key, typ in group.items():
             params.setdefault(key, {"key": key, "displayName": key, "dataType": typ, "inputOutputType": kind})
+    tasks = [_mapping_task("1", "Build PO number", [po_number, execution_id])]
+    if email:
+        # 2: build recipient list + subject + body   3: send email   4: set status
+        recipients = {"inputField": {"fieldType": S, "transformExpression": {
+            "initialValue": _ref("approver_emails")["initialValue"],
+            "transformationFunctions": [{"functionType": {"stringFunction": {"functionName": "SPLIT"}},
+                                         "parameters": [_lit(",")]}]}},
+            "outputField": {"referenceKey": "$recipient_list$", "fieldType": "STRING_ARRAY", "cardinality": "OPTIONAL"}}
+        subject = {"inputField": {"fieldType": S, "transformExpression": {
+            "initialValue": {"literalValue": {"stringValue": "Approval needed: "}},
+            "transformationFunctions": _lits("$request_id$", " - ", "$campaign_id$", " (", "$approver_role$", ")")}},
+            "outputField": _out_field("email_subject")}
+        body = {"inputField": {"fieldType": S, "transformExpression": {
+            "initialValue": _ref("summary")["initialValue"],
+            "transformationFunctions": _lits("\n\nRequest ", "$request_id$", " needs approval from ", "$approver_role$",
+                                             ". Open the Campaign Provisioner chat and choose Confirm or Reject.")}},
+            "outputField": _out_field("email_body")}
+        for key, typ in (("recipient_list", "STRING_ARRAY"), ("email_subject", S), ("email_body", S)):
+            params[key] = {"key": key, "displayName": key, "dataType": typ}
+        t2 = _mapping_task("2", "Build email", [recipients, subject, body])
+        t2["nextTasks"] = [{"taskId": "3"}]
+        t4 = _mapping_task("4", "Mark approver notified", [status])
+        tasks += [t2, _email_task("3", "4"), t4]
+    else:
+        tasks.append(_mapping_task("2", "Mark approver notified", [status]))
     return {
-        "description": "Campaign Provisioner workflows: create purchase order, notify approver.",
+        "description": "Campaign Provisioner workflows: create purchase order, notify approver by email.",
         "integrationParameters": list(params.values()),
         "triggerConfigs": [_trigger(1, PO_TRIGGER, "1", PO_IN, PO_OUT),
                            _trigger(2, NOTIFY_TRIGGER, "2", NOTIFY_IN, NOTIFY_OUT)],
-        "taskConfigs": [_mapping_task("1", "Build PO number", [po_number, execution_id]),
-                        _mapping_task("2", "Mark approver notified", [status])],
+        "taskConfigs": tasks,
     }
 
 
@@ -138,6 +187,8 @@ def run(args, project=""):
     import google.auth
     from google.auth.transport.requests import AuthorizedSession
 
+    if not getattr(args, "skip_preflight", False):
+        preflight(project, ["integrations.googleapis.com"], check_bigquery_permissions=False)
     creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
     http = AuthorizedSession(creds)
     run_with(http, args, project)
@@ -166,7 +217,7 @@ def run_with(http, args, project):
     else:
         print("  creating the integration and publishing it ..." if not exists else "  adding a new version and publishing it ...")
         r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
-                      json=build_version())
+                      json=build_version(email=not args.no_email))
         if r.status_code != 200:
             _fail(r, project)
         version = r.json()["name"]
@@ -179,8 +230,17 @@ def run_with(http, args, project):
         print(f"  OK  created and published: {', '.join(sorted(wanted))}")
 
     if args.test:
-        print("\nRunning each trigger once with sample data ...")
-        for trigger, params in SAMPLE.items():
+        test_email = args.test_email or default_account_email()
+        samples = dict(SAMPLE)
+        if test_email and not args.no_email:
+            samples[NOTIFY_TRIGGER] = notify_sample(test_email)
+            print(f"\nRunning each trigger once; the approver email goes to {test_email} ...")
+        elif not args.no_email:
+            print("\nSkipping the notify_approver test: no email known. Pass --test-email you@example.com.")
+        else:
+            samples[NOTIFY_TRIGGER] = notify_sample("none@example.com")
+            print("\nRunning each trigger once ...")
+        for trigger, params in samples.items():
             r = http.post(f"{base}:execute", json={"triggerId": trigger, "inputParameters": params})
             if r.status_code != 200:
                 _fail(r, project)
@@ -193,6 +253,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default=None)
     ap.add_argument("--test", action="store_true", help="execute both triggers once with sample data")
+    ap.add_argument("--test-email", default=None, help="recipient for the --test approval email (default: your gcloud account)")
+    ap.add_argument("--no-email", action="store_true", help="do not add the Send Email task to notify_approver")
     ap.add_argument("--check-only", action="store_true", help="check only; do not create anything")
     ap.add_argument("--provision-region", action="store_true",
                     help="one-time: enable Application Integration in this region (first use only)")

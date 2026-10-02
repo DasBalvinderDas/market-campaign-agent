@@ -72,6 +72,7 @@ SEED = {
         {"tier": "EXECUTIVE", "min_amount": 50000.0, "max_amount": 1e12, "requires_human": True,
          "approver_role": "VP Marketing + Finance Controller"},
     ],
+    "approvers": [],  # filled by scripts/setup_bigquery.py from --approver-email / APPROVER_EMAILS
     "inventory_reservations": [],
     "campaign_requests": [],
     "purchase_orders": [],
