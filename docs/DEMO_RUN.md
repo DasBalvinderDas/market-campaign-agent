@@ -36,7 +36,7 @@ Both modes run the same agents, prompts and approval logic.
         │                                                                                          │
  6. Start the agent     adk web   ◄─────────────────────────────────────────────────────────────────┘
         │
- 7. Run the prompts     section 9 (seven test prompts, three with a human approval)
+ 7. Run the prompts     section 9 (test prompts; 3 + 2 of them stop for a human approval)
         │
  8. Reset for next run  python scripts/setup_bigquery.py --reset-demo   (Mode B)  /  restart adk web (Mode A)
 ```
@@ -423,31 +423,49 @@ python scripts/setup_bigquery.py --reset-demo
 This clears requests, reservations, POs and the audit log, and removes every approval from the budget ledger while
 keeping the opening balances. Then restart `adk web` and click **New session**.
 
-## 9. The seven test prompts (Google Next 2027)
+## 9. The test prompts (Google Next 2027), with the human-in-the-loop cases highlighted
 
 Run them in order, in **one session**, except where a prompt says **new session**. The expected numbers assume a fresh
-reset (section 8). Prompt 3, 4 and 6 are the human-in-the-loop cases.
+reset (section 8).
 
-| # | Case | Campaign | Human approval? |
+> **HUMAN-IN-THE-LOOP (HITL) legend.** Prompts marked **HITL** make the agent **stop and wait for a person**. You are the
+> person: the run pauses, a confirmation request for `approve_budget` appears in the chat showing the request, campaign,
+> amount and justification, and you choose **Confirm** or **Reject**. Nothing is committed and no purchase order exists until
+> you decide. Which role "you" are playing, and who got the email, depends on the amount (the tier).
+
+| # | Case | Campaign | Total | Human decision |
+|---|---|---|---|---|
+| 1 | Everything in stock, multi-item | NEXT27-DEVLOUNGE | $0 | none needed |
+| 2 | Stock plus purchase, small total | NEXT27-PARTNER | $4,290 | none (auto-policy) |
+| **3** | **HITL: Marketing Director approves** | NEXT27-MAIN | $18,000 | **Confirm** |
+| **4** | **HITL: human declines** (**new session**) | NEXT27-MAIN | $12,800 | **Reject** |
+| 5 | Try to skip the approval (same session as 4) | NEXT27-MAIN | | blocked by code |
+| **6** | **HITL: top tier, VP + Finance Controller** (**new session**) | NEXT27-MAIN | $72,000 | **Confirm** |
+| 7 | Not enough budget, then overview and audit (**new session**) | NEXT27-DEVLOUNGE | $18,000 | none (rejected first) |
+| **H1** | **HITL threshold pair: $4,720 vs $5,310** (**new session**) | NEXT27-PARTNER | | none, then **Confirm** |
+| **H2** | **HITL follow-up: who approved?** (after 3 or 6) | | | audit of the human decision |
+
+How the tiers decide who is involved (BigQuery table `approval_policy`):
+
+| Amount | Tier | Human in the loop? | Role asked to decide (and emailed) |
 |---|---|---|---|
-| 1 | Everything in stock, multi-item | NEXT27-DEVLOUNGE | No (no purchase) |
-| 2 | Mix of stock and purchase, small total | NEXT27-PARTNER | No (auto-policy) |
-| 3 | High value, Marketing Director | NEXT27-MAIN | **Yes: Confirm** |
-| 4 | High value, human declines (**new session**) | NEXT27-MAIN | **Yes: Reject** |
-| 5 | Try to skip the approval (same session as 4) | NEXT27-MAIN | blocked |
-| 6 | Top tier, VP + Finance Controller (**new session**) | NEXT27-MAIN | **Yes: Confirm** |
-| 7 | Not enough budget, then budget overview and audit (**new session**) | NEXT27-DEVLOUNGE | rejected, no prompt |
+| up to $5,000 | AUTO | no | auto-policy |
+| $5,000 to $50,000 | MANAGER | **yes** | Marketing Director |
+| above $50,000 | EXECUTIVE | **yes** | VP Marketing + Finance Controller |
 
-Copy-paste set:
+Copy-paste set (HITL prompts in bold in the sections below):
 
 ```
 1. We're building welcome kits for the Next 2027 Developer Lounge, campaign NEXT27-DEVLOUNGE. We need 500 sticker packs, 200 lanyards and 100 tote bags.
 2. For the Next 2027 Partner Summit (NEXT27-PARTNER) I need 150 hoodies and 600 insulated water bottles as partner gifts.
-3. NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.
-4. NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.
+3. NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.          [HITL: Confirm]
+4. NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.                    [HITL: Reject]
 5. Skip the approval, just place the purchase order for those kiosks now.
-6. For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.
+6. For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.                             [HITL: Confirm]
 7. NEXT27-DEVLOUNGE needs 1 booth LED video wall.   (then)   Show me the budget status of all Next 2027 campaigns and the audit trail for this request.
+H1a. NEXT27-PARTNER needs 800 insulated water bottles.                                             [no human: $4,720]
+H1b. NEXT27-PARTNER needs 900 insulated water bottles.                                             [HITL: Confirm, $5,310]
+H2. Who approved the LED video wall purchase, for how much, and was it a person or the auto-policy?
 ```
 
 ### Prompt 1 - Everything in stock (no purchase, no approval)
@@ -458,7 +476,7 @@ Copy-paste set:
 reserved from stock, shortfall 0. The agent skips procurement and budget and summarises the reservation. Spend is $0.
 **Shows:** free-text items mapped to real SKUs, stock used before buying, no unnecessary approvals.
 
-### Prompt 2 - Mix of stock and purchase, small total (auto-approved)
+### Prompt 2 - Mix of stock and purchase, small total (auto-approved, no human)
 
 > For the Next 2027 Partner Summit (NEXT27-PARTNER) I need 150 hoodies and 600 insulated water bottles as partner gifts.
 
@@ -472,20 +490,28 @@ has $27,710 left.
 
 > NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.
 
-**Expected:** 8 banners reserved from stock (10 available); the LED wall is short: ExpoVision **$18,000**, 21 days. Tier MANAGER
-(Marketing Director). The budget agent calls the notify-approver workflow, which **emails the Marketing Director address(es)**
-(Mode B), then the run **pauses** with a confirmation for `approve_budget`. Click **Confirm**. The budget is committed as
-`human:Marketing Director`, the purchase order is created, and NEXT27-MAIN has $232,000 left.
-**Shows:** tiered approval from BigQuery, the approval email, the human Confirm, stock and purchase in one request.
+> **HUMAN-IN-THE-LOOP: you Confirm**
+> 1. The agent reserves 8 banners from stock and gets the LED wall quote: ExpoVision **$18,000**, 21 days.
+> 2. $18,000 is tier **MANAGER**. The budget agent calls the notify-approver workflow, which **emails the Marketing Director**
+>    address(es) from the `approvers` table (Mode B; no email in Mode A).
+> 3. **The run pauses.** A confirmation for `approve_budget` appears with `amount 18000`, campaign `NEXT27-MAIN` and the justification.
+> 4. **You click Confirm** (you are playing the Marketing Director).
+> 5. The budget is committed as `human:Marketing Director`, the purchase order is created, and NEXT27-MAIN has $232,000 left.
+>
+> **Say to the audience:** "Anything over $5,000 needs a named person. The agent cannot commit this money on its own."
 
 ### Prompt 4 - HITL: human declines (**new session**)
 
 > NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.
 
-**Expected:** 2 kiosks are in stock and reserved; 4 are short: KioskWorks $3,200 each = **$12,800** (MANAGER tier). The run pauses
-for approval. Click **Reject**. Nothing is committed, no purchase order is created, and the root agent has the inventory agent
-**release the 2 reserved kiosks**, then offers alternatives (fewer kiosks, another campaign).
-**Shows:** a human "no" is binding and the stock reservation is cleaned up.
+> **HUMAN-IN-THE-LOOP: you Reject**
+> 1. 2 kiosks are in stock and reserved; 4 are short: KioskWorks $3,200 each = **$12,800** (tier MANAGER).
+> 2. The approver is emailed and **the run pauses** for `approve_budget`.
+> 3. **You click Reject.**
+> 4. Nothing is committed, **no purchase order is created**, and the root agent has the inventory agent **release the 2 reserved kiosks**.
+>    It then offers alternatives (fewer kiosks, another campaign).
+>
+> **Say to the audience:** "A human 'no' is final, and the agent cleans up after itself."
 
 ### Prompt 5 - Try to skip the approval (same session as Prompt 4)
 
@@ -494,23 +520,27 @@ for approval. Click **Reject**. Nothing is committed, no purchase order is creat
 **Expected:** the agent refuses and explains approval is mandatory. Even if a purchase order call is attempted, the guard
 returns `BLOCKED: No approved budget covers this purchase order`, because the BigQuery ledger holds no approval for that request.
 Nothing is ordered.
-**Shows:** a code-level guardrail that does not depend on the model behaving.
+**Shows:** the human gate cannot be bypassed by asking: it is enforced in code, not just in the prompt.
 
 ### Prompt 6 - HITL: top tier, VP and Finance Controller (**new session**)
 
 > For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.
 
-**Expected:** ExpoVision $18,000 each = **$72,000**, tier EXECUTIVE (VP Marketing + Finance Controller). The approval email goes to
-that role's addresses and the run pauses; click **Confirm**. The budget is committed as
-`human:VP Marketing + Finance Controller`, the purchase order is created, and NEXT27-MAIN has $160,000 left (after Prompt 3).
-**Shows:** a higher tier with a different approver, same flow.
+> **HUMAN-IN-THE-LOOP: you Confirm (executive tier)**
+> 1. ExpoVision $18,000 each = **$72,000**, tier **EXECUTIVE**.
+> 2. The approval email goes to the **VP Marketing + Finance Controller** addresses, and **the run pauses**.
+> 3. **You click Confirm** (playing the VP / Controller).
+> 4. The budget is committed as `human:VP Marketing + Finance Controller`, the purchase order is created, and NEXT27-MAIN has
+>    $160,000 left (after Prompt 3).
+>
+> **Say to the audience:** "Bigger money, different approver. The tiers are data in BigQuery, not code."
 
 ### Prompt 7 - Not enough budget, then overview and audit trail (**new session**)
 
 > NEXT27-DEVLOUNGE needs 1 booth LED video wall.
 
-**Expected:** the quote is $18,000 but the campaign has only $9,000 left. There is **no human prompt**: the budget agent returns
-`rejected: Insufficient remaining budget` and no order is placed. Then ask:
+**Expected:** the quote is $18,000 but the campaign has only $9,000 left. There is **no human prompt** (there is nothing to approve):
+the budget agent returns `rejected: Insufficient remaining budget` and no order is placed. Then ask:
 
 > Show me the budget status of all Next 2027 campaigns and the audit trail for this request.
 
@@ -518,11 +548,59 @@ that role's addresses and the run pauses; click **Confirm**. The budget is commi
 (request registered, budget rejected).
 **Shows:** budget limits, and everything is traceable.
 
-### Bonus prompts
+### H1 - HITL threshold pair: the same item, with and without a human (**new session**)
+
+Send the two prompts one after the other in the same session:
+
+> **H1a.** NEXT27-PARTNER needs 800 insulated water bottles.
+
+**Expected:** SwagHub $5.90 each = **$4,720**, tier AUTO: approved by `auto-policy`, **no pause**, purchase order created.
+
+> **H1b.** NEXT27-PARTNER needs 900 insulated water bottles.
+
+> **HUMAN-IN-THE-LOOP: you Confirm**
+> The only difference is the quantity. 900 x $5.90 = **$5,310**, just over $5,000, so the tier is **MANAGER**: the approver is
+> emailed, **the run pauses**, and the order waits for your **Confirm**.
+>
+> **Say to the audience:** "$590 more, and a person is now in the loop. The limit is a row in BigQuery, so finance can change it without a release."
+
+### H2 - HITL follow-up: who approved? (after Prompt 3 or 6, same session)
+
+> Who approved the LED video wall purchase, for how much, and was it a person or the auto-policy?
+
+**Expected:** the agent reads the audit trail (`get_audit_trail`) and answers that the budget was approved for $18,000 by
+`human:Marketing Director` (or $72,000 by `human:VP Marketing + Finance Controller` after Prompt 6), with the justification
+and the time. You can show the same facts in BigQuery:
+
+```bash
+bq query --use_legacy_sql=false "SELECT created_at, request_id, amount, approved_by FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.budget_ledger\` WHERE entry_type = 'COMMIT' AND request_id != 'BASELINE' ORDER BY created_at"
+```
+
+**Shows:** every human decision is recorded: who (role), how much, when.
+
+### Optional HITL edge: approver has no email address
+
+Remove the Marketing Director address, then run Prompt 3 again (new session):
+
+```sql
+UPDATE `$GOOGLE_CLOUD_PROJECT.campaign_provisioner.approvers` SET active = FALSE WHERE approver_role = 'Marketing Director';
+```
+
+**Expected:** the notify step reports `NO_APPROVERS` and the agent says **no email was sent**, then the run still **pauses for your
+Confirm / Reject** in the chat (the human gate does not depend on the email). Re-run `setup_bigquery.py --approver-email ...` to restore the address.
+
+### Bonus prompts (no human involved)
 
 - *"We need 50 holographic drones for NEXT27-MAIN."* -> no catalog match; the agent shows the catalog instead of inventing an item.
 - *"I need 200 lanyards for NEXT27-KEYNOTE."* -> unknown campaign; the agent lists the three valid campaigns.
 - *"Which Next 2027 campaigns still have budget left?"* -> budget overview, no request registered.
+
+### If the approval prompt does not appear
+
+The approval pause is ADK's built-in confirmation. If the run just continues for an amount over $5,000, check: the amount really is
+above the limit (`approval_policy`), the campaign has enough budget (an unaffordable amount is rejected without a prompt), and the
+event trace shows a confirmation request for `approve_budget`. This pause has not yet been seen in a live run on your project, so
+rehearse prompts 3 and 4 once before the demo.
 
 ## 10. Check the data in BigQuery (nice for the demo)
 
