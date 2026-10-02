@@ -14,12 +14,64 @@ Both modes run the same agents, prompts and approval logic.
 
 ---
 
+## Setup at a glance (start here)
+
+```
+ 1. Get the code        git clone ... && git checkout claude/next-2027-enhanced
+        │
+ 2. Install             python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+        │               pytest                       <- proves the code works, no cloud needed
+        │
+        ├── Mode A (rehearse offline) ──► set DATA_BACKEND=memory, WORKFLOW_BACKEND=mock in .env ──┐
+        │                                                                                          │
+ 3. Log in (Mode B)     export GOOGLE_CLOUD_PROJECT=<project>  +  gcloud auth application-default login
+        │                                                                                          │
+ 4. One-command setup   python scripts/setup_all.py --approver-email "you@example.com"             │
+        │                 ├─ checks APIs + permissions, lists anything missing, changes nothing yet  │
+        │                 ├─ BigQuery: dataset, tables, views, demo data, approver emails            │
+        │                 ├─ Application Integration: creates + publishes the workflow               │
+        │                 └─ writes .env and campaign_provisioner/.env                               │
+        │                                                                                          │
+ 5. Verify              python scripts/verify_setup.py --integration                               │
+        │                                                                                          │
+ 6. Start the agent     adk web   ◄─────────────────────────────────────────────────────────────────┘
+        │
+ 7. Run the prompts     section 9 (seven prompts, three with a human approval)
+        │
+ 8. Reset for next run  python scripts/setup_bigquery.py --reset-demo   (Mode B)  /  restart adk web (Mode A)
+```
+
+| Step | Command | You should see |
+|---|---|---|
+| 2 | `pytest` | all tests pass |
+| 4 | `python scripts/setup_all.py ...` | `BigQuery data: OK`, `Application Integration: OK`, and the line `wrote .env ...` |
+| 5 | `python scripts/verify_setup.py --integration` | 3 campaigns, stock, 3 approval tiers, the approver emails, then `Application Integration OK` |
+| 6 | `adk web` | a URL (http://localhost:8000); pick **campaign_provisioner** |
+| 7 | the first prompt in section 9 | the agent reserves stock, quotes, and finishes without asking for approval |
+
+**If step 4 prints a message instead of OK:** it names the API to enable or the role to ask for, nothing is half-done, and
+you simply run the same command again after fixing it. Finished parts are skipped.
+
+**Where each part of the flow gets its data** (so you know what is being set up):
+
+| What the agent needs | Comes from | Set up by |
+|---|---|---|
+| Stock, vendor prices, budgets, approval tiers | BigQuery tables and views | `setup_all.py` (step 4) |
+| Who is emailed for approval | BigQuery table `approvers` | `--approver-email` in step 4 |
+| Purchase order + approval email actions | Application Integration workflow | `setup_all.py` (step 4) |
+| The human Confirm / Reject | the `adk web` chat | nothing to set up |
+| Project, backends, model | `.env` | written by step 4 |
+
+The sections that follow give the detail for each step.
+
+---
+
 ## 1. Prerequisites
 
 - Python 3.10+ and a Google Cloud project with billing enabled (Mode B)
 - `gcloud` CLI (Cloud Shell has it)
 - The BigQuery, Application Integration and Vertex AI APIs enabled in the project (the scripts tell you if one is missing)
-- Your user needs BigQuery Data Editor + Job User, Application Integration Invoker + Viewer, and Vertex AI User
+- Your user needs BigQuery Data Editor + Job User, Application Integration Editor (or Admin) + Invoker + Viewer, and Vertex AI User (the setup script checks the BigQuery ones up front)
 
 ## 2. Install
 
@@ -39,7 +91,8 @@ cp .env.example .env
 ```
 
 Edit `.env`: set `DATA_BACKEND=memory`, `WORKFLOW_BACKEND=mock`, and either `GOOGLE_API_KEY=...` or the Vertex AI
-lines. Then jump to **section 8** (start `adk web`). Restart `adk web` between prompts to reset the state.
+lines (also `cp .env campaign_provisioner/.env`). Then jump to **section 8** (start `adk web`). Restart `adk web` between
+prompts to reset the state. In this mode no approval email is sent (the workflow is a local stand-in).
 
 ## 4. How the flow works and where Application Integration fits (read this first)
 
