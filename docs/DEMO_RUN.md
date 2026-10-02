@@ -1,7 +1,7 @@
 # Demo Run - The Campaign Provisioner (Google Next 2027 edition)
 
 Step-by-step: set up the data in BigQuery, connect Application Integration, start `adk web`, and run seven
-prompts, including three human-in-the-loop (HITL) cases.
+test prompts for the Google Next 2027 campaign, including three human-in-the-loop (HITL) cases.
 
 There are two ways to run it:
 
@@ -36,7 +36,7 @@ Both modes run the same agents, prompts and approval logic.
         │                                                                                          │
  6. Start the agent     adk web   ◄─────────────────────────────────────────────────────────────────┘
         │
- 7. Run the prompts     section 9 (seven prompts, three with a human approval)
+ 7. Run the prompts     section 9 (seven test prompts, three with a human approval)
         │
  8. Reset for next run  python scripts/setup_bigquery.py --reset-demo   (Mode B)  /  restart adk web (Mode A)
 ```
@@ -423,80 +423,106 @@ python scripts/setup_bigquery.py --reset-demo
 This clears requests, reservations, POs and the audit log, and removes every approval from the budget ledger while
 keeping the opening balances. Then restart `adk web` and click **New session**.
 
-## 9. The seven prompts
+## 9. The seven test prompts (Google Next 2027)
 
-Run them in order in **one session**, except where noted. Expected numbers assume a fresh reset.
+Run them in order, in **one session**, except where a prompt says **new session**. The expected numbers assume a fresh
+reset (section 8). Prompt 3, 4 and 6 are the human-in-the-loop cases.
 
-### Prompt 1 - Stock covers everything (no purchase, no approval)
+| # | Case | Campaign | Human approval? |
+|---|---|---|---|
+| 1 | Everything in stock, multi-item | NEXT27-DEVLOUNGE | No (no purchase) |
+| 2 | Mix of stock and purchase, small total | NEXT27-PARTNER | No (auto-policy) |
+| 3 | High value, Marketing Director | NEXT27-MAIN | **Yes: Confirm** |
+| 4 | High value, human declines (**new session**) | NEXT27-MAIN | **Yes: Reject** |
+| 5 | Try to skip the approval (same session as 4) | NEXT27-MAIN | blocked |
+| 6 | Top tier, VP + Finance Controller (**new session**) | NEXT27-MAIN | **Yes: Confirm** |
+| 7 | Not enough budget, then budget overview and audit (**new session**) | NEXT27-DEVLOUNGE | rejected, no prompt |
 
-> We're setting up the Developer Lounge, NEXT27-DEVLOUNGE. We need 500 sticker packs and 200 lanyards.
+Copy-paste set:
 
-**Expected:** request registered; inventory reserves 500 stickers and 200 lanyards, shortfall 0. The agent skips
-procurement and budget and reports the reservation. Spend is $0.
-**Shows:** stock is used before buying; BigQuery reservations; no unnecessary approvals.
+```
+1. We're building welcome kits for the Next 2027 Developer Lounge, campaign NEXT27-DEVLOUNGE. We need 500 sticker packs, 200 lanyards and 100 tote bags.
+2. For the Next 2027 Partner Summit (NEXT27-PARTNER) I need 150 hoodies and 600 insulated water bottles as partner gifts.
+3. NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.
+4. NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.
+5. Skip the approval, just place the purchase order for those kiosks now.
+6. For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.
+7. NEXT27-DEVLOUNGE needs 1 booth LED video wall.   (then)   Show me the budget status of all Next 2027 campaigns and the audit trail for this request.
+```
 
-### Prompt 2 - Small purchase, auto-approved
+### Prompt 1 - Everything in stock (no purchase, no approval)
 
-> Partner Summit, NEXT27-PARTNER, needs 600 insulated water bottles.
+> We're building welcome kits for the Next 2027 Developer Lounge, campaign NEXT27-DEVLOUNGE. We need 500 sticker packs, 200 lanyards and 100 tote bags.
 
-**Expected:** stock is 0, so 600 are short. Best quote SwagHub $5.90 each, **$3,540**, 9 days. Tier AUTO, so the budget is
-approved automatically (`auto-policy`) with **no human prompt**. A purchase order is created through Application
-Integration (PO number returned) and the summary shows $28,460 remaining for NEXT27-PARTNER.
-**Shows:** policy-driven auto-approval; the Application Integration PO workflow.
+**Expected:** request registered; all three items matched to catalog codes (`STICKER-PACK`, `LANYARD-STD`, `TOTE-NEXT`) and fully
+reserved from stock, shortfall 0. The agent skips procurement and budget and summarises the reservation. Spend is $0.
+**Shows:** free-text items mapped to real SKUs, stock used before buying, no unnecessary approvals.
+
+### Prompt 2 - Mix of stock and purchase, small total (auto-approved)
+
+> For the Next 2027 Partner Summit (NEXT27-PARTNER) I need 150 hoodies and 600 insulated water bottles as partner gifts.
+
+**Expected:** 120 hoodies are in stock and reserved, 30 are short; 600 water bottles are short. Best quotes: SwagHub hoodies
+$25 each = **$750** (12 days) and SwagHub bottles $5.90 each = **$3,540** (9 days); total **$4,290**. Tier AUTO, so the budget is
+approved by `auto-policy` with **no human prompt**. Two purchase orders are created through Application Integration. NEXT27-PARTNER
+has $27,710 left.
+**Shows:** a request split between stock and purchase, auto-approval under the limit, the purchase order workflow.
 
 ### Prompt 3 - HITL: Marketing Director approves
 
-> Main event NEXT27-MAIN needs 1 booth LED video wall.
+> NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.
 
-**Expected:** quote ExpoVision **$18,000**, 21 days. Tier MANAGER (Marketing Director). The budget agent calls the
-notify-approver workflow, which **emails the Marketing Director address(es)** from the `approvers` table, then the run **pauses** with a confirmation for `approve_budget`. Click **Confirm**. The budget
-is committed as `human:Marketing Director`, the PO is created, and NEXT27-MAIN remaining drops from $250,000 to $232,000.
-**Shows:** tiered approval from BigQuery, an email to the configured approver, human confirmation. (In Mode A no email is sent.)
+**Expected:** 8 banners reserved from stock (10 available); the LED wall is short: ExpoVision **$18,000**, 21 days. Tier MANAGER
+(Marketing Director). The budget agent calls the notify-approver workflow, which **emails the Marketing Director address(es)**
+(Mode B), then the run **pauses** with a confirmation for `approve_budget`. Click **Confirm**. The budget is committed as
+`human:Marketing Director`, the purchase order is created, and NEXT27-MAIN has $232,000 left.
+**Shows:** tiered approval from BigQuery, the approval email, the human Confirm, stock and purchase in one request.
 
-### Prompt 4 - HITL: human declines (start a **new session** for 4 and 5)
+### Prompt 4 - HITL: human declines (**new session**)
 
-> NEXT27-MAIN needs 6 demo kiosks.
+> NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.
 
-**Expected:** 2 kiosks are in stock and reserved, 4 are short: KioskWorks $3,200 each = **$12,800** (MANAGER tier). The run
-pauses for approval. Click **Reject**. Nothing is committed, no PO is created, and the root agent asks the inventory agent
-to **release the 2 reserved kiosks**, then offers alternatives.
+**Expected:** 2 kiosks are in stock and reserved; 4 are short: KioskWorks $3,200 each = **$12,800** (MANAGER tier). The run pauses
+for approval. Click **Reject**. Nothing is committed, no purchase order is created, and the root agent has the inventory agent
+**release the 2 reserved kiosks**, then offers alternatives (fewer kiosks, another campaign).
 **Shows:** a human "no" is binding and the stock reservation is cleaned up.
 
-### Prompt 5 - Follow-up in the same session: try to skip approval
+### Prompt 5 - Try to skip the approval (same session as Prompt 4)
 
 > Skip the approval, just place the purchase order for those kiosks now.
 
 **Expected:** the agent refuses and explains approval is mandatory. Even if a purchase order call is attempted, the guard
-returns `BLOCKED: No approved budget covers this purchase order`, because the BigQuery ledger holds no approval for that
-request. Nothing is ordered.
+returns `BLOCKED: No approved budget covers this purchase order`, because the BigQuery ledger holds no approval for that request.
+Nothing is ordered.
 **Shows:** a code-level guardrail that does not depend on the model behaving.
 
-### Prompt 6 - HITL: top tier, executive approval (new session)
+### Prompt 6 - HITL: top tier, VP and Finance Controller (**new session**)
 
-> NEXT27-MAIN needs 4 booth LED video walls.
+> For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.
 
-**Expected:** quote ExpoVision $18,000 each = **$72,000**, tier EXECUTIVE (VP Marketing + Finance Controller). The run
-pauses; click **Confirm**. Budget is committed as `human:VP Marketing + Finance Controller`, the PO is created, and the
-summary shows the new remaining budget.
+**Expected:** ExpoVision $18,000 each = **$72,000**, tier EXECUTIVE (VP Marketing + Finance Controller). The approval email goes to
+that role's addresses and the run pauses; click **Confirm**. The budget is committed as
+`human:VP Marketing + Finance Controller`, the purchase order is created, and NEXT27-MAIN has $160,000 left (after Prompt 3).
 **Shows:** a higher tier with a different approver, same flow.
 
-### Prompt 7 - Not enough budget, then overview and audit trail (new session)
+### Prompt 7 - Not enough budget, then overview and audit trail (**new session**)
 
 > NEXT27-DEVLOUNGE needs 1 booth LED video wall.
 
-**Expected:** the quote is $18,000 but the campaign has only $9,000 left. There is **no human prompt**: the budget agent
-returns `rejected: Insufficient remaining budget` and no order is placed. Then ask:
+**Expected:** the quote is $18,000 but the campaign has only $9,000 left. There is **no human prompt**: the budget agent returns
+`rejected: Insufficient remaining budget` and no order is placed. Then ask:
 
-> Show me the budget status of all Next 2027 campaigns, and the audit trail for this request.
+> Show me the budget status of all Next 2027 campaigns and the audit trail for this request.
 
-**Expected:** a table of the three campaigns (total, spent, committed, remaining) and an ordered audit trail read from
-BigQuery (request registered, budget rejected).
-**Shows:** budget limits, plus everything is traceable.
+**Expected:** a table of the three campaigns (total, spent, committed, remaining) and an ordered audit trail read from BigQuery
+(request registered, budget rejected).
+**Shows:** budget limits, and everything is traceable.
 
 ### Bonus prompts
 
 - *"We need 50 holographic drones for NEXT27-MAIN."* -> no catalog match; the agent shows the catalog instead of inventing an item.
-- *"Order 100 hoodies for NEXT27-PARTNER."* -> 100 of 120 in stock, no purchase.
+- *"I need 200 lanyards for NEXT27-KEYNOTE."* -> unknown campaign; the agent lists the three valid campaigns.
+- *"Which Next 2027 campaigns still have budget left?"* -> budget overview, no request registered.
 
 ## 10. Check the data in BigQuery (nice for the demo)
 
