@@ -17,7 +17,7 @@ Both modes run the same agents, prompts and approval logic.
 ## Setup at a glance (start here)
 
 ```
- 1. Get the code        git clone ... && git checkout claude/next-2027-enhanced
+ 1. Get the code        git clone -b claude/next-2027-enhanced https://github.com/dasbalvinderdas/market-campaign-agent.git
         │
  2. Install             python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
         │               pytest                       <- proves the code works, no cloud needed
@@ -76,7 +76,7 @@ The sections that follow give the detail for each step.
 ## 2. Install
 
 ```bash
-git clone <repo-url> && cd market-campaign-agent
+git clone -b claude/next-2027-enhanced https://github.com/dasbalvinderdas/market-campaign-agent.git && cd market-campaign-agent
 git checkout claude/next-2027-enhanced
 
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
