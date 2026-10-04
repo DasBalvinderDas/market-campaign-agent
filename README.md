@@ -9,7 +9,8 @@ A central **root agent** governs three **sub-agents**: inventory, procurement an
 |---|---|---|
 | **Google BigQuery** | All data: stock, vendor prices, budgets (ledger), approval tiers, approver emails, requests, purchase orders, audit log | dataset `campaign_provisioner` |
 | **Google Application Integration** | The two workflow actions: `create_purchase_order` and `notify_approver` (sends the approval email), called through ADK's Application Integration toolset | integration `campaign-provisioner-workflows` |
-| **Human in the loop** | Spend above $5,000 pauses for a Confirm / Reject in the chat; the approver is emailed first | `adk web` chat |
+| **Human in the loop** | Spend above $5,000 pauses for a Confirm / Reject (the approver is emailed first) | `adk web` chat while testing; the client of the deployed agent on Agent Engine |
+| **Vertex AI Agent Engine** | Where the finished agent runs (hosted, managed sessions) | `scripts/deploy_agent_engine.py` |
 | **Code guard** | A purchase order is blocked unless an approved budget covers it | `campaign_provisioner/workflow/guard.py` |
 
 Approval tiers (a BigQuery table, so they can change without code): up to $5,000 auto-approved, $5,000 to $50,000
@@ -28,6 +29,8 @@ export GOOGLE_CLOUD_PROJECT=<your-project-id>
 python scripts/setup_all.py --approver-email "you@example.com"
 python scripts/verify_setup.py --integration
 adk web --port 8080                      # then open Web Preview on port 8080
+
+python scripts/deploy_agent_engine.py    # final step: deploy to Vertex AI Agent Engine (see docs/DEMO_RUN.md section 14)
 ```
 
 `setup_all.py` checks your APIs and permissions first and lists anything missing (which API to enable, which role to ask
@@ -53,6 +56,8 @@ API and Vertex AI API must be enabled in the project.
 | `scripts/setup_bigquery.py` | BigQuery only; `--reset-demo` clears demo transactions between runs, `--reset` rebuilds, `--approver-email` sets who is emailed |
 | `scripts/setup_application_integration.py` | Application Integration only; `--test` runs both triggers once and sends a test email, `--print-definition` shows what is sent |
 | `scripts/verify_setup.py` | Reads back the BigQuery data and (with `--integration`) the tools ADK builds from the integration |
+| `scripts/deploy_agent_engine.py` | Deploys the agent to Vertex AI Agent Engine (`--dry-run` to check first, `--update ID` to redeploy) |
+| `scripts/query_agent_engine.py` | Talks to the deployed agent and handles the human Confirm / Reject |
 
 ## Configuration
 
@@ -64,6 +69,6 @@ emails are read from the BigQuery `approvers` table, so you change them there.
 
 Verified on a real Google Cloud project: the BigQuery setup, creating and publishing the Application Integration workflow,
 running both triggers, reading the data back, and ADK discovering the two integration tools. Not yet confirmed: approval
-email delivery to an inbox, a full agent run with Gemini, and the in-chat Confirm / Reject pause. See the last section of
+email delivery to an inbox, a full agent run with Gemini, the in-chat Confirm / Reject pause, and the Agent Engine deployment (new). See the last section of
 `docs/DEMO_RUN.md`. Unit tests (`pytest`) cover the tools, policy, guard, audit trail, setup scripts and the BigQuery
 repository (against a stub client).

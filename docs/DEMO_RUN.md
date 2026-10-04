@@ -31,6 +31,8 @@ for the agent. Everything is configured through `.env` (section 3), which the se
  7. Run the prompts     section 9 (test prompts; 3 + 2 of them stop for a human approval)
         │
  8. Reset for next run  python scripts/setup_bigquery.py --reset-demo
+        │
+ 9. Deploy (final)      python scripts/deploy_agent_engine.py      -> Vertex AI Agent Engine (section 14)
 ```
 
 | Step | Command | You should see |
@@ -54,7 +56,7 @@ you simply run the same command again after fixing it. Finished parts are skippe
 | The human Confirm / Reject | the `adk web` chat | nothing to set up |
 | Project, dataset, regions, approver emails | `.env` | written by step 4 |
 
-The sections that follow give the detail for each step.
+The sections that follow give the detail for each step. Step 9, deploying to Vertex AI Agent Engine, is section 14.
 
 ---
 
@@ -644,3 +646,115 @@ returned a PO number, the notify trigger completed), reading the data back (`ver
 project, and the in-chat Confirm / Reject pause. Unit tests cover the tools, tiered policy, purchase-order guard (including
 one email call per approver address), audit trail, the setup scripts and the BigQuery repository (stub client, SQL syntax).
 Run sections 8 and 9 once before presenting, prompts 1, 3 and 4 first.
+
+## 14. Deploy to Vertex AI Agent Engine (the final step)
+
+Everything above runs the agent on your machine with `adk web`. For the real deployment the agent runs on **Vertex AI
+Agent Engine**: Google hosts it, keeps the chat sessions, and scales it. The same code, BigQuery data and Application
+Integration workflow are used; only where the agent runs changes.
+
+### 14.1 What changes compared with `adk web`
+
+| | `adk web` (testing) | Agent Engine (deployed) |
+|---|---|---|
+| Where it runs | your Cloud Shell | a container Google builds and hosts |
+| Chat sessions | in memory, lost on restart | Agent Engine managed sessions (survive restarts) |
+| User interface | the `adk web` browser chat | none built in: use `scripts/query_agent_engine.py`, the Agent Engine playground, or Gemini Enterprise |
+| Human Confirm / Reject | buttons in the chat | the agent returns an approval request; the client shows it and sends your answer (the query script does this) |
+| Who it runs as | you | the Agent Engine service agent (or a service account you choose), so **it needs its own permissions** |
+| Settings | `.env` | runtime settings copied from `.env` by the deploy script; project and region are set by Agent Engine |
+| Data and emails | BigQuery, Application Integration | exactly the same (approver emails are still read from BigQuery) |
+
+### 14.2 Before you deploy
+
+1. Sections 5 to 9 work on your project: `verify_setup.py --integration` is clean and the prompts behave.
+2. The **Vertex AI API** and **Cloud Build API** are enabled (the deploy script checks and tells you which to enable).
+3. The deploy tooling is installed: `pip install "google-adk[gcp]"`.
+4. There is no `campaign_provisioner/.env` file (only the repo-root `.env`); the script stops if it finds one.
+
+### 14.3 Give the deployed agent permission
+
+The deployed agent calls BigQuery and Application Integration as **its own identity**, not as you. Without these roles it
+cannot read the data or reach the workflow, and the deployment can fail while starting. By default it runs as the Vertex AI
+Agent Engine service agent:
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe $GOOGLE_CLOUD_PROJECT --format='value(projectNumber)')
+MEMBER="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+for ROLE in roles/bigquery.dataEditor roles/bigquery.jobUser \\
+            roles/integrations.integrationInvoker roles/integrations.viewer roles/aiplatform.user; do
+  gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT --member="$MEMBER" --role="$ROLE" --condition=None
+done
+```
+
+If that service agent does not exist yet (the grant fails with "does not exist"), run the deployment once (14.4), let it
+finish or fail, run the grant, then redeploy with `--update`. To use a dedicated service account instead, create it, give it
+the same roles and pass `--service-account <email>` to the deploy script. For a production setup, prefer the dedicated
+service account.
+
+### 14.4 Deploy
+
+```bash
+python scripts/deploy_agent_engine.py --dry-run     # checks everything, prints the command, deploys nothing
+python scripts/deploy_agent_engine.py               # deploys (several minutes: it builds a container image)
+```
+
+The script confirms that BigQuery has the data and the Application Integration workflow is published, builds the runtime
+settings (BigQuery dataset, Application Integration name and region, model) from your `.env`, runs
+`adk deploy agent_engine` on the `campaign_provisioner` folder, and saves the resource name as `AGENT_ENGINE_RESOURCE` in
+`.env`. It prints the console link to the Agent Engine playground and the permission commands again. Options:
+
+| Option | Meaning |
+|---|---|
+| `--project`, `--region` | default: your project, `GOOGLE_CLOUD_LOCATION` or `us-central1` |
+| `--service-account EMAIL` | run the agent as this account |
+| `--update ENGINE_ID` | redeploy new code to an existing deployment (use after every code change) |
+| `--dry-run` | checks only |
+
+### 14.5 Test the deployed agent, including the human approval
+
+```bash
+python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall and 8 event banners."
+python scripts/query_agent_engine.py          # interactive chat; type exit to leave
+```
+
+When a request needs a person (above $5,000), the approver gets the email and the client stops and shows:
+
+```
+  *** HUMAN APPROVAL NEEDED ***
+  tool: approve_budget
+    request_id: ...   campaign_id: NEXT27-MAIN   amount: 18000.0   justification: ...
+  Confirm? [y/N]
+```
+
+Answer `y` to Confirm or anything else to Reject; the answer is sent back and the agent continues. The test prompts in section 9
+work the same way. Reset the data between runs with `python scripts/setup_bigquery.py --reset-demo`.
+
+### 14.6 Operate it
+
+- **New code:** `python scripts/deploy_agent_engine.py --update <engine id>` (the id is the last part of `AGENT_ENGINE_RESOURCE`).
+- **Change approver emails, tiers, stock, prices:** edit the BigQuery tables (section 6); no redeploy needed.
+- **Change the integration:** re-run `setup_application_integration.py`; if the agent was started before, redeploy so it reloads the tools.
+- **Logs and traces:** Cloud Logging and Cloud Trace in the console for the Agent Engine resource.
+- **Gemini Enterprise:** `adk deploy` prints a link explaining how to register the agent there, which gives users a chat UI with the
+  approval step (the "Gemini Enterprise App" interface in the architecture slide).
+- **Delete:** in the console under Vertex AI > Agent Engine, or
+  `python -c "import vertexai,os; vertexai.Client(project='$GOOGLE_CLOUD_PROJECT', location='us-central1').agent_engines.delete(name='$AGENT_ENGINE_RESOURCE', force=True)"`.
+
+### 14.7 If something goes wrong
+
+| Symptom | Fix |
+|---|---|
+| Script says an API is not enabled | Enable the API it names, wait a minute, run it again |
+| `ModuleNotFoundError` / `vertexai` missing | `pip install "google-adk[gcp]"` |
+| Deployment fails while the container starts, mentioning Application Integration or BigQuery | The runtime identity lacks roles (14.3), or the integration does not exist in that project/region. Grant the roles, check `setup_application_integration.py --check-only`, redeploy |
+| `.../campaign_provisioner/.env exists` | Delete that file; the repo-root `.env` is the one used |
+| Region error | Use a region where Agent Engine is available, for example `us-central1` (`--region`) |
+| The client prints nothing for a request | Run with a fresh session (just run the script again); check the logs of the Agent Engine resource |
+
+### 14.8 What has and hasn't been verified for deployment
+
+Unit tests cover the deploy script (settings, command, resource-name parsing) and the client's handling of the approval request and
+answer. The deployment itself has **not been run** by the author: the real deployment, the runtime permissions in 14.3 (in particular
+the exact service agent name), `--service-account`, and the approval round trip through Agent Engine are untested. Treat the first
+deploy as a rehearsal, and send any message the script prints back for a fix.

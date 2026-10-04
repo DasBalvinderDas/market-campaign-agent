@@ -103,6 +103,9 @@ inside Application Integration instead, see `docs/DEMO_RUN.md` section 4.2.
 - `workflow/guard.py` runs **before** the PO tool: no PO unless the BigQuery budget ledger holds an approved COMMIT
   that still covers the amount. It runs **after**: stores the PO and audit events in BigQuery.
 
+**Deployed agent:** when the agent runs on Agent Engine it calls this integration as its own identity, which needs
+`roles/integrations.integrationInvoker` and `roles/integrations.viewer` (see `docs/DEMO_RUN.md` section 14.3).
+
 ## Status of this guide
 
 The ADK side and the setup script's logic are covered by offline tests, the integration definition was checked field by field

@@ -58,7 +58,8 @@ campaign_provisioner/
   workflow/integration.py     Application Integration toolsets (test doubles for unit tests)
   workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit
   sub_agents/                 inventory_agent, procurement_agent, budget_agent
-scripts/                      setup_all.py, setup_bigquery.py, setup_application_integration.py, verify_setup.py
+scripts/                      setup_all.py, setup_bigquery.py, setup_application_integration.py, verify_setup.py,
+                              deploy_agent_engine.py, query_agent_engine.py
 .env                          single config file in the repo root (written by setup_all.py)
 bigquery/schema.sql           generated DDL
 integration/README.md         Application Integration contract and build steps
@@ -155,7 +156,7 @@ See DEMO_RUN.md section 13.
 
 ## 9. Production notes
 
-- Use a persistent ADK session service (Vertex AI Agent Engine or a database) so pending confirmations survive restarts.
+- **Deployment target: Vertex AI Agent Engine.** `scripts/deploy_agent_engine.py` deploys the agent; Agent Engine provides the managed sessions, so a pending human approval survives restarts. The deployed agent runs as its own identity, which needs BigQuery, Application Integration and Vertex AI roles (DEMO_RUN.md section 14). With no `adk web` UI there, the approval request is returned to the client; `scripts/query_agent_engine.py` shows it and sends the Confirm / Reject back, and Gemini Enterprise can provide the chat UI.
 - Run the agent under a service account with only the roles it needs (BigQuery Data Editor + Job User, Application Integration Invoker, Vertex AI User).
 - Send the audit table to Cloud Logging or a Looker dashboard; add alerting on `po_blocked` events.
 - Add Model Armor for prompt safety and IAM-based approver checks, as shown in the architecture slide.

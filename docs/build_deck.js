@@ -51,7 +51,7 @@ arrow(2.95,3.9,2.4,3.9); txt('Results',2.35,3.95,0.6,0.2,{sz:7,c:MUTE});
 
 // Center: Google Cloud runtime
 box(2.95,1.05,7.4,5.55,{fill:'FFFFFF',line:BLUE,lw:1.25});
-txt('Google Cloud ( Agent Runtime )',2.95,1.08,7.4,0.3,{b:true,sz:10});
+txt('Google Cloud ( Vertex AI Agent Engine runtime )',2.95,1.08,7.4,0.3,{b:true,sz:10});
 // root agent
 box(3.1,1.45,7.1,1.2,{fill:LIGHT});
 
@@ -73,7 +73,7 @@ subs.forEach((q,i)=>{ const x=3.2+i*2.33; box(x,3.05,2.25,1.7,{fill:q[3],line:LI
 arrow(6.65,2.45,6.65,2.8,true);
 // memory
 box(3.1,4.95,7.1,0.8,{fill:LIGHT}); txt('Memory & Knowledge Layer',3.1,4.95,7.1,0.25,{b:true,sz:9,c:NAVY});
-[['Approval Policy (BigQuery)','Tiers, limits, approver roles'],['Session Working Memory','Conversation & pending approvals'],['Audit Log (BigQuery)','Every governed action']].forEach((q,i)=>card(3.3+i*2.25,5.2,2.15,0.5,q[0],q[1],{sz:8}));
+[['Approval Policy (BigQuery)','Tiers, limits, approver roles'],['Agent Engine Sessions','Chat state & pending approvals'],['Audit Log (BigQuery)','Every governed action']].forEach((q,i)=>card(3.3+i*2.25,5.2,2.15,0.5,q[0],q[1],{sz:8}));
 // cloud services
 box(3.1,5.82,7.1,0.7,{fill:LIGHT}); txt('Google Cloud Supporting Services',3.1,5.82,7.1,0.22,{b:true,sz:9,c:NAVY});
 [['IAM','Access Control'],['Secret Manager','Credentials'],['Cloud Logging','Audit Trail'],['Cloud Monitoring','Observability'],['Cloud Trace','Tracing'],['Model Armor','Safety Filtering']].forEach((q,i)=>card(3.2+i*1.15,6.03,1.08,0.5,q[0],q[1],{sz:7}));
@@ -91,5 +91,5 @@ rcol(3.2,2.0,'Application Integration',[['create_purchase_order','API trigger: c
 rcol(5.35,1.25,'LLM & AI Framework',[['Gemini  |  ADK 2.x','Reasoning & Agent Framework']]);
 arrow(10.75,2.0,10.9,2.0,true); arrow(10.75,4.1,10.9,4.1,true); arrow(10.75,5.95,10.9,5.95,true);
 txt('HCLTech  |  Confidential',0.5,6.95,5,0.3,{sz:9,al:'left',c:MUTE});
-s.addNotes('Reference architecture. Every element is a native, editable PowerPoint shape or text box - no images. Google BigQuery holds all data (inventory, vendor prices, budget ledger, approval policy, approver emails, audit log). Google Application Integration runs the two workflow actions: create_purchase_order and notify_approver (sends the approval email). The human Confirm / Reject happens in the chat; purchase orders are blocked in code without an approved budget.');
+s.addNotes('Reference architecture. Every element is a native, editable PowerPoint shape or text box - no images. Google BigQuery holds all data (inventory, vendor prices, budget ledger, approval policy, approver emails, audit log). Google Application Integration runs the two workflow actions: create_purchase_order and notify_approver (sends the approval email). The agent is deployed to Vertex AI Agent Engine (hosted runtime and managed sessions). The human Confirm / Reject is returned to the client (chat UI or Gemini Enterprise); purchase orders are blocked in code without an approved budget.');
 p.writeFile({fileName:'/home/user/market-campaign-agent/docs/Campaign_Provisioner_Management_Deck.pptx'}).then(()=>console.log('ok'));
