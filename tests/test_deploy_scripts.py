@@ -80,6 +80,8 @@ def test_grant_roles_ok_and_member(monkeypatch):
         calls.append(cmd)
         if "describe" in cmd and "roles" in cmd:
             return _Proc(1, "", "denied")
+        if "get-iam-policy" in cmd:
+            return _Proc(1, "", "no access")  # policy unreadable -> just try to grant everything
         return _Proc(0, "123456\n")
     monkeypatch.setattr(dep.subprocess, "run", fake_run)
     member = dep.runtime_member("p", None)
@@ -90,7 +92,8 @@ def test_grant_roles_ok_and_member(monkeypatch):
     assert bound == dep.BASE_ROLES + [dep.READ_ROLE_CANDIDATES[1]]  # lookup unavailable here -> safe fallback
 
 
-def test_grant_roles_reports_problems_instead_of_raising(monkeypatch, capsys):
+def test_grant_roles_reports_problems_instead_of_raising(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(dep, "ROOT", tmp_path)
     monkeypatch.setattr(dep.subprocess, "run",
                         lambda cmd, **k: _Proc(1, "", "ERROR: Service account service-1@x does not exist."))
     assert dep.grant_runtime_roles("p", "serviceAccount:service-1@x") == "missing_identity"
@@ -98,7 +101,7 @@ def test_grant_roles_reports_problems_instead_of_raising(monkeypatch, capsys):
                         lambda cmd, **k: _Proc(1, "", "PERMISSION_DENIED: caller does not have permission"))
     assert dep.grant_runtime_roles("p", "serviceAccount:service-1@x") == "denied"
     out = capsys.readouterr().out
-    assert "does not exist yet" in out and "Ask an admin to grant" in out
+    assert "does not exist yet" in out and "Send this file to an admin" in out
     assert dep.grant_runtime_roles("p", None) == "error"
 
 
@@ -166,3 +169,38 @@ def test_redeploy_updates_the_saved_deployment_automatically():
     assert dep.pick_update_id(ns(update="777"), saved) == "777"
     assert dep.pick_update_id(ns(new=True), saved) is None
     assert dep.pick_update_id(ns(), {}) is None                  # nothing saved yet: create
+
+
+def test_roles_already_granted_by_an_admin_are_not_a_problem(monkeypatch, capsys):
+    import json as _json
+    member = "serviceAccount:service-1@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+    roles = dep.BASE_ROLES + [dep.READ_ROLE_CANDIDATES[0]]
+    policy = {"bindings": [{"role": r, "members": [member]} for r in roles]}
+
+    def fake_run(cmd, **k):
+        if "get-iam-policy" in cmd:
+            return _Proc(0, _json.dumps(policy))
+        raise AssertionError("must not try to grant anything")
+    monkeypatch.setattr(dep.subprocess, "run", fake_run)
+    assert dep.grant_runtime_roles("p", member, roles) == "ok"
+    assert "already has all the roles" in capsys.readouterr().out
+
+
+def test_denied_grant_writes_a_script_for_the_admin(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(dep, "ROOT", tmp_path)
+    member = "serviceAccount:service-1@x"
+
+    def fake_run(cmd, **k):
+        if "get-iam-policy" in cmd:
+            return _Proc(0, '{"bindings": []}')
+        return _Proc(1, "", "PERMISSION_DENIED: Policy update access denied.")
+    monkeypatch.setattr(dep.subprocess, "run", fake_run)
+    assert dep.grant_runtime_roles("p", member, ["roles/a", "roles/b"]) == "denied"
+    script = (tmp_path / "grant_agent_permissions.sh").read_text()
+    assert script.count("add-iam-policy-binding p --member=serviceAccount:service-1@x") == 2 and "roles/b" in script
+    assert "Send this file to an admin" in capsys.readouterr().out
+
+
+def test_not_found_detection_for_a_deleted_deployment():
+    assert dep.is_not_found("Failed to deploy: 404 NOT_FOUND. Reasoning Engine [..] is not found.")
+    assert not dep.is_not_found("403 PERMISSION_DENIED")

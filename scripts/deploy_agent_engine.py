@@ -134,6 +134,31 @@ def runtime_member(project: str, service_account: str | None) -> str | None:
     return f"serviceAccount:service-{number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
 
 
+def granted_roles(project: str, member: str) -> set[str] | None:
+    """Roles the member already has on the project (None if the policy cannot be read)."""
+    r = subprocess.run(["gcloud", "projects", "get-iam-policy", project, "--format=json"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    try:
+        bindings = json.loads(r.stdout).get("bindings", [])
+    except ValueError:
+        return None
+    return {b["role"] for b in bindings if member in b.get("members", [])}
+
+
+def write_admin_script(project: str, member: str, roles: list[str]) -> Path:
+    """A ready-to-run script for someone who is allowed to change IAM (Project IAM Admin / Owner)."""
+    path = ROOT / "grant_agent_permissions.sh"
+    lines = ["#!/usr/bin/env bash", f"# Run by a Project IAM Admin or Owner of {project}.",
+             "# Gives the deployed Campaign Provisioner agent access to BigQuery, Application Integration and Vertex AI.",
+             "set -e"]
+    lines += [f"gcloud projects add-iam-policy-binding {project} --member={member} --role={role} --condition=None"
+              for role in roles]
+    path.write_text("\n".join(lines) + "\n")
+    return path
+
+
 def grant_runtime_roles(project: str, member: str | None, roles: list[str] | None = None) -> str:
     """Give the deployed agent's identity the roles it needs. Returns ok | missing_identity | denied | error.
     Problems are printed, never raised."""
@@ -142,6 +167,13 @@ def grant_runtime_roles(project: str, member: str | None, roles: list[str] | Non
         return "error"
     status = "ok"
     roles = roles or choose_runtime_roles()
+    have = granted_roles(project, member)
+    if have is not None:
+        missing = [r for r in roles if r not in have]
+        if not missing:
+            print(f"  OK  {member} already has all the roles it needs")
+            return "ok"
+        roles = missing
     for role in roles:
         r = subprocess.run(["gcloud", "projects", "add-iam-policy-binding", project, f"--member={member}",
                             f"--role={role}", "--condition=None", "--quiet"], capture_output=True, text=True)
@@ -152,8 +184,13 @@ def grant_runtime_roles(project: str, member: str | None, roles: list[str] | Non
             print(f"  NOTE: {member} does not exist yet (it is created the first time Agent Engine is used).")
             return "missing_identity"
         if "permission" in err or "403" in err or "denied" in err:
-            print(f"  PROBLEM: you are not allowed to grant roles in {project} (needs Project IAM Admin).\n"
-                  f"           Ask an admin to grant {member} these roles: {', '.join(roles)}")
+            script = write_admin_script(project, member, roles)
+            print(f"  PROBLEM: you are not allowed to grant roles in {project} (that needs Project IAM Admin or Owner).\n"
+                  f"           The agent cannot reach BigQuery or Application Integration until these roles are granted\n"
+                  f"           to {member}:\n"
+                  f"             {', '.join(roles)}\n"
+                  f"           Send this file to an admin to run (it is ready to use):  {script}\n"
+                  "           No redeploy is needed afterwards; run `python scripts/query_agent_engine.py ...` again.")
             return "denied"
         print(f"  PROBLEM granting {role}: {(r.stderr or '').strip()[:300]}")
         status = "error"
@@ -209,6 +246,11 @@ def run(args, project=""):
 
     print("\nDeploying (this takes several minutes: it builds a container image) ...\n")
     returncode, text = run_deploy(cmd)
+    if returncode != 0 and args.update and is_not_found(text):
+        print(f"\nThe saved deployment {args.update} no longer exists (deleted?). Creating a new one instead ...\n")
+        args.update = None
+        cmd = deploy_command(project, region, config_path, ROOT / "campaign_provisioner", None)
+        returncode, text = run_deploy(cmd)
     if returncode != 0 and grant_status == "missing_identity":
         print("\nThe agent's identity did not exist before the first deployment. Granting its roles now and "
               "trying once more ...")
@@ -230,7 +272,11 @@ def run(args, project=""):
         from setup_all import write_env
         write_env(ROOT / ".env", {"AGENT_ENGINE_RESOURCE": resource})
         print(f"\nSaved AGENT_ENGINE_RESOURCE={resource} to .env")
-    if resource and not args.no_smoke_test:
+    if grant_status == "denied":
+        print("\nSmoke test skipped: the agent's permissions are not granted yet (see above). After an admin ran "
+              "grant_agent_permissions.sh, test with:\n  python scripts/query_agent_engine.py \"Which Next 2027 campaigns "
+              "still have budget left?\"")
+    elif resource and not args.no_smoke_test:
         print("\nSmoke test: asking the deployed agent a read-only question ...\n")
         smoke = subprocess.run([sys.executable, str(ROOT / "scripts" / "query_agent_engine.py"),
                                 "Which Next 2027 campaigns still have budget left?", "--resource", resource,
@@ -254,6 +300,10 @@ class _Http:
 
     def post(self, *a, **k):
         return self._s.post(*a, **k)
+
+
+def is_not_found(text: str) -> bool:
+    return "NOT_FOUND" in text or "is not found" in text
 
 
 def run_deploy(cmd) -> tuple[int, str]:
