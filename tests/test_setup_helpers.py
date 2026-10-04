@@ -109,3 +109,16 @@ def test_setup_all_continues_after_a_failed_step_and_reports(tmp_path, monkeypat
     out = capsys.readouterr().out
     assert "API not enabled: bigquery.googleapis.com" in out and "Application Integration: OK" in out
     assert "need attention" in str(e.value) and not (tmp_path / ".env").exists()
+
+
+def test_importing_the_package_does_not_build_agents_or_touch_the_cloud():
+    """Regression: setup scripts import campaign_provisioner.* before the integration exists."""
+    import os, subprocess
+    env = {**os.environ, "WORKFLOW_BACKEND": "app_integration", "DATA_BACKEND": "bigquery"}
+    env.pop("GOOGLE_CLOUD_PROJECT", None)
+    code = ("import campaign_provisioner.approvers, campaign_provisioner.data.schema, "
+            "campaign_provisioner.data.seed_data; import sys; "
+            "assert 'campaign_provisioner.agent' not in sys.modules")
+    r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True,
+                       cwd=str(Path(__file__).resolve().parent.parent))
+    assert r.returncode == 0, r.stderr

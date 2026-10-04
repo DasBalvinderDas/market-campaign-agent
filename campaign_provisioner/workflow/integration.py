@@ -60,9 +60,16 @@ def _toolset(trigger: str, hint: str):
 
     if not config.PROJECT:
         raise RuntimeError("GOOGLE_CLOUD_PROJECT must be set (export GOOGLE_CLOUD_PROJECT=<your-project-id>)")
-    return ApplicationIntegrationToolset(
-        project=config.PROJECT, location=config.APP_INTEGRATION_LOCATION,
-        integration=config.APP_INTEGRATION_NAME, triggers=[trigger], tool_instructions=hint)
+    try:
+        return ApplicationIntegrationToolset(
+            project=config.PROJECT, location=config.APP_INTEGRATION_LOCATION,
+            integration=config.APP_INTEGRATION_NAME, triggers=[trigger], tool_instructions=hint)
+    except ValueError as exc:  # ADK raises this when the integration or trigger cannot be found
+        raise RuntimeError(
+            f"Application Integration '{config.APP_INTEGRATION_NAME}' (trigger {trigger}) was not found in project "
+            f"'{config.PROJECT}', region '{config.APP_INTEGRATION_LOCATION}'. Create it first:\n"
+            "    python scripts/setup_application_integration.py     (or python scripts/setup_all.py)\n"
+            "and check APP_INTEGRATION_NAME / APP_INTEGRATION_LOCATION in .env.") from exc
 
 
 def build_po_tool():
