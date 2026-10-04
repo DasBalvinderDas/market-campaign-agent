@@ -709,8 +709,11 @@ instead (recommended for production), create it and pass `--service-account <ema
 | `--update ENGINE_ID` | redeploy new code to an existing deployment (use after every code change) |
 | `--dry-run` | checks only, deploys nothing |
 
-A deployment takes several minutes because Google builds a container image. When it finishes the script prints the console
-link to the Agent Engine playground and the command to talk to the agent.
+A deployment takes several minutes because Google builds a container image. When it finishes the script asks the deployed agent
+a read-only test question ("Which Next 2027 campaigns still have budget left?"); if that fails it prints the deployment's logs. Skip
+the test with `--no-smoke-test`. It then prints the console link to the Agent Engine playground and the command to talk to the agent.
+The Application Integration tools are loaded on first use, so a missing permission shows as a clear error on that step instead of
+breaking the whole agent.
 
 ### 14.5 Test the deployed agent, including the human approval
 
@@ -749,6 +752,7 @@ work the same way. Reset the data between runs with `python scripts/setup_bigque
 | A script says an API is not enabled | Enable the API it names (the message includes the command), wait a minute, run the script again |
 | `ModuleNotFoundError` / `vertexai` missing | Run `source scripts/env_setup.sh` (it installs everything) |
 | Deployment fails while the container starts, mentioning Application Integration or BigQuery | The runtime identity lacks roles (14.3), or the integration does not exist in that project/region. Grant the roles, check `setup_application_integration.py --check-only`, redeploy |
+| The agent answers with `Reasoning Engine Execution failed ... Internal Server Error` | The container is failing. The query script now prints the deployment's recent logs automatically; you can also run `python scripts/agent_engine_logs.py --errors-only`. Common causes: missing roles for the agent's identity (14.3), the integration not published in that project/region, a missing package |
 | `.../campaign_provisioner/.env exists` | Delete that file; the repo-root `.env` is the one used |
 | Region error | Use a region where Agent Engine is available, for example `us-central1` (`--region`) |
 | The client prints nothing for a request | Run with a fresh session (just run the script again); check the logs of the Agent Engine resource |

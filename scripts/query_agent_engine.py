@@ -82,7 +82,13 @@ async def converse(remote, user_id, session_id, message):
 
 @guarded
 def run(args, project=""):
-    import vertexai
+    try:
+        import agentplatform as sdk  # newer name of the SDK
+        sdk.Client
+    except (ImportError, AttributeError):
+        import vertexai as sdk
+        import warnings
+        warnings.filterwarnings("ignore", category=FutureWarning)
 
     resource = args.resource or os.getenv("AGENT_ENGINE_RESOURCE")
     if not resource:
@@ -94,7 +100,7 @@ def run(args, project=""):
         sys.exit("No deployed agent known. Run scripts/deploy_agent_engine.py first, or pass --resource "
                  "projects/<p>/locations/<region>/reasoningEngines/<id>")
     region = resource.split("/")[3]
-    client = vertexai.Client(project=project, location=region)
+    client = sdk.Client(project=project, location=region)
     remote = client.agent_engines.get(name=resource)
 
     async def go():
@@ -114,7 +120,15 @@ def run(args, project=""):
                 return
             await converse(remote, user_id, session_id, text)
 
-    asyncio.run(go())
+    try:
+        asyncio.run(go())
+    except Exception as exc:  # noqa: BLE001 - show the problem and the deployment's logs instead of a stack trace
+        from agent_engine_logs import recent_logs
+        print(f"\nThe deployed agent returned an error:\n  {str(exc)[:600]}\n")
+        print("Recent logs of the deployment (newest last):\n")
+        print(recent_logs(project, resource, limit=40, errors_only=False))
+        print("\nMore: python scripts/agent_engine_logs.py --limit 100 --errors-only")
+        sys.exit(1)
 
 
 def main():

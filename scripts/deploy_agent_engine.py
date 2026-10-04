@@ -13,7 +13,8 @@ What it does
      you are not allowed to, it prints who must grant what
   4. runs `adk deploy agent_engine` on the campaign_provisioner folder (retries once if the identity only
      existed after the first attempt)
-  5. saves the deployed resource name as AGENT_ENGINE_RESOURCE in .env and prints the command to talk to it
+  5. saves the deployed resource name as AGENT_ENGINE_RESOURCE in .env, asks the deployed agent a read-only
+     test question (if it fails, the deployment's logs are printed), and prints the command to talk to it
      (scripts/query_agent_engine.py)
 
 Nothing manual: problems are printed on the console with what to do, they are not raised as stack traces.
@@ -200,6 +201,13 @@ def run(args, project=""):
         from setup_all import write_env
         write_env(ROOT / ".env", {"AGENT_ENGINE_RESOURCE": resource})
         print(f"\nSaved AGENT_ENGINE_RESOURCE={resource} to .env")
+    if resource and not args.no_smoke_test:
+        print("\nSmoke test: asking the deployed agent a read-only question ...\n")
+        smoke = subprocess.run([sys.executable, str(ROOT / "scripts" / "query_agent_engine.py"),
+                                "Which Next 2027 campaigns still have budget left?", "--resource", resource,
+                                "--project", project])
+        if smoke.returncode != 0:
+            sys.exit("\nThe agent was deployed but did not answer (details and logs above).")
     print("\nTalk to it (handles the human Confirm / Reject):\n"
           '  python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall."')
 
@@ -236,6 +244,7 @@ def main():
     ap.add_argument("--update", default=None, metavar="ENGINE_ID", help="redeploy to an existing Agent Engine id")
     ap.add_argument("--service-account", default=None, help="run the agent as this service account instead of the default")
     ap.add_argument("--dry-run", action="store_true", help="run the checks and print the command, deploy nothing")
+    ap.add_argument("--no-smoke-test", action="store_true", help="do not ask the deployed agent a test question")
     ap.add_argument("--skip-checks", action="store_true", help="skip the BigQuery / Application Integration check")
     ap.add_argument("--skip-preflight", action="store_true")
     args = ap.parse_args()

@@ -106,3 +106,24 @@ def test_env_setup_script_is_valid_bash_and_refuses_to_run_unsourced():
     assert subprocess.run(["bash", "-n", script]).returncode == 0
     r = subprocess.run(["bash", script], capture_output=True, text=True)
     assert r.returncode == 1 and "source scripts/env_setup.sh" in r.stdout
+
+
+def test_integration_tools_are_built_lazily_and_fail_soft(monkeypatch):
+    import asyncio
+    from campaign_provisioner import config
+    from campaign_provisioner.workflow import integration as wi
+
+    monkeypatch.setattr(config, "WORKFLOW_BACKEND", "app_integration")
+    monkeypatch.setattr(config, "PROJECT", "")  # no project: building would fail, importing must not
+    tool = wi.build_po_tool()  # nothing built, no network
+    assert isinstance(tool, wi.LazyIntegrationToolset)
+    tools = asyncio.run(tool.get_tools())  # building fails -> a stub tool, not an exception
+    assert [t.name for t in tools] == ["create_purchase_order_unavailable"]
+    assert "could not be loaded" in wi.create_purchase_order_unavailable("R", "S", 1, "V")["error"]
+    assert [t.name for t in asyncio.run(wi.build_notify_tool().get_tools())] == ["notify_approver_unavailable"]
+
+
+def test_log_filter_targets_the_deployment():
+    import agent_engine_logs as logs
+    f = logs.build_filter("projects/1/locations/us-central1/reasoningEngines/987", errors_only=True)
+    assert 'reasoning_engine_id="987"' in f and "severity>=ERROR" in f
