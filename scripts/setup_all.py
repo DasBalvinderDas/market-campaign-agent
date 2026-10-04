@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One command to set up everything: BigQuery data + Application Integration workflow + .env.
+"""One command to set up everything: BigQuery data + Application Integration workflow + the .env file.
 
   python scripts/setup_all.py --approver-email "you@example.com"
   python scripts/setup_all.py --project my-proj \\
@@ -92,9 +92,11 @@ def main():
                    "APP_INTEGRATION_LOCATION": args.region}
         if args.approver_email:
             updates["APPROVER_EMAILS"] = ";".join(args.approver_email)
-        for target in (ROOT / ".env", ROOT / "campaign_provisioner" / ".env"):
-            write_env(target, updates)
-        print("== .env\n  wrote .env and campaign_provisioner/.env (project, dataset, locations, approver emails)\n")
+        write_env(ROOT / ".env", updates)
+        stale = ROOT / "campaign_provisioner" / ".env"
+        if stale.exists():  # an older copy next to the agent would take precedence, so keep it in step
+            write_env(stale, updates)
+        print("== .env\n  wrote .env (project, dataset, locations, approver emails)\n")
 
     print("Summary: " + ", ".join(f"{k}: {v}" for k, v in results.items()))
     if any(v != "OK" for v in results.values()):

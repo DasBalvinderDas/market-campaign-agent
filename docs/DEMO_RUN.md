@@ -22,7 +22,7 @@ for the agent. Everything is configured through `.env` (section 3), which the se
         │                 ├─ checks APIs + permissions, lists anything missing, changes nothing yet  │
         │                 ├─ BigQuery: dataset, tables, views, demo data, approver emails            │
         │                 ├─ Application Integration: creates + publishes the workflow               │
-        │                 └─ writes .env and campaign_provisioner/.env                               │
+        │                 └─ writes the .env file                                                    │
         │                                                                                          │
  5. Verify              python scripts/verify_setup.py --integration                               │
         │                                                                                          │
@@ -78,8 +78,10 @@ pytest                                             # expect: all tests pass (no 
 
 ## 3. Configure `.env` (real environment)
 
-`python scripts/setup_all.py` (section 5) creates `.env` and `campaign_provisioner/.env` from `.env.example` and fills in the
-project, dataset, region and approver emails. You only check the Gemini lines. These are all the entries:
+`python scripts/setup_all.py` (section 5) creates one `.env` file (in the repo root) from `.env.example` and fills in the
+project, dataset, region and approver emails. You only check the Gemini lines. There is just one file: `adk web` looks for
+`.env` in the agent folder and then in the folders above it, so the repo-root file is found. (If an old
+`campaign_provisioner/.env` exists from an earlier setup, delete it or keep it identical, because the one next to the agent wins.) These are all the entries:
 
 | Entry | Meaning | Example |
 |---|---|---|
@@ -185,7 +187,7 @@ That single command:
    `gcloud services enable ...` command) and any missing BigQuery permission (with the role to ask for).
 2. Creates the **BigQuery** dataset, tables, views, demo data and the approver emails.
 3. Creates and publishes the **Application Integration** workflow (purchase order + approver email).
-4. Writes `.env` and `campaign_provisioner/.env` (project, dataset, locations, approver emails), keeping any other lines.
+4. Writes the `.env` file (project, dataset, locations, approver emails), keeping any other lines.
 
 What you can configure:
 
@@ -260,8 +262,7 @@ change. `--test` sends one real test email (to `--test-email`, default your gclo
 ### 5.4 Configure `.env`
 
 ```bash
-cp .env.example .env
-cp .env campaign_provisioner/.env      # adk web reads the agent folder's .env
+cp .env.example .env      # only if you are not using setup_all.py; edit the values
 ```
 
 Set `GOOGLE_CLOUD_PROJECT` (the setup script already did, see section 3 for the other entries).
