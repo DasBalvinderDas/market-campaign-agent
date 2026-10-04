@@ -1,5 +1,5 @@
 """Tools for the Budget Agent, including the human-in-the-loop gate."""
-from google.adk.tools import FunctionTool
+from google.adk.tools import FunctionTool, ToolContext
 
 from ..repositories import get_repo
 from .audit import audit
@@ -29,7 +29,8 @@ def get_approval_policy(amount: float) -> dict:
             "requires_human": bool(p["requires_human"]), "approver_role": p["approver_role"]}
 
 
-def approve_budget(request_id: str, campaign_id: str, amount: float, justification: str) -> dict:
+def approve_budget(request_id: str, campaign_id: str, amount: float, justification: str,
+                   tool_context: ToolContext | None = None) -> dict:
     """Approve and commit budget for a request. Writes a COMMIT entry to the budget ledger.
 
     Amounts in a tier that requires a human are paused by the platform until a person
@@ -41,6 +42,19 @@ def approve_budget(request_id: str, campaign_id: str, amount: float, justificati
         amount: Total USD to commit.
         justification: Why the spend is needed (shown to the human approver).
     """
+    result = _approve(request_id, campaign_id, amount, justification)
+    if tool_context is not None and result.get("status") in ("approved", "rejected"):
+        # Hand control back to the orchestrator in code, so the next step (purchase orders, or releasing stock
+        # after a rejection) does not depend on the model remembering to transfer.
+        tool_context.actions.transfer_to_agent = "campaign_provisioner"
+    if result.get("status") == "approved":
+        result["next_step"] = "Budget approved. Control returns to campaign_provisioner, which now has procurement_agent create the purchase orders."
+    elif result.get("status") == "rejected":
+        result["next_step"] = "Budget not approved. Control returns to campaign_provisioner, which releases the reserved stock and explains."
+    return result
+
+
+def _approve(request_id: str, campaign_id: str, amount: float, justification: str) -> dict:
     repo = get_repo()
     budget = repo.get_budget(campaign_id)
     if not budget:

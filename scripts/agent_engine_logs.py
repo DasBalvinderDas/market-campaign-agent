@@ -66,7 +66,8 @@ def recent_logs(project: str, resource: str, limit: int = 40, errors_only: bool 
         return f"(could not read the logs: {r.stderr.strip()[:300]})"
     lines = [ln for ln in r.stdout.splitlines() if ln.strip()]
     if not lines:
-        return "(no log entries found for this deployment yet)"
+        return ("(no ERROR entries for this deployment; run again without --errors-only to see everything)" if errors_only
+                else "(no log entries found for this deployment yet)")
     lines.reverse()
     if full:
         return "\n".join(lines)

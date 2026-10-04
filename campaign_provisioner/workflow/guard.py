@@ -124,5 +124,5 @@ def after_tool(tool, args, tool_context, tool_response):
         failed = bool(resp.get("executionFailed") or _find(resp, ("error", "errorMessage")))
         audit(args.get("request_id"), "budget_agent", "approver_notification_failed" if failed else "approver_notified",
               approver_role=args.get("approver_role"), recipients=args.get("approver_email"),
-              amount=args.get("amount"))
+              amount=args.get("amount"), response=str(resp)[:400] if failed else None)
     return None

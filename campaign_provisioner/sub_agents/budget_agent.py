@@ -24,5 +24,6 @@ budget_agent = LlmAgent(
         "campaign_provisioner with approver and remaining budget."
     ),
     tools=[check_budget, get_approval_policy, build_notify_tool(), approve_budget_tool],
+    before_tool_callback=guard.before_tool,  # fills the approver email, subject and body for notify_approver
     after_tool_callback=guard.after_tool,
 )

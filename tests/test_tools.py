@@ -183,3 +183,23 @@ def test_approver_config_parsing():
     assert a.parse("me@x.com") == {"*": ["me@x.com"]}
     with pytest.raises(ValueError):
         a.parse("Marketing Director=not-an-email")
+
+
+def test_budget_agent_registers_the_guard_before_tool():
+    from campaign_provisioner.sub_agents.budget_agent import budget_agent
+    from campaign_provisioner.sub_agents.procurement_agent import procurement_agent
+    assert guard.before_tool in (budget_agent.before_tool_callback
+                                 if isinstance(budget_agent.before_tool_callback, list)
+                                 else [budget_agent.before_tool_callback])
+    assert procurement_agent.before_tool_callback is not None
+
+
+def test_approve_budget_hands_control_back_to_the_orchestrator():
+    ctx = types.SimpleNamespace(actions=types.SimpleNamespace(transfer_to_agent=None))
+    rid = new_request()
+    ok = budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000.0, "wall", ctx)
+    assert ok["status"] == "approved" and ctx.actions.transfer_to_agent == "campaign_provisioner"
+    assert "purchase orders" in ok["next_step"]
+    ctx2 = types.SimpleNamespace(actions=types.SimpleNamespace(transfer_to_agent=None))
+    no = budget_tools.approve_budget(new_request("NEXT27-DEVLOUNGE"), "NEXT27-DEVLOUNGE", 18000.0, "wall", ctx2)
+    assert no["status"] == "rejected" and ctx2.actions.transfer_to_agent == "campaign_provisioner"
