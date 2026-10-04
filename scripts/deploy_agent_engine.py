@@ -2,7 +2,8 @@
 """Deploy The Campaign Provisioner to Vertex AI Agent Engine (the final step).
 
   python scripts/deploy_agent_engine.py                 # create a new Agent Engine deployment
-  python scripts/deploy_agent_engine.py --update ID     # redeploy new code to an existing one
+  python scripts/deploy_agent_engine.py                 # first time: creates; afterwards: updates the saved one
+  python scripts/deploy_agent_engine.py --new           # create a separate new deployment
   python scripts/deploy_agent_engine.py --dry-run       # run all checks and show the command, deploy nothing
 
 What it does
@@ -58,6 +59,20 @@ def runtime_env(env_file_values: dict) -> dict:
     merged = {k: os.environ[k] for k in RUNTIME_KEYS if k in os.environ}
     merged.update({k: v for k, v in env_file_values.items() if k in RUNTIME_KEYS})
     return merged
+
+
+def pick_update_id(args, env_values: dict) -> str | None:
+    """Which existing Agent Engine to update: --update ID, else the one saved in .env, unless --new."""
+    if args.new:
+        return None
+    if args.update and args.update != "auto":
+        return args.update.rstrip("/").split("/")[-1]
+    saved = env_values.get("AGENT_ENGINE_RESOURCE")
+    if saved and RESOURCE_RE.fullmatch(saved):
+        return saved.split("/")[-1]
+    if args.update == "auto":
+        print("  NOTE: --update given but no AGENT_ENGINE_RESOURCE is saved in .env, so a new deployment is created.")
+    return None
 
 
 def build_config(env: dict, service_account: str | None) -> dict:
@@ -172,6 +187,9 @@ def run(args, project=""):
         ai.run_with(_Http(), argparse.Namespace(test=False, check_only=True, provision_region=False,
                                                 no_email=False, test_email=None), project)
 
+    update_id = pick_update_id(args, read_env(ROOT / ".env"))
+    args.update = update_id
+    print(f"  {'Updating the existing deployment ' + update_id + ' (use --new for a separate one)' if update_id else 'Creating a new deployment'}")
     env = runtime_env(read_env(ROOT / ".env"))
     config = build_config(env, args.service_account)
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
@@ -252,7 +270,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default=None)
     ap.add_argument("--region", default=None, help="Agent Engine region (default: GOOGLE_CLOUD_LOCATION or us-central1)")
-    ap.add_argument("--update", default=None, metavar="ENGINE_ID", help="redeploy to an existing Agent Engine id")
+    ap.add_argument("--update", nargs="?", const="auto", default=None, metavar="ENGINE_ID",
+                    help="redeploy to an existing Agent Engine (no value: the one saved in .env). This is already the "
+                         "default when .env has AGENT_ENGINE_RESOURCE")
+    ap.add_argument("--new", action="store_true", help="create a separate new deployment even if one is saved in .env")
     ap.add_argument("--service-account", default=None, help="run the agent as this service account instead of the default")
     ap.add_argument("--dry-run", action="store_true", help="run the checks and print the command, deploy nothing")
     ap.add_argument("--no-smoke-test", action="store_true", help="do not ask the deployed agent a test question")

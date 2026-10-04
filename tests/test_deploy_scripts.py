@@ -155,3 +155,14 @@ def test_log_key_lines_drop_stack_noise_and_duplicates():
     out = logs.key_lines(lines).splitlines()
     assert any("403 Client Error" in l for l in out) and len([l for l in out if "403" in l]) == 1
     assert not any("File " in l for l in out)
+
+
+def test_redeploy_updates_the_saved_deployment_automatically():
+    import argparse
+    ns = lambda **k: argparse.Namespace(**{"update": None, "new": False, **k})  # noqa: E731
+    saved = {"AGENT_ENGINE_RESOURCE": "projects/1/locations/us-central1/reasoningEngines/555"}
+    assert dep.pick_update_id(ns(), saved) == "555"             # default: update what is saved
+    assert dep.pick_update_id(ns(update="auto"), saved) == "555"  # `--update` with no value
+    assert dep.pick_update_id(ns(update="777"), saved) == "777"
+    assert dep.pick_update_id(ns(new=True), saved) is None
+    assert dep.pick_update_id(ns(), {}) is None                  # nothing saved yet: create

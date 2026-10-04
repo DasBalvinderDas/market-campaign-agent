@@ -708,7 +708,9 @@ instead (recommended for production), create it and pass `--service-account <ema
 |---|---|
 | `--project`, `--region` | default: your project, `GOOGLE_CLOUD_LOCATION` or `us-central1` |
 | `--service-account EMAIL` | run the agent as this account |
-| `--update ENGINE_ID` | redeploy new code to an existing deployment (use after every code change) |
+| *(nothing)* | the first run creates the deployment; every later run **updates that same deployment** (its id is saved in `.env`), so redeploying after a code change is just the same command |
+| `--new` | create a separate new deployment instead |
+| `--update ENGINE_ID` | update a specific deployment |
 | `--dry-run` | checks only, deploys nothing |
 
 A deployment takes several minutes because Google builds a container image. When it finishes the script asks the deployed agent
@@ -738,7 +740,7 @@ work the same way. Reset the data between runs with `python scripts/setup_bigque
 
 ### 14.6 Operate it
 
-- **New code:** `python scripts/deploy_agent_engine.py --update <engine id>` (the id is the last part of `AGENT_ENGINE_RESOURCE`).
+- **New code:** run `python scripts/deploy_agent_engine.py` again; it updates the deployment saved in `.env`.
 - **Change approver emails, tiers, stock, prices:** edit the BigQuery tables (section 6); no redeploy needed.
 - **Change the integration:** re-run `setup_application_integration.py`; if the agent was started before, redeploy so it reloads the tools.
 - **Logs and traces:** Cloud Logging and Cloud Trace in the console for the Agent Engine resource.
@@ -754,7 +756,7 @@ work the same way. Reset the data between runs with `python scripts/setup_bigque
 | A script says an API is not enabled | Enable the API it names (the message includes the command), wait a minute, run the script again |
 | `ModuleNotFoundError` / `vertexai` missing | Run `source scripts/env_setup.sh` (it installs everything) |
 | Deployment fails while the container starts, mentioning Application Integration or BigQuery | The runtime identity lacks roles (14.3), or the integration does not exist in that project/region. Grant the roles, check `setup_application_integration.py --check-only`, redeploy |
-| Logs show `403 Forbidden ... generateOpenApiSpec` | The deployed agent's identity cannot read the Application Integration definition. Run `python scripts/deploy_agent_engine.py --update <engine id>`: it grants the right role and the error message names the identity it runs as |
+| Logs show `403 Forbidden ... generateOpenApiSpec` | The deployed agent's identity cannot read the Application Integration definition. Run `python scripts/deploy_agent_engine.py` again (it updates the saved deployment): it grants the right role and the error message names the identity it runs as |
 | The agent answers with `Reasoning Engine Execution failed ... Internal Server Error` | The container is failing. The query script now prints the deployment's recent logs automatically; you can also run `python scripts/agent_engine_logs.py --errors-only`. Common causes: missing roles for the agent's identity (14.3), the integration not published in that project/region, a missing package |
 | `.../campaign_provisioner/.env exists` | Delete that file; the repo-root `.env` is the one used |
 | Region error | Use a region where Agent Engine is available, for example `us-central1` (`--region`) |

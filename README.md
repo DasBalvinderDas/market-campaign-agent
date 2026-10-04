@@ -67,7 +67,7 @@ API and Vertex AI API must be enabled in the project.
 | `scripts/setup_application_integration.py` | Application Integration only; `--test` runs both triggers once and sends a test email, `--print-definition` shows what is sent |
 | `scripts/verify_setup.py` | Reads back the BigQuery data and (with `--integration`) the tools ADK builds from the integration |
 | `scripts/env_setup.sh` | Run first with `source`: Python environment, packages, project variables, login / API / data checks |
-| `scripts/deploy_agent_engine.py` | Grants the agent's permissions and deploys the agent to Vertex AI Agent Engine (`--dry-run` to check first, `--update ID` to redeploy) |
+| `scripts/deploy_agent_engine.py` | Grants the agent's permissions and deploys the agent to Vertex AI Agent Engine (`--dry-run` to check first; run it again after code changes and it updates the saved deployment, `--new` for a separate one) |
 | `scripts/agent_engine_logs.py` | Shows the deployed agent's recent logs (used automatically when a request fails) |
 | `scripts/query_agent_engine.py` | Talks to the deployed agent and handles the human Confirm / Reject |
 
