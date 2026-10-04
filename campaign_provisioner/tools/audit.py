@@ -1,4 +1,4 @@
-"""Audit helper: writes to the audit_log table (BigQuery or memory)."""
+"""Audit helper: writes to the audit_log table (BigQuery)."""
 from ..repositories import get_repo
 
 

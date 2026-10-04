@@ -2,7 +2,7 @@
 
 > Autonomous agent that orchestrates campaign inventory, procurement and budget approval on **BigQuery** data, runs its workflow actions through **Google Application Integration**, and keeps humans in the loop for high-value spend.
 
-This is the enhanced version. The first version used mock in-memory data; this one reads and writes BigQuery, calls Application Integration for actions, and applies a tiered approval policy stored in BigQuery.
+This is the enhanced version. The first version used placeholder in-memory data; this one reads and writes BigQuery, calls Application Integration for actions, and applies a tiered approval policy stored in BigQuery.
 
 ## 1. The problem
 
@@ -53,9 +53,9 @@ campaign_provisioner/
   config.py                   env-driven settings (backends, dataset, integration names)
   data/schema.py              BigQuery tables and views (single source of truth)
   data/seed_data.py           Google Next 2027 demo data
-  repositories/               base.py (contract), bigquery_repo.py, memory_repo.py, get_repo()
+  repositories/               base.py (contract), bigquery_repo.py, memory_repo.py (unit tests only), get_repo()
   tools/                      inventory, procurement, budget, orchestration, audit tools
-  workflow/integration.py     Application Integration toolsets (or offline mocks)
+  workflow/integration.py     Application Integration toolsets (test doubles for unit tests)
   workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit
   sub_agents/                 inventory_agent, procurement_agent, budget_agent
 scripts/                      setup_bigquery.py, setup_application_integration.py, verify_setup.py
@@ -114,7 +114,7 @@ Two API triggers in one integration (`campaign-provisioner-workflows`): `create_
 (which emails the approvers listed in the BigQuery `approvers` table; the guard supplies the addresses, never the model).
 `python scripts/setup_all.py` sets up BigQuery, the integration and `.env` in one go, and reports missing APIs and permissions up front.
 ADK connects with `ApplicationIntegrationToolset`. Variable names are a contract; see `integration/README.md`.
-`WORKFLOW_BACKEND=mock` swaps in local functions with identical arguments for offline rehearsal.
+
 
 **Who directs the flow.** Today the root agent directs the order of the steps, the agents read and write BigQuery
 directly, and Application Integration runs two actions (purchase order, approver alert). Directing the whole flow from
@@ -126,7 +126,7 @@ as the conversational front door) is a possible next step. Both designs are comp
 
 **Where data comes from.** Production-style data lives in BigQuery and is created by `scripts/setup_bigquery.py`.
 The figures are **fictional demo data** (budgets, prices, stock, vendors, tier limits) and do not come from any real
-Google or customer system. `DATA_BACKEND=memory` uses the same seed data in process for offline runs and tests.
+Google or customer system. The unit tests use the same seed data in memory, so they need no cloud access.
 
 **Assumptions**
 

@@ -101,7 +101,6 @@ inside Application Integration instead, see `docs/DEMO_RUN.md` section 4.2.
   one for the budget agent).
 - `workflow/guard.py` runs **before** the PO tool: no PO unless the BigQuery budget ledger holds an approved COMMIT
   that still covers the amount. It runs **after**: stores the PO and audit events in BigQuery.
-- Set `WORKFLOW_BACKEND=mock` to rehearse without any integration; the mock functions use the same argument names.
 
 ## Status of this guide
 

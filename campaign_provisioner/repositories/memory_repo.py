@@ -1,4 +1,4 @@
-"""In-memory repository seeded from the same data as BigQuery (offline demo + tests)."""
+"""In-memory repository seeded from the same data as BigQuery (unit tests only)."""
 import copy
 
 from .. import approvers as approvers_cfg

@@ -1,7 +1,7 @@
 """Demo seed data: Google Next 2027 campaigns (fictional figures).
 
 Loaded into BigQuery by ``scripts/setup_bigquery.py`` and used directly by the
-in-memory repository, so both backends start from identical data.
+unit-test repository, so both start from identical data.
 """
 from datetime import datetime, timezone
 

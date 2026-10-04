@@ -91,7 +91,7 @@ def test_setup_all_runs_both_steps_and_writes_env(tmp_path, monkeypatch):
     setup_all.main()
     assert calls == ["preflight", ("bq", "p1", ["a@x.com"]), ("ai", "p1", False)]
     env = (tmp_path / ".env").read_text()
-    assert "GOOGLE_CLOUD_PROJECT=p1" in env and "APPROVER_EMAILS=a@x.com" in env and "WORKFLOW_BACKEND=app_integration" in env
+    assert "GOOGLE_CLOUD_PROJECT=p1" in env and "APPROVER_EMAILS=a@x.com" in env and "BACKEND" not in env
 
 
 def test_setup_all_continues_after_a_failed_step_and_reports(tmp_path, monkeypatch, capsys):

@@ -54,8 +54,6 @@ def main():
     ap.add_argument("--no-email", action="store_true", help="do not add the Send Email task")
     ap.add_argument("--test", action="store_true", help="run both Application Integration triggers once (sends a test email)")
     ap.add_argument("--test-email", default=None)
-    ap.add_argument("--skip-bigquery", action="store_true")
-    ap.add_argument("--skip-integration", action="store_true")
     ap.add_argument("--no-env", action="store_true", help="do not write the .env files")
     args = ap.parse_args()
 
@@ -63,9 +61,7 @@ def main():
     project = resolve_project(args.project)
     print(f"Project: {project}\n")
 
-    apis = [a for a, skip in (("bigquery.googleapis.com", args.skip_bigquery),
-                              ("integrations.googleapis.com", args.skip_integration)) if not skip]
-    preflight(project, apis, check_bigquery_permissions=not args.skip_bigquery,
+    preflight(project, ["bigquery.googleapis.com", "integrations.googleapis.com"],
               optional_apis=["aiplatform.googleapis.com"])
 
     import setup_application_integration as ai
@@ -84,25 +80,21 @@ def main():
                 print(exc.code if isinstance(exc.code, str) else f"(exit {exc.code})")
         print()
 
-    if not args.skip_bigquery:
-        bq_args = types.SimpleNamespace(dataset=args.dataset, location=args.location, reset=False, reset_demo=False,
-                                        approver_email=args.approver_email, skip_preflight=True)
-        step("BigQuery data", lambda: bq.run(bq_args, project=project))
-    if not args.skip_integration:
-        ai_args = types.SimpleNamespace(test=args.test, check_only=False, provision_region=False,
-                                        no_email=args.no_email, test_email=args.test_email, skip_preflight=True)
-        step("Application Integration", lambda: ai.run(ai_args, project=project))
+    bq_args = types.SimpleNamespace(dataset=args.dataset, location=args.location, reset=False, reset_demo=False,
+                                    approver_email=args.approver_email, skip_preflight=True)
+    step("BigQuery data", lambda: bq.run(bq_args, project=project))
+    ai_args = types.SimpleNamespace(test=args.test, check_only=False, provision_region=False,
+                                    no_email=args.no_email, test_email=args.test_email, skip_preflight=True)
+    step("Application Integration", lambda: ai.run(ai_args, project=project))
 
     if not args.no_env and all(v == "OK" for v in results.values()):
         updates = {"GOOGLE_CLOUD_PROJECT": project, "BQ_DATASET": args.dataset, "BQ_LOCATION": args.location,
-                   "APP_INTEGRATION_LOCATION": args.region,
-                   "DATA_BACKEND": "bigquery" if not args.skip_bigquery else "memory",
-                   "WORKFLOW_BACKEND": "app_integration" if not args.skip_integration else "mock"}
+                   "APP_INTEGRATION_LOCATION": args.region}
         if args.approver_email:
             updates["APPROVER_EMAILS"] = ";".join(args.approver_email)
         for target in (ROOT / ".env", ROOT / "campaign_provisioner" / ".env"):
             write_env(target, updates)
-        print("== .env\n  wrote .env and campaign_provisioner/.env (project, backends, locations)\n")
+        print("== .env\n  wrote .env and campaign_provisioner/.env (project, dataset, locations, approver emails)\n")
 
     print("Summary: " + ", ".join(f"{k}: {v}" for k, v in results.items()))
     if any(v != "OK" for v in results.values()):

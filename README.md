@@ -13,5 +13,5 @@ high-value spend pauses for a named human approver.
 Full setup in one command (BigQuery data, Application Integration workflow, approver emails, `.env`):
 `python scripts/setup_all.py --approver-email "you@example.com"`. It reports any API that must be enabled or permission that is missing.
 
-Quick start (offline rehearsal): `pip install -r requirements.txt && pytest`, then set `DATA_BACKEND=memory` and
-`WORKFLOW_BACKEND=mock` in `.env` and run `adk web`.
+Then: `python scripts/verify_setup.py --integration`, `adk web`, and the prompts in `docs/DEMO_RUN.md`. The unit tests (`pytest`)
+need no cloud access.

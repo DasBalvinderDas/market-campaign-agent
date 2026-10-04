@@ -246,7 +246,7 @@ def run_with(http, args, project):
                 _fail(r, project)
             body = r.json()
             print(f"  {trigger}: failed={body.get('executionFailed', False)} outputs={body.get('outputParameters')}")
-    print("\nApplication Integration OK. Set WORKFLOW_BACKEND=app_integration in .env.")
+    print("\nApplication Integration OK. Next: python scripts/verify_setup.py --integration")
 
 
 def main():

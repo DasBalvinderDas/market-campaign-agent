@@ -3,14 +3,8 @@
 Step-by-step: set up the data in BigQuery, connect Application Integration, start `adk web`, and run
 the test prompts for the Google Next 2027 campaign, with the human-in-the-loop (HITL) cases highlighted.
 
-There are two ways to run it:
-
-| Mode | Data | Workflow actions | Use it for |
-|---|---|---|---|
-| **A. Rehearsal (offline)** | in-memory copy of the seed data | local mock functions | trying the prompts with no GCP setup |
-| **B. Full (recommended for the demo)** | BigQuery | Google Application Integration | the real architecture |
-
-Both modes run the same agents, prompts and approval logic.
+It runs on your real Google Cloud project: data in BigQuery, workflow actions in Application Integration, Gemini
+for the agent. Everything is configured through `.env` (section 3), which the setup script fills in for you.
 
 ---
 
@@ -22,9 +16,7 @@ Both modes run the same agents, prompts and approval logic.
  2. Install             python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
         │               pytest                       <- proves the code works, no cloud needed
         │
-        ├── Mode A (rehearse offline) ──► set DATA_BACKEND=memory, WORKFLOW_BACKEND=mock in .env ──┐
-        │                                                                                          │
- 3. Log in (Mode B)     export GOOGLE_CLOUD_PROJECT=<project>  +  gcloud auth application-default login
+ 3. Log in             export GOOGLE_CLOUD_PROJECT=<project>  +  gcloud auth application-default login
         │                                                                                          │
  4. One-command setup   python scripts/setup_all.py --approver-email "you@example.com"             │
         │                 ├─ checks APIs + permissions, lists anything missing, changes nothing yet  │
@@ -38,7 +30,7 @@ Both modes run the same agents, prompts and approval logic.
         │
  7. Run the prompts     section 9 (test prompts; 3 + 2 of them stop for a human approval)
         │
- 8. Reset for next run  python scripts/setup_bigquery.py --reset-demo   (Mode B)  /  restart adk web (Mode A)
+ 8. Reset for next run  python scripts/setup_bigquery.py --reset-demo
 ```
 
 | Step | Command | You should see |
@@ -60,7 +52,7 @@ you simply run the same command again after fixing it. Finished parts are skippe
 | Who is emailed for approval | BigQuery table `approvers` | `--approver-email` in step 4 |
 | Purchase order + approval email actions | Application Integration workflow | `setup_all.py` (step 4) |
 | The human Confirm / Reject | the `adk web` chat | nothing to set up |
-| Project, backends, model | `.env` | written by step 4 |
+| Project, dataset, regions, approver emails | `.env` | written by step 4 |
 
 The sections that follow give the detail for each step.
 
@@ -68,7 +60,7 @@ The sections that follow give the detail for each step.
 
 ## 1. Prerequisites
 
-- Python 3.10+ and a Google Cloud project with billing enabled (Mode B)
+- Python 3.10+ and a Google Cloud project with billing enabled
 - `gcloud` CLI (Cloud Shell has it)
 - The BigQuery, Application Integration and Vertex AI APIs enabled in the project (the scripts tell you if one is missing)
 - Your user needs BigQuery Data Editor + Job User, Application Integration Editor (or Admin) + Invoker + Viewer, and Vertex AI User (the setup script checks the BigQuery ones up front)
@@ -84,15 +76,21 @@ pip install -r requirements.txt
 pytest                                             # expect: all tests pass (no cloud needed)
 ```
 
-## 3. Mode A: offline rehearsal (5 minutes)
+## 3. Configure `.env` (real environment)
 
-```bash
-cp .env.example .env
-```
+`python scripts/setup_all.py` (section 5) creates `.env` and `campaign_provisioner/.env` from `.env.example` and fills in the
+project, dataset, region and approver emails. You only check the Gemini lines. These are all the entries:
 
-Edit `.env`: set `DATA_BACKEND=memory`, `WORKFLOW_BACKEND=mock`, and either `GOOGLE_API_KEY=...` or the Vertex AI
-lines (also `cp .env campaign_provisioner/.env`). Then jump to **section 8** (start `adk web`). Restart `adk web` between
-prompts to reset the state. In this mode no approval email is sent (the workflow is a local stand-in).
+| Entry | Meaning | Example |
+|---|---|---|
+| `GOOGLE_GENAI_USE_VERTEXAI` | use Gemini on Vertex AI | `TRUE` |
+| `GOOGLE_CLOUD_PROJECT` | your Google Cloud project id | `my-project` |
+| `GOOGLE_CLOUD_LOCATION` | Vertex AI location | `us-central1` |
+| `GOOGLE_API_KEY` | only if you use a Gemini API key instead of Vertex AI | `...` |
+| `CAMPAIGN_MODEL` | optional, Gemini model | `gemini-2.5-flash` |
+| `BQ_DATASET` / `BQ_LOCATION` | BigQuery dataset and location | `campaign_provisioner` / `US` |
+| `APP_INTEGRATION_NAME` / `APP_INTEGRATION_LOCATION` | the Application Integration workflow | `campaign-provisioner-workflows` / `us-central1` |
+| `APPROVER_EMAILS` | who is emailed for approvals (`Role=a@x.com,b@x.com;Role 2=c@x.com`) | `Marketing Director=md@example.com` |
 
 ## 4. How the flow works and where Application Integration fits (read this first)
 
@@ -171,7 +169,7 @@ section 4.1. Moving to 4.2 means building the `campaign-flow` integration in the
 For Each Loop, conditions, approval step) and replacing the three sub-agents' tools with calls to the new triggers.
 The exact task names depend on what your region offers, and the flow has not been built or run yet.
 
-## 5. Mode B: BigQuery + Application Integration
+## 5. Set up BigQuery and Application Integration
 
 ### 5.0 The one-command setup
 
@@ -187,7 +185,7 @@ That single command:
    `gcloud services enable ...` command) and any missing BigQuery permission (with the role to ask for).
 2. Creates the **BigQuery** dataset, tables, views, demo data and the approver emails.
 3. Creates and publishes the **Application Integration** workflow (purchase order + approver email).
-4. Writes `.env` and `campaign_provisioner/.env` (project, backends, locations, approver emails), keeping any other lines.
+4. Writes `.env` and `campaign_provisioner/.env` (project, dataset, locations, approver emails), keeping any other lines.
 
 What you can configure:
 
@@ -266,7 +264,7 @@ cp .env.example .env
 cp .env campaign_provisioner/.env      # adk web reads the agent folder's .env
 ```
 
-Set `GOOGLE_CLOUD_PROJECT`, keep `DATA_BACKEND=bigquery` and `WORKFLOW_BACKEND=app_integration`.
+Set `GOOGLE_CLOUD_PROJECT` (the setup script already did, see section 3 for the other entries).
 
 ## 6. Setting up the data
 
@@ -414,7 +412,7 @@ Open the URL it prints (http://localhost:8000, or use Cloud Shell's **Web Previe
 **campaign_provisioner** in the agent dropdown. The Events panel shows each tool call and each hand-off between
 the root agent and the sub-agents.
 
-**Reset before every demo run** (Mode B):
+**Reset before every demo run:**
 
 ```bash
 python scripts/setup_bigquery.py --reset-demo
@@ -493,7 +491,7 @@ has $27,710 left.
 > **HUMAN-IN-THE-LOOP: you Confirm**
 > 1. The agent reserves 8 banners from stock and gets the LED wall quote: ExpoVision **$18,000**, 21 days.
 > 2. $18,000 is tier **MANAGER**. The budget agent calls the notify-approver workflow, which **emails the Marketing Director**
->    address(es) from the `approvers` table (Mode B; no email in Mode A).
+>    address(es) from the `approvers` table .
 > 3. **The run pauses.** A confirmation for `approve_budget` appears with `amount 18000`, campaign `NEXT27-MAIN` and the justification.
 > 4. **You click Confirm** (you are playing the Marketing Director).
 > 5. The budget is committed as `human:Marketing Director`, the purchase order is created, and NEXT27-MAIN has $232,000 left.
@@ -627,7 +625,6 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_
 | "API not enabled" message from a script | Enable the API it names (`gcloud services enable <api> --project $GOOGLE_CLOUD_PROJECT`), wait a minute, re-run |
 | Permission denied | Ask for the roles listed in the prerequisites; run `gcloud auth application-default login` |
 | `adk web` fails at start with an Application Integration error | The toolset reads the integration at start. Check the integration is **published**, the name/region in `.env`, and run `verify_setup.py --integration` |
-| Want to rehearse without the integration | Set `WORKFLOW_BACKEND=mock` (and `DATA_BACKEND=memory` for no BigQuery) |
 | Numbers differ from this guide | Run `--reset-demo` and start a new session |
 | No approval prompt for a high amount | The amount may exceed the remaining budget (rejected directly), or the tier in `approval_policy` was changed |
 | No approval email arrives | Check `verify_setup.py` lists an address for the role, check spam, run `setup_application_integration.py --test --test-email you@example.com`, and look at the audit log for `approver_notified` / `approver_notification_failed` / `approver_email_skipped_no_recipients` |

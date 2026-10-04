@@ -5,8 +5,8 @@ Two integration API triggers are used:
   * notify_approver        - emails the human approver that a decision is waiting (recipients come from the
                              BigQuery table `approvers`)
 
-WORKFLOW_BACKEND=app_integration  -> ADK ApplicationIntegrationToolset (real integration)
-WORKFLOW_BACKEND=mock             -> local functions with the same argument names (offline demo/tests)
+The tools come from ADK's ApplicationIntegrationToolset (your published integration). The local functions below
+are test doubles with the same argument names; they are used only by the unit tests.
 
 The integration contract (inputs/outputs) is documented in integration/README.md.
 """
@@ -22,7 +22,7 @@ _NOTIFY_HINT = ("Email the human approver that a high-value request is waiting f
 
 def create_purchase_order(request_id: str, sku: str, quantity: int, vendor_id: str,
                           campaign_id: str = "", total_amount: float = 0.0) -> dict:
-    """Create a purchase order for an approved request (offline stand-in for the Application
+    """Create a purchase order for an approved request (test double for the Application
     Integration trigger of the same name).
 
     Args:
@@ -39,7 +39,7 @@ def create_purchase_order(request_id: str, sku: str, quantity: int, vendor_id: s
 
 def notify_approver(request_id: str, campaign_id: str, amount: float, approver_role: str, summary: str,
                     approver_emails: str = "") -> dict:
-    """Notify the human approver by email that a request is waiting (offline stand-in for the Application
+    """Notify the human approver by email that a request is waiting (test double for the Application
     Integration trigger of the same name). Do not pass approver_emails: the platform fills it in from the
     BigQuery table `approvers`.
 
@@ -51,7 +51,7 @@ def notify_approver(request_id: str, campaign_id: str, amount: float, approver_r
         summary: What is being bought and why (items, vendor, total).
         approver_emails: Filled in by the platform guard.
     """
-    return {"status": "SUCCEEDED", "channel": "mock (no email is sent)", "approver_role": approver_role,
+    return {"status": "SUCCEEDED", "channel": "test double (no email is sent)", "approver_role": approver_role,
             "approver_emails": approver_emails}
 
 
@@ -59,17 +59,17 @@ def _toolset(trigger: str, hint: str):
     from google.adk.tools.application_integration_tool import ApplicationIntegrationToolset
 
     if not config.PROJECT:
-        raise RuntimeError("GOOGLE_CLOUD_PROJECT must be set when WORKFLOW_BACKEND=app_integration")
+        raise RuntimeError("GOOGLE_CLOUD_PROJECT must be set (export GOOGLE_CLOUD_PROJECT=<your-project-id>)")
     return ApplicationIntegrationToolset(
         project=config.PROJECT, location=config.APP_INTEGRATION_LOCATION,
         integration=config.APP_INTEGRATION_NAME, triggers=[trigger], tool_instructions=hint)
 
 
 def build_po_tool():
-    return _toolset(config.PO_TRIGGER, _PO_HINT) if config.WORKFLOW_BACKEND == "app_integration" \
+    return _toolset(config.PO_TRIGGER, _PO_HINT) if config.WORKFLOW_BACKEND != "mock" \
         else create_purchase_order
 
 
 def build_notify_tool():
-    return _toolset(config.NOTIFY_TRIGGER, _NOTIFY_HINT) if config.WORKFLOW_BACKEND == "app_integration" \
+    return _toolset(config.NOTIFY_TRIGGER, _NOTIFY_HINT) if config.WORKFLOW_BACKEND != "mock" \
         else notify_approver

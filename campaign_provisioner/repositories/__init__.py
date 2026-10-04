@@ -1,4 +1,4 @@
-"""Backend selection. DATA_BACKEND=bigquery (real data) or memory (offline demo/tests)."""
+"""Repository selection: BigQuery (default). An in-memory repository exists for unit tests only."""
 from .. import config
 from .base import Repository
 
@@ -8,12 +8,12 @@ _repo: Repository | None = None
 def get_repo() -> Repository:
     global _repo
     if _repo is None:
-        if config.DATA_BACKEND == "bigquery":
-            from .bigquery_repo import BigQueryRepository
-            _repo = BigQueryRepository(config.PROJECT, config.BQ_DATASET, config.BQ_LOCATION)
-        else:
+        if config.DATA_BACKEND == "memory":  # unit tests only
             from .memory_repo import MemoryRepository
             _repo = MemoryRepository()
+        else:
+            from .bigquery_repo import BigQueryRepository
+            _repo = BigQueryRepository(config.PROJECT, config.BQ_DATASET, config.BQ_LOCATION)
     return _repo
 
 

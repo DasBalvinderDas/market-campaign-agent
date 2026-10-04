@@ -21,7 +21,6 @@ from _common import guarded, resolve_project  # noqa: E402
 @guarded
 def run(args, project=""):
     os.environ["GOOGLE_CLOUD_PROJECT"] = project
-    os.environ["DATA_BACKEND"] = "bigquery"
     from campaign_provisioner import config
     from campaign_provisioner.repositories import get_repo
 

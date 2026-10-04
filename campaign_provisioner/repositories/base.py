@@ -17,7 +17,7 @@ def _tokens(text: str) -> set:
 
 
 class Repository:
-    """Implemented by MemoryRepository (offline/tests) and BigQueryRepository."""
+    """Implemented by BigQueryRepository (real) and MemoryRepository (unit tests only)."""
 
     # ---- inventory
     def list_catalog(self) -> list[dict]: raise NotImplementedError
