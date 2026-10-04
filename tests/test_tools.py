@@ -6,6 +6,11 @@ from campaign_provisioner.workflow import guard
 from campaign_provisioner.workflow.integration import create_purchase_order, notify_approver
 
 
+def run_before(tool, args, ctx):
+    import asyncio
+    return asyncio.run(guard.before_tool(tool, args, ctx))
+
+
 def new_request(campaign="NEXT27-MAIN"):
     return orchestration_tools.register_campaign_request(campaign, "test")["request_id"]
 
@@ -74,25 +79,25 @@ def po_args(rid, qty=1, sku="BOOTH-LEDWALL", vendor="V-EXPOVISION"):
 
 def test_po_blocked_without_approval():
     rid = new_request()
-    assert guard.before_tool(TOOL, po_args(rid), None)["status"] == "BLOCKED"
+    assert run_before(TOOL, po_args(rid), None)["status"] == "BLOCKED"
 
 
 def test_po_allowed_with_approval_amount_overridden_and_recorded(repo):
     rid = new_request()
     budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000.0, "led wall")
     args = po_args(rid)
-    assert guard.before_tool(TOOL, args, None) is None
+    assert run_before(TOOL, args, None) is None
     assert args["total_amount"] == 18000.0 and args["campaign_id"] == "NEXT27-MAIN"  # model value ignored
     resp = guard.after_tool(TOOL, args, None, create_purchase_order(**args))
     assert resp["recorded"] and repo.t["purchase_orders"][0]["total_amount"] == 18000.0
     # a second PO now exceeds the approval
-    assert guard.before_tool(TOOL, po_args(rid), None)["status"] == "BLOCKED"
+    assert run_before(TOOL, po_args(rid), None)["status"] == "BLOCKED"
 
 
 def test_po_cannot_exceed_approval():
     rid = new_request()
     budget_tools.approve_budget(rid, "NEXT27-MAIN", 4000.0, "x")
-    assert guard.before_tool(TOOL, po_args(rid), None)["status"] == "BLOCKED"
+    assert run_before(TOOL, po_args(rid), None)["status"] == "BLOCKED"
 
 
 def test_after_tool_notify_is_audited(repo):
@@ -130,28 +135,43 @@ def test_adk_confirmation_predicate_receives_args():
 
 
 # ---- approver notification
+class FakeNotifyTool:
+    name = "notify_approver"
+
+    def __init__(self):
+        self.calls = []
+
+    async def run_async(self, *, args, tool_context):
+        self.calls.append(dict(args))
+        return {"status": "SUCCEEDED"}
+
+
 def test_notify_recipients_come_from_data_not_model(repo):
-    from campaign_provisioner.tools.audit import audit  # noqa: F401
     repo.t["approvers"] = [{"approver_role": "Marketing Director", "email": "md@example.com", "active": True},
                            {"approver_role": "Marketing Director", "email": "md2@example.com", "active": True},
                            {"approver_role": "Marketing Director", "email": "old@example.com", "active": False}]
-    tool = types.SimpleNamespace(name="notify_approver")
-    args = {"request_id": "R", "approver_role": "Marketing Director", "approver_emails": "attacker@evil.com"}
-    assert guard.before_tool(tool, args, None) is None
-    assert args["approver_emails"] == "md@example.com,md2@example.com"
+    tool = FakeNotifyTool()
+    args = {"request_id": "R", "campaign_id": "C", "summary": "1 wall, $18,000", "approver_role": "Marketing Director",
+            "approver_email": "attacker@evil.com", "email_subject": "model subject"}
+    assert run_before(tool, args, None) is None
+    # first address goes through the normal call, every extra address gets its own call
+    assert args["approver_email"] == "md@example.com"
+    assert [c["approver_email"] for c in tool.calls] == ["md2@example.com"]
+    assert args["email_subject"] == "Approval needed: R - C (Marketing Director)" and "1 wall" in args["email_body"]
+    assert "attacker" not in str(args) + str(tool.calls)
 
 
 def test_notify_without_recipients_is_reported_not_blocking(repo):
     repo.t["approvers"] = []
-    tool = types.SimpleNamespace(name="notify_approver")
-    out = guard.before_tool(tool, {"request_id": "R", "approver_role": "VP Marketing + Finance Controller"}, None)
+    tool = FakeNotifyTool()
+    out = run_before(tool, {"request_id": "R", "approver_role": "VP Marketing + Finance Controller"}, None)
     assert out["status"] == "NO_APPROVERS" and "no email was sent" in out["reason"]
     assert repo.t["audit_log"][-1]["action"] == "approver_email_skipped_no_recipients"
 
 
 def test_notification_failure_is_audited(repo):
     tool = types.SimpleNamespace(name="notify_approver")
-    guard.after_tool(tool, {"request_id": "R", "approver_emails": "a@x.com"}, None, {"executionFailed": True})
+    guard.after_tool(tool, {"request_id": "R", "approver_email": "a@x.com"}, None, {"executionFailed": True})
     assert repo.t["audit_log"][-1]["action"] == "approver_notification_failed"
 
 

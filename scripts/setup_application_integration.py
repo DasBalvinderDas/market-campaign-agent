@@ -9,11 +9,13 @@ It builds integration "campaign-provisioner-workflows" with two API triggers thr
 Integration REST API:
   create_purchase_order  in: request_id, campaign_id, sku, vendor_id, quantity, total_amount
                          out: po_number (PO-<request_id>-<sku>), execution_id
-  notify_approver        in: request_id, campaign_id, approver_role, approver_emails, summary, amount
+  notify_approver        in: request_id, campaign_id, approver_role, summary, amount,
+                            approver_email, email_subject, email_body
                          out: status
-create_purchase_order runs a Data Mapping task. notify_approver builds the message, SENDS AN EMAIL to
-approver_emails (a comma-separated list the agent reads from the BigQuery table `approvers`, so the addresses
-are configured in data, not in the integration), then sets status. Use --no-email to skip the email task.
+create_purchase_order runs a Data Mapping task. notify_approver SENDS AN EMAIL (Send Email task) to ONE address,
+approver_email, using email_subject and email_body, then sets status. The agent reads the addresses from the
+BigQuery table `approvers` and calls the trigger once per address, so recipients are configured in data, not in
+the integration. Use --no-email to skip the email task. --print-definition shows the JSON that is sent.
 
 Assumes the Application Integration API is already enabled. Project id: --project, else
 GOOGLE_CLOUD_PROJECT, else your active gcloud project. If an API is not enabled the script tells you which one.
@@ -40,7 +42,8 @@ S, I, D = "STRING_VALUE", "INT_VALUE", "DOUBLE_VALUE"
 # Variable names are a contract with the agent (campaign_provisioner/workflow/guard.py).
 PO_IN = {"request_id": S, "campaign_id": S, "sku": S, "vendor_id": S, "quantity": I, "total_amount": D}
 PO_OUT = {"po_number": S, "execution_id": S}
-NOTIFY_IN = {"request_id": S, "campaign_id": S, "approver_role": S, "approver_emails": S, "summary": S, "amount": D}
+NOTIFY_IN = {"request_id": S, "campaign_id": S, "approver_role": S, "approver_email": S, "email_subject": S,
+             "email_body": S, "summary": S, "amount": D}
 NOTIFY_OUT = {"status": S}
 
 SAMPLE = {
@@ -52,7 +55,9 @@ SAMPLE = {
 
 def notify_sample(email):
     return {"request_id": {"stringValue": "SETUP-TEST"}, "campaign_id": {"stringValue": "NEXT27-MAIN"},
-            "approver_role": {"stringValue": "Marketing Director"}, "approver_emails": {"stringValue": email},
+            "approver_role": {"stringValue": "Marketing Director"}, "approver_email": {"stringValue": email},
+            "email_subject": {"stringValue": "Campaign Provisioner setup test (please ignore)"},
+            "email_body": {"stringValue": "This is a test of the approver notification email. No action needed."},
             "summary": {"stringValue": "Setup test, please ignore: 1 booth LED video wall, USD 18,000"},
             "amount": {"doubleValue": 18000}}
 
@@ -91,17 +96,13 @@ def _trigger(number, trigger_id, start_task, inputs, outputs):
             "inputVariables": {"names": list(inputs)}, "outputVariables": {"names": list(outputs)}}
 
 
-def _lits(*parts):
-    return [_concat(_lit(p)) if not p.startswith("$") else _concat(_ref(p.strip("$"))) for p in parts]
-
-
 def _email_task(task_id, next_id):
     """Send Email task. Parameter keys follow Google's published foreach-loop-send-email sample."""
     empty = {"stringArray": {}}
     return {"task": "EmailTask", "taskId": task_id, "displayName": "Email the approver",
             "nextTasks": [{"taskId": next_id}], "taskExecutionStrategy": "WHEN_ALL_SUCCEED",
             "parameters": {
-                "To": {"key": "To", "value": {"stringArray": {"stringValues": ["$recipient_list$"]}}},
+                "To": {"key": "To", "value": {"stringArray": {"stringValues": ["$approver_email$"]}}},
                 "Cc": {"key": "Cc", "value": empty}, "Bcc": {"key": "Bcc", "value": empty},
                 "AttachmentPath": {"key": "AttachmentPath", "value": empty},
                 "Subject": {"key": "Subject", "value": {"stringValue": "$email_subject$"}},
@@ -129,27 +130,9 @@ def build_version(email: bool = True) -> dict:
             params.setdefault(key, {"key": key, "displayName": key, "dataType": typ, "inputOutputType": kind})
     tasks = [_mapping_task("1", "Build PO number", [po_number, execution_id])]
     if email:
-        # 2: build recipient list + subject + body   3: send email   4: set status
-        recipients = {"inputField": {"fieldType": S, "transformExpression": {
-            "initialValue": _ref("approver_emails")["initialValue"],
-            "transformationFunctions": [{"functionType": {"stringFunction": {"functionName": "SPLIT"}},
-                                         "parameters": [_lit(",")]}]}},
-            "outputField": {"referenceKey": "$recipient_list$", "fieldType": "STRING_ARRAY", "cardinality": "OPTIONAL"}}
-        subject = {"inputField": {"fieldType": S, "transformExpression": {
-            "initialValue": {"literalValue": {"stringValue": "Approval needed: "}},
-            "transformationFunctions": _lits("$request_id$", " - ", "$campaign_id$", " (", "$approver_role$", ")")}},
-            "outputField": _out_field("email_subject")}
-        body = {"inputField": {"fieldType": S, "transformExpression": {
-            "initialValue": _ref("summary")["initialValue"],
-            "transformationFunctions": _lits("\n\nRequest ", "$request_id$", " needs approval from ", "$approver_role$",
-                                             ". Open the Campaign Provisioner chat and choose Confirm or Reject.")}},
-            "outputField": _out_field("email_body")}
-        for key, typ in (("recipient_list", "STRING_ARRAY"), ("email_subject", S), ("email_body", S)):
-            params[key] = {"key": key, "displayName": key, "dataType": typ}
-        t2 = _mapping_task("2", "Build email", [recipients, subject, body])
-        t2["nextTasks"] = [{"taskId": "3"}]
-        t4 = _mapping_task("4", "Mark approver notified", [status])
-        tasks += [t2, _email_task("3", "4"), t4]
+        # 2: send email (only trigger inputs are referenced, like Google's foreach-loop-send-email sample)
+        # 3: set status
+        tasks += [_email_task("2", "3"), _mapping_task("3", "Mark approver notified", [status])]
     else:
         tasks.append(_mapping_task("2", "Mark approver notified", [status]))
     return {
@@ -164,10 +147,17 @@ def build_version(email: bool = True) -> dict:
 # ---------------------------------------------------------------- API calls
 def _fail(resp, project):
     hint = explain(resp.text, project)
-    sys.exit(f"\n{hint}" if hint else
-             f"\nApplication Integration returned HTTP {resp.status_code}:\n{resp.text[:800]}\n\n"
-             "If this is the first time Application Integration is used in this region, run this script once with "
-             "--provision-region. Otherwise create the integration in the console (integration/README.md).")
+    if hint:
+        sys.exit(f"\n{hint}")
+    msg = f"\nApplication Integration returned HTTP {resp.status_code}:\n{resp.text[:800]}\n"
+    if resp.status_code == 400:
+        msg += ("\nThe API rejected the integration definition. Send this message to the maintainer; "
+                "`--print-definition` shows exactly what was sent. You can also build the integration in the "
+                "console (integration/README.md).")
+    elif resp.status_code in (403, 404):
+        msg += ("\nIf Application Integration has never been used in this region, run this script once with "
+                "--provision-region. Otherwise check the permissions (Application Integration Editor) and the region.")
+    sys.exit(msg)
 
 
 def _published_triggers(http, base):
@@ -258,7 +248,11 @@ def main():
     ap.add_argument("--check-only", action="store_true", help="check only; do not create anything")
     ap.add_argument("--provision-region", action="store_true",
                     help="one-time: enable Application Integration in this region (first use only)")
+    ap.add_argument("--print-definition", action="store_true", help="print the integration definition JSON and exit")
     args = ap.parse_args()
+    if args.print_definition:
+        print(json.dumps(build_version(email=not args.no_email), indent=2))
+        return
     run(args, project=resolve_project(args.project))
 
 

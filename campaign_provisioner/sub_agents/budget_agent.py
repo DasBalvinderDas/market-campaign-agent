@@ -14,7 +14,7 @@ budget_agent = LlmAgent(
         "3) If the total exceeds the remaining budget, still call approve_budget: it returns 'rejected' without "
         "a human prompt and records the rejection. Then report the shortfall. "
         "4) If the policy requires a human, first call the notify approver tool (request_id, campaign_id, "
-        "amount, approver_role, summary; never pass email addresses, the platform adds them) so the approver "
+        "amount, approver_role, summary; never pass email addresses, subject or body, the platform adds them) so the approver "
         "is emailed through Application Integration. If it reports NO_APPROVERS, continue anyway and tell the "
         "user that no email was sent. "
         "5) Call approve_budget with the total and a clear justification (items, vendor, cost, remaining "

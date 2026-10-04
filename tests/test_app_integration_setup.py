@@ -99,18 +99,21 @@ def test_test_flag_executes_both_triggers():
     assert len([c for c in h.calls if c[1].endswith(":execute")]) == 2
 
 
-def test_notify_trigger_sends_email_to_configurable_recipients():
+def test_notify_trigger_sends_one_email_using_only_trigger_inputs():
     v = sai.build_version()
     tasks = {t["taskId"]: t for t in v["taskConfigs"]}
-    email = tasks["3"]
+    email = tasks["2"]
     assert email["task"] == "EmailTask"
-    assert email["parameters"]["To"]["value"]["stringArray"]["stringValues"] == ["$recipient_list$"]
-    assert [n["taskId"] for n in tasks["2"]["nextTasks"]] == ["3"] and [n["taskId"] for n in email["nextTasks"]] == ["4"]
-    # recipients come from the approver_emails input (data), not from the integration
-    assert "approver_emails" in sai.NOTIFY_IN
-    cfg = json.loads(tasks["2"]["parameters"]["FieldMappingConfigTaskParameterKey"]["value"]["jsonValue"])
-    assert "$approver_emails$" in json.dumps(cfg) and "SPLIT" in json.dumps(cfg)
-    assert "approver_emails" not in json.dumps(email)
+    p = email["parameters"]
+    assert p["To"]["value"]["stringArray"]["stringValues"] == ["$approver_email$"]
+    assert p["Subject"]["value"]["stringValue"] == "$email_subject$" and p["TextBody"]["value"]["stringValue"] == "$email_body$"
+    # only trigger INPUT variables are referenced (the pattern in Google's published email sample)
+    declared = {x["key"]: x for x in v["integrationParameters"]}
+    for ref in ("approver_email", "email_subject", "email_body"):
+        assert declared[ref]["inputOutputType"] == "IN" and declared[ref]["dataType"] == "STRING_VALUE"
+    assert [n["taskId"] for n in email["nextTasks"]] == ["3"]
+    assert [t["startTasks"][0]["taskId"] for t in v["triggerConfigs"]] == ["1", "2"]
+    assert not any(k in declared for k in ("recipient_list", "approver_emails"))
 
 
 def test_no_email_variant_has_no_email_task():

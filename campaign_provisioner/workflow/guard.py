@@ -3,7 +3,8 @@
 before_tool: a purchase order is blocked unless the request has an approved budget (a COMMIT in
              the BigQuery budget ledger) that still covers it. The amount is recomputed from the
              vendor price list - the model's value is ignored.
-before_tool also fills approver_emails for notify_approver from the BigQuery `approvers` table.
+before_tool also fills the email recipient, subject and body for notify_approver (recipients from the BigQuery
+`approvers` table; one call per address).
 after_tool:  records the PO and the notification in BigQuery and the audit log.
 """
 from ..repositories import get_repo
@@ -42,8 +43,17 @@ def _blocked(request_id, reason, **details):
             "next_step": "Route to budget_agent for approval first. Do not retry or work around."}
 
 
-def _before_notify(args):
-    """Recipients always come from the BigQuery `approvers` table, never from the model."""
+def _email_text(args):
+    role = args.get("approver_role", "")
+    subject = f"Approval needed: {args.get('request_id', '')} - {args.get('campaign_id', '')} ({role})"
+    body = (f"{args.get('summary', '')}\n\nRequest {args.get('request_id', '')} needs approval from {role}. "
+            "Open the Campaign Provisioner chat and choose Confirm or Reject.")
+    return subject, body
+
+
+async def _before_notify(tool, args, tool_context):
+    """Recipients, subject and body are set here from BigQuery and the request, never by the model.
+    The workflow emails one address per call, so every extra recipient gets its own call."""
     role = args.get("approver_role", "")
     emails = get_repo().get_approver_emails(role)
     if not emails:
@@ -52,13 +62,23 @@ def _before_notify(args):
                 "reason": f"No approver email is configured for '{role}', so no email was sent.",
                 "next_step": "Continue to approve_budget (the approver can still confirm in the chat) and tell "
                              "the user that no email was sent. Setup: scripts/setup_bigquery.py --approver-email"}
-    args["approver_emails"] = ",".join(emails)
+    args["email_subject"], args["email_body"] = _email_text(args)
+    args.pop("approver_emails", None)
+    for extra in emails[1:]:
+        try:
+            await tool.run_async(args={**args, "approver_email": extra}, tool_context=tool_context)
+            audit(args.get("request_id"), "budget_agent", "approver_notified", approver_role=role,
+                  recipients=extra, amount=args.get("amount"))
+        except Exception as exc:  # noqa: BLE001 - one bad address must not stop the approval flow
+            audit(args.get("request_id"), "budget_agent", "approver_notification_failed", approver_role=role,
+                  recipients=extra, error=str(exc)[:300])
+    args["approver_email"] = emails[0]
     return None
 
 
-def before_tool(tool, args, tool_context):
+async def before_tool(tool, args, tool_context):
     if _is_notify(tool):
-        return _before_notify(args)
+        return await _before_notify(tool, args, tool_context)
     if not _is_po(tool):
         return None
     repo = get_repo()
@@ -103,6 +123,6 @@ def after_tool(tool, args, tool_context, tool_response):
             return None
         failed = bool(resp.get("executionFailed") or _find(resp, ("error", "errorMessage")))
         audit(args.get("request_id"), "budget_agent", "approver_notification_failed" if failed else "approver_notified",
-              approver_role=args.get("approver_role"), recipients=args.get("approver_emails"),
+              approver_role=args.get("approver_role"), recipients=args.get("approver_email"),
               amount=args.get("amount"))
     return None

@@ -17,7 +17,7 @@ from .. import config
 _PO_HINT = ("Create the purchase order for an APPROVED request. Pass request_id, sku, quantity and vendor_id. "
             "The platform recomputes the amount and blocks the call if no approved budget covers it.")
 _NOTIFY_HINT = ("Email the human approver that a high-value request is waiting for a decision. Pass request_id, "
-                "campaign_id, amount, approver_role and summary. Never pass approver_emails; the platform fills it in.")
+                "campaign_id, amount, approver_role and summary. Never pass approver_email, email_subject or email_body; the platform fills them in.")
 
 
 def create_purchase_order(request_id: str, sku: str, quantity: int, vendor_id: str,
@@ -38,10 +38,9 @@ def create_purchase_order(request_id: str, sku: str, quantity: int, vendor_id: s
 
 
 def notify_approver(request_id: str, campaign_id: str, amount: float, approver_role: str, summary: str,
-                    approver_emails: str = "") -> dict:
-    """Notify the human approver by email that a request is waiting (test double for the Application
-    Integration trigger of the same name). Do not pass approver_emails: the platform fills it in from the
-    BigQuery table `approvers`.
+                    approver_email: str = "", email_subject: str = "", email_body: str = "") -> dict:
+    """Email the human approver that a request is waiting (test double for the Application Integration trigger
+    of the same name). Do not pass approver_email, email_subject or email_body: the platform fills them in.
 
     Args:
         request_id: Campaign request id.
@@ -49,10 +48,12 @@ def notify_approver(request_id: str, campaign_id: str, amount: float, approver_r
         amount: USD amount awaiting approval.
         approver_role: Role that must decide, from get_approval_policy.
         summary: What is being bought and why (items, vendor, total).
-        approver_emails: Filled in by the platform guard.
+        approver_email: Filled in by the platform guard.
+        email_subject: Filled in by the platform guard.
+        email_body: Filled in by the platform guard.
     """
     return {"status": "SUCCEEDED", "channel": "test double (no email is sent)", "approver_role": approver_role,
-            "approver_emails": approver_emails}
+            "approver_email": approver_email}
 
 
 def _toolset(trigger: str, hint: str):
