@@ -30,8 +30,18 @@ python scripts/setup_all.py --approver-email "you@example.com"
 python scripts/verify_setup.py --integration
 adk web --port 8080                      # then open Web Preview on port 8080
 
-python scripts/deploy_agent_engine.py    # final step: deploy to Vertex AI Agent Engine (see docs/DEMO_RUN.md section 14)
 ```
+
+## Deploy to Vertex AI Agent Engine (final step, Cloud Shell)
+
+```bash
+source scripts/env_setup.sh                 # 1. venv, packages, project, login/API/data checks (prints any problem)
+python scripts/deploy_agent_engine.py       # 2. grants the agent its permissions and deploys
+python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall."   # talk to it; handles Confirm / Reject
+```
+
+New project? `source scripts/env_setup.sh --approver-email you@example.com` also creates the BigQuery data and the workflow.
+Details: `docs/DEMO_RUN.md` section 14.
 
 `setup_all.py` checks your APIs and permissions first and lists anything missing (which API to enable, which role to ask
 for). It then creates the BigQuery dataset, tables, views, demo data and approver emails, creates and publishes the
@@ -56,7 +66,8 @@ API and Vertex AI API must be enabled in the project.
 | `scripts/setup_bigquery.py` | BigQuery only; `--reset-demo` clears demo transactions between runs, `--reset` rebuilds, `--approver-email` sets who is emailed |
 | `scripts/setup_application_integration.py` | Application Integration only; `--test` runs both triggers once and sends a test email, `--print-definition` shows what is sent |
 | `scripts/verify_setup.py` | Reads back the BigQuery data and (with `--integration`) the tools ADK builds from the integration |
-| `scripts/deploy_agent_engine.py` | Deploys the agent to Vertex AI Agent Engine (`--dry-run` to check first, `--update ID` to redeploy) |
+| `scripts/env_setup.sh` | Run first with `source`: Python environment, packages, project variables, login / API / data checks |
+| `scripts/deploy_agent_engine.py` | Grants the agent's permissions and deploys the agent to Vertex AI Agent Engine (`--dry-run` to check first, `--update ID` to redeploy) |
 | `scripts/query_agent_engine.py` | Talks to the deployed agent and handles the human Confirm / Reject |
 
 ## Configuration

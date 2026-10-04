@@ -7,11 +7,16 @@
 
 What it does
   1. checks the APIs (Vertex AI, Cloud Build) and that BigQuery and the Application Integration workflow are
-     already set up (run scripts/setup_all.py first)
+     already set up (run `source scripts/env_setup.sh` first; add --approver-email to create them)
   2. builds the runtime settings (BigQuery dataset, Application Integration name and region, model) from your .env
-  3. runs `adk deploy agent_engine` on the campaign_provisioner folder
-  4. saves the deployed resource name as AGENT_ENGINE_RESOURCE in .env and prints the permissions the deployed
-     agent needs plus the command to talk to it (scripts/query_agent_engine.py)
+  3. gives the deployed agent's identity the roles it needs (BigQuery, Application Integration, Vertex AI); if
+     you are not allowed to, it prints who must grant what
+  4. runs `adk deploy agent_engine` on the campaign_provisioner folder (retries once if the identity only
+     existed after the first attempt)
+  5. saves the deployed resource name as AGENT_ENGINE_RESOURCE in .env and prints the command to talk to it
+     (scripts/query_agent_engine.py)
+
+Nothing manual: problems are printed on the console with what to do, they are not raised as stack traces.
 
 Project id: --project, else GOOGLE_CLOUD_PROJECT, else your active gcloud project. Region: --region, else
 GOOGLE_CLOUD_LOCATION from .env, else us-central1.
@@ -72,6 +77,49 @@ def deploy_command(project, region, config_path, agent_dir, update_id):
     return cmd + [str(agent_dir)]
 
 
+RUNTIME_ROLES = ["roles/bigquery.dataEditor", "roles/bigquery.jobUser", "roles/integrations.integrationInvoker",
+                 "roles/integrations.viewer", "roles/aiplatform.user"]
+
+
+def runtime_member(project: str, service_account: str | None) -> str | None:
+    """The identity the deployed agent runs as."""
+    if service_account:
+        return f"serviceAccount:{service_account}"
+    r = subprocess.run(["gcloud", "projects", "describe", project, "--format=value(projectNumber)"],
+                       capture_output=True, text=True)
+    number = r.stdout.strip()
+    if r.returncode != 0 or not number:
+        return None
+    return f"serviceAccount:service-{number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+
+
+def grant_runtime_roles(project: str, member: str | None) -> str:
+    """Give the deployed agent's identity the roles it needs. Returns ok | missing_identity | denied | error.
+    Problems are printed, never raised."""
+    if not member:
+        print("  PROBLEM: could not work out the identity the agent runs as (gcloud projects describe failed).")
+        return "error"
+    status = "ok"
+    for role in RUNTIME_ROLES:
+        r = subprocess.run(["gcloud", "projects", "add-iam-policy-binding", project, f"--member={member}",
+                            f"--role={role}", "--condition=None", "--quiet"], capture_output=True, text=True)
+        if r.returncode == 0:
+            continue
+        err = (r.stderr or "").lower()
+        if "does not exist" in err or "invalid" in err and "serviceaccount" in err:
+            print(f"  NOTE: {member} does not exist yet (it is created the first time Agent Engine is used).")
+            return "missing_identity"
+        if "permission" in err or "403" in err or "denied" in err:
+            print(f"  PROBLEM: you are not allowed to grant roles in {project} (needs Project IAM Admin).\n"
+                  f"           Ask an admin to grant {member} these roles: {', '.join(RUNTIME_ROLES)}")
+            return "denied"
+        print(f"  PROBLEM granting {role}: {(r.stderr or '').strip()[:300]}")
+        status = "error"
+    if status == "ok":
+        print(f"  OK  {member} has: {', '.join(r.split('/')[1] for r in RUNTIME_ROLES)}")
+    return status
+
+
 def iam_help(project: str) -> str:
     return f"""
 Give the deployed agent permission to use your data and workflow. It runs as the Vertex AI Agent Engine service
@@ -125,28 +173,33 @@ def run(args, project=""):
     if args.dry_run:
         print("\n(dry run: nothing deployed)")
         return
+    print("\nPermissions for the deployed agent:")
+    member = runtime_member(project, args.service_account)
+    grant_status = grant_runtime_roles(project, member)
+
     print("\nDeploying (this takes several minutes: it builds a container image) ...\n")
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=str(ROOT))
-    output = []
-    for line in proc.stdout:
-        print(line, end="")
-        output.append(line)
-    proc.wait()
-    text = "".join(output)
-    explained = None
-    if proc.returncode != 0:
+    returncode, text = run_deploy(cmd)
+    if returncode != 0 and grant_status == "missing_identity":
+        print("\nThe agent's identity did not exist before the first deployment. Granting its roles now and "
+              "trying once more ...")
+        if grant_runtime_roles(project, member) == "ok":
+            returncode, text = run_deploy(cmd)
+    elif returncode == 0 and grant_status == "missing_identity":
+        grant_runtime_roles(project, member)
+        print("  (If the first question fails with a permission error, wait a minute for the roles to take effect.)")
+    if returncode != 0:
         from _common import explain
         explained = explain(text, project)
         sys.exit(f"\n{explained}" if explained else
-                 "\nDeployment failed (see the output above). If it mentions a missing module, run: "
-                 'pip install "google-adk[gcp]"')
+                 "\nDeployment failed (see the output above). If it mentions a missing module run "
+                 "`source scripts/env_setup.sh` first. If it mentions Application Integration or BigQuery "
+                 "permissions, the roles above are missing for the agent's identity.")
     found = RESOURCE_RE.findall(text)
     resource = found[-1] if found else None
     if resource:
         from setup_all import write_env
         write_env(ROOT / ".env", {"AGENT_ENGINE_RESOURCE": resource})
         print(f"\nSaved AGENT_ENGINE_RESOURCE={resource} to .env")
-    print(iam_help(project))
     print("\nTalk to it (handles the human Confirm / Reject):\n"
           '  python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall."')
 
@@ -164,6 +217,16 @@ class _Http:
 
     def post(self, *a, **k):
         return self._s.post(*a, **k)
+
+
+def run_deploy(cmd) -> tuple[int, str]:
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, cwd=str(ROOT))
+    output = []
+    for line in proc.stdout:
+        print(line, end="")
+        output.append(line)
+    proc.wait()
+    return proc.returncode, "".join(output)
 
 
 def main():

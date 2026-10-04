@@ -32,7 +32,7 @@ for the agent. Everything is configured through `.env` (section 3), which the se
         │
  8. Reset for next run  python scripts/setup_bigquery.py --reset-demo
         │
- 9. Deploy (final)      python scripts/deploy_agent_engine.py      -> Vertex AI Agent Engine (section 14)
+ 9. Deploy (final)      source scripts/env_setup.sh  ->  python scripts/deploy_agent_engine.py   (section 14)
 ```
 
 | Step | Command | You should see |
@@ -665,51 +665,52 @@ Integration workflow are used; only where the agent runs changes.
 | Settings | `.env` | runtime settings copied from `.env` by the deploy script; project and region are set by Agent Engine |
 | Data and emails | BigQuery, Application Integration | exactly the same (approver emails are still read from BigQuery) |
 
-### 14.2 Before you deploy
-
-1. Sections 5 to 9 work on your project: `verify_setup.py --integration` is clean and the prompts behave.
-2. The **Vertex AI API** and **Cloud Build API** are enabled (the deploy script checks and tells you which to enable).
-3. The deploy tooling is installed: `pip install "google-adk[gcp]"`.
-4. There is no `campaign_provisioner/.env` file (only the repo-root `.env`); the script stops if it finds one.
-
-### 14.3 Give the deployed agent permission
-
-The deployed agent calls BigQuery and Application Integration as **its own identity**, not as you. Without these roles it
-cannot read the data or reach the workflow, and the deployment can fail while starting. By default it runs as the Vertex AI
-Agent Engine service agent:
+### 14.2 The two commands (nothing manual)
 
 ```bash
-PROJECT_NUMBER=$(gcloud projects describe $GOOGLE_CLOUD_PROJECT --format='value(projectNumber)')
-MEMBER="serviceAccount:service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
-for ROLE in roles/bigquery.dataEditor roles/bigquery.jobUser \\
-            roles/integrations.integrationInvoker roles/integrations.viewer roles/aiplatform.user; do
-  gcloud projects add-iam-policy-binding $GOOGLE_CLOUD_PROJECT --member="$MEMBER" --role="$ROLE" --condition=None
-done
+cd ~/market-campaign-agent
+source scripts/env_setup.sh                       # 1. prepare the Cloud Shell environment (use `source`)
+python scripts/deploy_agent_engine.py             # 2. deploy
 ```
 
-If that service agent does not exist yet (the grant fails with "does not exist"), run the deployment once (14.4), let it
-finish or fail, run the grant, then redeploy with `--update`. To use a dedicated service account instead, create it, give it
-the same roles and pass `--service-account <email>` to the deploy script. For a production setup, prefer the dedicated
-service account.
-
-### 14.4 Deploy
+If this is a brand-new project, let the first command also create the data and the workflow (same as `setup_all.py`):
 
 ```bash
-python scripts/deploy_agent_engine.py --dry-run     # checks everything, prints the command, deploys nothing
-python scripts/deploy_agent_engine.py               # deploys (several minutes: it builds a container image)
+source scripts/env_setup.sh --approver-email "you@example.com"
 ```
 
-The script confirms that BigQuery has the data and the Application Integration workflow is published, builds the runtime
-settings (BigQuery dataset, Application Integration name and region, model) from your `.env`, runs
-`adk deploy agent_engine` on the `campaign_provisioner` folder, and saves the resource name as `AGENT_ENGINE_RESOURCE` in
-`.env`. It prints the console link to the Agent Engine playground and the permission commands again. Options:
+**1. `env_setup.sh`** (always run it first, with `source` so the settings stay in your shell). It creates and activates the Python
+virtual environment, installs every package the agent and the deployment need (including `google-adk[gcp]`), sets
+`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` and the Vertex AI setting, and checks: you are logged in, the four APIs
+(BigQuery, Application Integration, Vertex AI, Cloud Build) are enabled, no stray `campaign_provisioner/.env` exists, and the
+BigQuery data and the workflow are ready. It enables and changes nothing in Google Cloud. Anything wrong is **printed** with
+the exact fix, for example `PROBLEM: these APIs are not enabled: ...` followed by the `gcloud services enable ...` line. Options:
+`--project <id>`, `--region <region>`, `--approver-email <email>`.
+
+**2. `deploy_agent_engine.py`** (use `--dry-run` first if you want to see what it will do). It re-checks the APIs and data,
+**grants the deployed agent's identity the roles it needs** (section 14.3), builds the runtime settings from your `.env`, runs
+`adk deploy agent_engine`, retries once if the agent's identity only existed after the first attempt, and saves the result as
+`AGENT_ENGINE_RESOURCE` in `.env`. Problems are printed on the console, not shown as stack traces.
+
+### 14.3 Permissions for the deployed agent (done by the script)
+
+The deployed agent calls BigQuery and Application Integration as **its own identity**, not as you: by default the Vertex AI
+Agent Engine service agent `service-<project number>@gcp-sa-aiplatform-re.iam.gserviceaccount.com`. The deploy script grants it
+BigQuery Data Editor and Job User, Application Integration Invoker and Viewer, and Vertex AI User. If you are not allowed to
+change IAM, it prints exactly who must grant which roles to which account. To run the agent as a dedicated service account
+instead (recommended for production), create it and pass `--service-account <email>`; the script grants the same roles to it.
+
+### 14.4 Deploy options
 
 | Option | Meaning |
 |---|---|
 | `--project`, `--region` | default: your project, `GOOGLE_CLOUD_LOCATION` or `us-central1` |
 | `--service-account EMAIL` | run the agent as this account |
 | `--update ENGINE_ID` | redeploy new code to an existing deployment (use after every code change) |
-| `--dry-run` | checks only |
+| `--dry-run` | checks only, deploys nothing |
+
+A deployment takes several minutes because Google builds a container image. When it finishes the script prints the console
+link to the Agent Engine playground and the command to talk to the agent.
 
 ### 14.5 Test the deployed agent, including the human approval
 
@@ -745,8 +746,8 @@ work the same way. Reset the data between runs with `python scripts/setup_bigque
 
 | Symptom | Fix |
 |---|---|
-| Script says an API is not enabled | Enable the API it names, wait a minute, run it again |
-| `ModuleNotFoundError` / `vertexai` missing | `pip install "google-adk[gcp]"` |
+| A script says an API is not enabled | Enable the API it names (the message includes the command), wait a minute, run the script again |
+| `ModuleNotFoundError` / `vertexai` missing | Run `source scripts/env_setup.sh` (it installs everything) |
 | Deployment fails while the container starts, mentioning Application Integration or BigQuery | The runtime identity lacks roles (14.3), or the integration does not exist in that project/region. Grant the roles, check `setup_application_integration.py --check-only`, redeploy |
 | `.../campaign_provisioner/.env exists` | Delete that file; the repo-root `.env` is the one used |
 | Region error | Use a region where Agent Engine is available, for example `us-central1` (`--region`) |

@@ -66,3 +66,43 @@ def test_converse_asks_the_human_and_sends_the_answer(monkeypatch):
     asyncio.run(qry.converse(remote, "u", "s", "need a wall"))
     assert remote.sent[0] == "need a wall"
     assert remote.sent[1]["parts"][0]["function_response"]["response"] == {"confirmed": True}
+
+
+class _Proc:
+    def __init__(self, code=0, out="", err=""):
+        self.returncode, self.stdout, self.stderr = code, out, err
+
+
+def test_grant_roles_ok_and_member(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **k):
+        calls.append(cmd)
+        return _Proc(0, "123456\n")
+    monkeypatch.setattr(dep.subprocess, "run", fake_run)
+    member = dep.runtime_member("p", None)
+    assert member == "serviceAccount:service-123456@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+    assert dep.runtime_member("p", "sa@p.iam.gserviceaccount.com") == "serviceAccount:sa@p.iam.gserviceaccount.com"
+    assert dep.grant_runtime_roles("p", member) == "ok"
+    bound = [c[-3].split("=")[1] for c in calls if "add-iam-policy-binding" in c]
+    assert bound == dep.RUNTIME_ROLES
+
+
+def test_grant_roles_reports_problems_instead_of_raising(monkeypatch, capsys):
+    monkeypatch.setattr(dep.subprocess, "run",
+                        lambda cmd, **k: _Proc(1, "", "ERROR: Service account service-1@x does not exist."))
+    assert dep.grant_runtime_roles("p", "serviceAccount:service-1@x") == "missing_identity"
+    monkeypatch.setattr(dep.subprocess, "run",
+                        lambda cmd, **k: _Proc(1, "", "PERMISSION_DENIED: caller does not have permission"))
+    assert dep.grant_runtime_roles("p", "serviceAccount:service-1@x") == "denied"
+    out = capsys.readouterr().out
+    assert "does not exist yet" in out and "Ask an admin to grant" in out
+    assert dep.grant_runtime_roles("p", None) == "error"
+
+
+def test_env_setup_script_is_valid_bash_and_refuses_to_run_unsourced():
+    import subprocess
+    script = str(Path(__file__).resolve().parent.parent / "scripts" / "env_setup.sh")
+    assert subprocess.run(["bash", "-n", script]).returncode == 0
+    r = subprocess.run(["bash", script], capture_output=True, text=True)
+    assert r.returncode == 1 and "source scripts/env_setup.sh" in r.stdout
