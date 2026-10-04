@@ -19,7 +19,7 @@ s.addText([
 s.addShape(p.ShapeType.rect,{x:7.2,y:0,w:6.13,h:7.5,fill:{color:'2B4BD8'},line:{color:'2B4BD8'}});
 const pillars = [
  ['1','Autonomous Stock & Sourcing','Reads live stock, vendor prices and budgets from BigQuery, reserves available units and calculates shortfalls. Procurement compares vendor quotes on price and lead time and recommends the best fit.'],
- ['2','Tiered Human Approval','Approval tiers are stored in BigQuery. Routine spend is approved by policy, while higher tiers notify and pause for a named human approver (Marketing Director, or VP Marketing and Finance Controller).'],
+ ['2','Tiered Human Approval','Approval tiers and approver emails are stored in BigQuery. Routine spend is approved by policy, while higher tiers are emailed to the approver through Application Integration and pause for a named human Confirm (Marketing Director, or VP Marketing and Finance Controller).'],
  ['3','Controlled Execution & Audit','Purchase orders are created through Application Integration and hard-blocked until an approved budget covers them. Every action is written to a BigQuery audit log, and the orchestrator returns one consolidated summary.']];
 pillars.forEach((q,i)=>{ const y=0.7+i*2.15;
  s.addText(q[0],{x:7.5,y:y+0.35,w:0.6,h:0.8,fontFace:F,fontSize:40,color:'FFFFFF',margin:0,isTextBox:true});
@@ -63,9 +63,9 @@ txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:N
 // sub agents
 box(3.1,2.8,7.1,2.05,{fill:'E8F0FF',line:LINE,dash:'dash'});
 s.addShape(p.ShapeType.roundRect,{x:3.15,y:2.73,w:1.0,h:0.22,rectRadius:0.05,fill:{color:BLUE},line:{color:BLUE}}); txt('3 Sub Agents',3.15,2.73,1.0,0.22,{sz:8,b:true,c:'FFFFFF'});
-const subs=[['1. Inventory Agent','(Check & Reserve Stock)',['Read stock from BigQuery','Reserve available units','Report shortfall to procure'],'F0F7FF'],
- ['2. Procurement Agent','(Quote & Create PO)',['Fetch quotes from BigQuery','Rank on price & lead time','Create PO via App Integration'],LILAC],
- ['3. Budget Agent','(Validate & Approve - HITL)',['Check budget & approval tier','Notify approver (workflow)','Human approval above tier limit'],'FFF7ED']];
+const subs=[['1. Inventory Agent','(Check & Reserve Stock)',['Read stock (BigQuery)','Reserve units (BigQuery)','Report shortfall to procure'],'F0F7FF'],
+ ['2. Procurement Agent','(Quote & Create PO)',['Fetch quotes (BigQuery)','Rank on price & lead time','Create PO (App Integration)'],LILAC],
+ ['3. Budget Agent','(Validate & Approve - HITL)',['Check budget & tier (BigQuery)','Email approver (App Integration)','Human Confirm / Reject in chat'],'FFF7ED']];
 subs.forEach((q,i)=>{ const x=3.2+i*2.33; box(x,3.05,2.25,1.7,{fill:q[3],line:LINE});
  txt(q[0],x+0.05,3.08,2.15,0.28,{b:true,sz:10,c:PURPLE}); txt(q[1],x+0.05,3.34,2.15,0.22,{sz:8,c:PURPLE});
  box(x+0.1,3.62,2.05,1.05,{fill:'FFFFFF',line:'D6E0F5'});
@@ -80,16 +80,16 @@ box(3.1,5.82,7.1,0.7,{fill:LIGHT}); txt('Google Cloud Supporting Services',3.1,5
 
 // MCP rail
 box(10.45,1.5,0.3,4.6,{round:true,fill:'FFFFFF',line:BLUE});
-s.addText('ADK Tools / Connectors',{x:10.45,y:1.5,w:0.3,h:4.6,fontFace:F,fontSize:8,color:BLUE,align:'center',valign:'middle',margin:0,isTextBox:true,vert:'vert270'});
+s.addText('BigQuery API  |  ADK Application Integration toolset',{x:10.45,y:1.5,w:0.3,h:4.6,fontFace:F,fontSize:8,color:BLUE,align:'center',valign:'middle',margin:0,isTextBox:true,vert:'vert270'});
 arrow(10.2,3.3,10.45,3.3,true);
 
 // Right column
 const rcol=(y,h,title,items)=>{ box(10.9,y,2.1,h,{fill:LIGHT}); txt(title,10.95,y+0.03,2.0,0.28,{b:true,sz:9,c:NAVY});
  items.forEach((q,i)=>card(11.0,y+0.35+i*0.62,1.9,0.55,q[0],q[1],{sz:8}));};
-rcol(1.05,2.0,'BigQuery (Enterprise Data)',[['Inventory & Vendors','Stock, reservations, prices'],['Budget Ledger & Policy','Budgets, tiers, audit log']]);
-rcol(3.2,2.0,'Application Integration',[['Create Purchase Order','API trigger: ERP, vendor'],['Notify Approver','API trigger: Chat / email']]);
+rcol(1.05,2.0,'Google BigQuery (Data)',[['Stock, Vendors, Budgets','Tables + views, read & write'],['Approval Policy & Audit','Tiers, approver emails, log']]);
+rcol(3.2,2.0,'Application Integration',[['create_purchase_order','API trigger: creates the PO'],['notify_approver','API trigger: emails approver']]);
 rcol(5.35,1.25,'LLM & AI Framework',[['Gemini  |  ADK 2.x','Reasoning & Agent Framework']]);
 arrow(10.75,2.0,10.9,2.0,true); arrow(10.75,4.1,10.9,4.1,true); arrow(10.75,5.95,10.9,5.95,true);
 txt('HCLTech  |  Confidential',0.5,6.95,5,0.3,{sz:9,al:'left',c:MUTE});
-s.addNotes('Reference architecture. Every element is a native, editable PowerPoint shape or text box - no images.');
+s.addNotes('Reference architecture. Every element is a native, editable PowerPoint shape or text box - no images. Google BigQuery holds all data (inventory, vendor prices, budget ledger, approval policy, approver emails, audit log). Google Application Integration runs the two workflow actions: create_purchase_order and notify_approver (sends the approval email). The human Confirm / Reject happens in the chat; purchase orders are blocked in code without an approved budget.');
 p.writeFile({fileName:'/home/user/market-campaign-agent/docs/Campaign_Provisioner_Management_Deck.pptx'}).then(()=>console.log('ok'));

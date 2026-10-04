@@ -58,7 +58,8 @@ campaign_provisioner/
   workflow/integration.py     Application Integration toolsets (test doubles for unit tests)
   workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit
   sub_agents/                 inventory_agent, procurement_agent, budget_agent
-scripts/                      setup_bigquery.py, setup_application_integration.py, verify_setup.py
+scripts/                      setup_all.py, setup_bigquery.py, setup_application_integration.py, verify_setup.py
+.env                          single config file in the repo root (written by setup_all.py)
 bigquery/schema.sql           generated DDL
 integration/README.md         Application Integration contract and build steps
 tests/                        tools, guard, policy, BigQuery repo (stub client)
@@ -111,7 +112,8 @@ Example: *"NEXT27-MAIN needs 1 booth LED video wall."*
 ## 7. Application Integration
 
 Two API triggers in one integration (`campaign-provisioner-workflows`): `create_purchase_order` and `notify_approver`
-(which emails the approvers listed in the BigQuery `approvers` table; the guard supplies the addresses, never the model).
+(which sends the approval email through its Send Email task). The recipients come from the BigQuery `approvers` table: the guard
+reads them, sets the subject and body, and calls the trigger once per address, so the model never supplies an address.
 `python scripts/setup_all.py` sets up BigQuery, the integration and `.env` in one go, and reports missing APIs and permissions up front.
 ADK connects with `ApplicationIntegrationToolset`. Variable names are a contract; see `integration/README.md`.
 
@@ -141,8 +143,15 @@ Google or customer system. The unit tests use the same seed data in memory, so t
 - Two users working in parallel against the same BigQuery data can both see the same free stock before either reserves; there is no locking.
 - The Application Integration workflows are defined by you; the PO guard requires the documented variable names.
 
-**Not yet verified.** Tools, policy, the guard, audit and the BigQuery repository (stub client, SQL syntax) are unit tested.
-BigQuery execution, Application Integration and a live Gemini model including the approval prompt have not been run.
+**Verified** on a real Google Cloud project: the BigQuery setup (dataset, tables, views, seed data, approver rows), creating and
+publishing the Application Integration workflow, executing both triggers (`setup_application_integration.py --test`: the PO trigger
+returned a PO number, the notify trigger completed), reading the data back (`verify_setup.py`), and ADK building the tools
+`create_purchase_order` and `notify_approver` from the integration.
+
+**Not yet confirmed:** that the approval email reaches an inbox (check the test email), a full agent run with Gemini on your
+project, and the in-chat Confirm / Reject pause. Unit tests cover the tools, tiered policy, purchase-order guard (including
+one email call per approver address), audit trail, the setup scripts and the BigQuery repository (stub client, SQL syntax).
+See DEMO_RUN.md section 13.
 
 ## 9. Production notes
 

@@ -1,17 +1,69 @@
 # The Campaign Provisioner (Google Next 2027 edition)
 
-Autonomous Google ADK agent for campaign logistics. A root orchestrator governs three sub-agents (inventory,
-procurement, budget). Data lives in **BigQuery**, workflow actions run through **Google Application Integration**, and
-high-value spend pauses for a named human approver.
+An autonomous Google ADK agent that handles campaign logistics: it checks stock, gets vendor quotes, approves spend and
+creates purchase orders, and it stops for a named human when the amount is high.
 
-- Setup and 7 demo prompts (with HITL cases): [docs/DEMO_RUN.md](docs/DEMO_RUN.md)
-- Design, code flow, data and assumptions: [docs/SOLUTION.md](docs/SOLUTION.md)
-- Application Integration contract: [integration/README.md](integration/README.md)
-- BigQuery DDL: [bigquery/schema.sql](bigquery/schema.sql); setup: `scripts/setup_bigquery.py`, `scripts/setup_application_integration.py` (creates the integration too)
-- Management deck (updated for BigQuery + Application Integration): `docs/Campaign_Provisioner_Management_Deck.pptx`
+A central **root agent** governs three **sub-agents**: inventory, procurement and budget.
 
-Full setup in one command (BigQuery data, Application Integration workflow, approver emails, `.env`):
-`python scripts/setup_all.py --approver-email "you@example.com"`. It reports any API that must be enabled or permission that is missing.
+| Part | What it does | Where it lives |
+|---|---|---|
+| **Google BigQuery** | All data: stock, vendor prices, budgets (ledger), approval tiers, approver emails, requests, purchase orders, audit log | dataset `campaign_provisioner` |
+| **Google Application Integration** | The two workflow actions: `create_purchase_order` and `notify_approver` (sends the approval email), called through ADK's Application Integration toolset | integration `campaign-provisioner-workflows` |
+| **Human in the loop** | Spend above $5,000 pauses for a Confirm / Reject in the chat; the approver is emailed first | `adk web` chat |
+| **Code guard** | A purchase order is blocked unless an approved budget covers it | `campaign_provisioner/workflow/guard.py` |
 
-Then: `python scripts/verify_setup.py --integration`, `adk web`, and the prompts in `docs/DEMO_RUN.md`. The unit tests (`pytest`)
-need no cloud access.
+Approval tiers (a BigQuery table, so they can change without code): up to $5,000 auto-approved, $5,000 to $50,000
+Marketing Director, above $50,000 VP Marketing + Finance Controller.
+
+## Set it up (Cloud Shell or any shell with gcloud)
+
+```bash
+git clone -b claude/next-2027-enhanced https://github.com/dasbalvinderdas/market-campaign-agent.git
+cd market-campaign-agent
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pytest                                   # unit tests, no cloud needed
+
+export GOOGLE_CLOUD_PROJECT=<your-project-id>
+python scripts/setup_all.py --approver-email "you@example.com"
+python scripts/verify_setup.py --integration
+adk web --port 8080                      # then open Web Preview on port 8080
+```
+
+`setup_all.py` checks your APIs and permissions first and lists anything missing (which API to enable, which role to ask
+for). It then creates the BigQuery dataset, tables, views, demo data and approver emails, creates and publishes the
+Application Integration workflow, and writes one `.env` file. It is safe to re-run. The BigQuery API, Application Integration
+API and Vertex AI API must be enabled in the project.
+
+## Documentation
+
+| Document | What is in it |
+|---|---|
+| [docs/DEMO_RUN.md](docs/DEMO_RUN.md) | Step-by-step setup, how the flow works, how to set up and change the data and approver emails, and the test prompts with the human-in-the-loop cases highlighted |
+| [docs/SOLUTION.md](docs/SOLUTION.md) | The problem, design, code flow, BigQuery data model, assumptions and limitations |
+| [integration/README.md](integration/README.md) | The Application Integration workflow: variables, tasks and how it is created |
+| [bigquery/schema.sql](bigquery/schema.sql) | BigQuery DDL (generated from `campaign_provisioner/data/schema.py`) |
+| `docs/Campaign_Provisioner_Management_Deck.pptx` | Three-slide management deck with an editable architecture diagram showing BigQuery and Application Integration (regenerate with `docs/build_deck.js`) |
+
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/setup_all.py` | One command: preflight checks, BigQuery, Application Integration, `.env` |
+| `scripts/setup_bigquery.py` | BigQuery only; `--reset-demo` clears demo transactions between runs, `--reset` rebuilds, `--approver-email` sets who is emailed |
+| `scripts/setup_application_integration.py` | Application Integration only; `--test` runs both triggers once and sends a test email, `--print-definition` shows what is sent |
+| `scripts/verify_setup.py` | Reads back the BigQuery data and (with `--integration`) the tools ADK builds from the integration |
+
+## Configuration
+
+One `.env` file in the repo root (written by `setup_all.py`, template in `.env.example`): Gemini settings, project, BigQuery
+dataset and location, Application Integration name and region, and the initial approver emails. After setup the approver
+emails are read from the BigQuery `approvers` table, so you change them there.
+
+## Status
+
+Verified on a real Google Cloud project: the BigQuery setup, creating and publishing the Application Integration workflow,
+running both triggers, reading the data back, and ADK discovering the two integration tools. Not yet confirmed: approval
+email delivery to an inbox, a full agent run with Gemini, and the in-chat Confirm / Reject pause. See the last section of
+`docs/DEMO_RUN.md`. Unit tests (`pytest`) cover the tools, policy, guard, audit trail, setup scripts and the BigQuery
+repository (against a stub client).

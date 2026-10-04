@@ -635,6 +635,12 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_
 
 ## 13. What has and hasn't been verified
 
-Tested without cloud access: the tools, tiered policy, purchase-order guard, audit trail, the BigQuery repository
-against a stub client, and the syntax of every SQL statement. **Not yet run against live services:** BigQuery execution,
-Application Integration (the setup script's request body was checked against Google's published API schema, but never sent to a real project), and a live Gemini model including the approval prompt. Run sections 5, 6 and 9 once before presenting.
+Verified on a real Google Cloud project: the BigQuery setup (dataset, tables, views, seed data, approver rows), creating and
+publishing the Application Integration workflow, executing both triggers (`setup_application_integration.py --test`: the PO trigger
+returned a PO number, the notify trigger completed), reading the data back (`verify_setup.py`), and ADK building the tools
+`create_purchase_order` and `notify_approver` from the integration.
+
+**Not yet confirmed:** that the approval email reaches an inbox (check the test email), a full agent run with Gemini on your
+project, and the in-chat Confirm / Reject pause. Unit tests cover the tools, tiered policy, purchase-order guard (including
+one email call per approver address), audit trail, the setup scripts and the BigQuery repository (stub client, SQL syntax).
+Run sections 8 and 9 once before presenting, prompts 1, 3 and 4 first.
