@@ -55,7 +55,7 @@ def explain(message: str, project: str) -> str | None:
         return (f"Your account lacks a permission in project '{project}'. Ask for these roles:\n"
                 "  - BigQuery Data Editor (roles/bigquery.dataEditor) and BigQuery Job User (roles/bigquery.jobUser)\n"
                 "  - Application Integration Editor or Admin to create the integration (roles/integrations.integrationEditor / integrationAdmin)\n"
-                "  - Application Integration Invoker + Viewer to run it (roles/integrations.integrationInvoker, roles/integrations.viewer)\n"
+                "  - Application Integration Invoker + Viewer to run it (roles/integrations.integrationInvoker, roles/integrations.integrationViewer)\n"
                 "  - Vertex AI User (roles/aiplatform.user)\n"
                 f"Original error: {message[:300]}")
     return None

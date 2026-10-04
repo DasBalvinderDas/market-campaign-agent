@@ -78,6 +78,8 @@ def test_grant_roles_ok_and_member(monkeypatch):
 
     def fake_run(cmd, **k):
         calls.append(cmd)
+        if "describe" in cmd and "roles" in cmd:
+            return _Proc(1, "", "denied")
         return _Proc(0, "123456\n")
     monkeypatch.setattr(dep.subprocess, "run", fake_run)
     member = dep.runtime_member("p", None)
@@ -85,7 +87,7 @@ def test_grant_roles_ok_and_member(monkeypatch):
     assert dep.runtime_member("p", "sa@p.iam.gserviceaccount.com") == "serviceAccount:sa@p.iam.gserviceaccount.com"
     assert dep.grant_runtime_roles("p", member) == "ok"
     bound = [c[-3].split("=")[1] for c in calls if "add-iam-policy-binding" in c]
-    assert bound == dep.RUNTIME_ROLES
+    assert bound == dep.BASE_ROLES + [dep.READ_ROLE_CANDIDATES[1]]  # lookup unavailable here -> safe fallback
 
 
 def test_grant_roles_reports_problems_instead_of_raising(monkeypatch, capsys):
@@ -127,3 +129,29 @@ def test_log_filter_targets_the_deployment():
     import agent_engine_logs as logs
     f = logs.build_filter("projects/1/locations/us-central1/reasoningEngines/987", errors_only=True)
     assert 'reasoning_engine_id="987"' in f and "severity>=ERROR" in f
+
+
+def test_read_role_is_chosen_by_looking_up_permissions(monkeypatch):
+    perms = {"roles/integrations.integrationViewer": {"integrations.integrations.get"},
+             "roles/integrations.integrationEditor": {"integrations.integrations.generateOpenApiSpec"},
+             "roles/integrations.integrationAdmin": {"integrations.integrations.generateOpenApiSpec", "x"}}
+    monkeypatch.setattr(dep, "role_permissions", lambda role: perms.get(role))
+    assert dep.choose_runtime_roles() == dep.BASE_ROLES + ["roles/integrations.integrationEditor"]
+    perms["roles/integrations.integrationViewer"] = {"integrations.integrations.generateOpenApiSpec"}
+    assert dep.choose_runtime_roles() == dep.BASE_ROLES + ["roles/integrations.integrationViewer"]
+
+
+def test_all_role_ids_used_exist_in_the_documented_form():
+    assert "roles/integrations.viewer" not in dep.BASE_ROLES + dep.READ_ROLE_CANDIDATES
+    assert all(r.startswith("roles/integrations.integration") for r in dep.READ_ROLE_CANDIDATES)
+
+
+def test_log_key_lines_drop_stack_noise_and_duplicates():
+    import agent_engine_logs as logs
+    lines = ["2026 ERROR Traceback (most recent call last):", "  File \"/app/x.py\", line 1, in f",
+             "requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://x/generateOpenApiSpec",
+             "    ^^^^^^^^", "requests.exceptions.HTTPError: 403 Client Error: Forbidden for url: https://x/generateOpenApiSpec",
+             "RuntimeError: Application Integration was not found"]
+    out = logs.key_lines(lines).splitlines()
+    assert any("403 Client Error" in l for l in out) and len([l for l in out if "403" in l]) == 1
+    assert not any("File " in l for l in out)

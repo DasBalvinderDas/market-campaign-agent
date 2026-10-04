@@ -78,8 +78,33 @@ def deploy_command(project, region, config_path, agent_dir, update_id):
     return cmd + [str(agent_dir)]
 
 
-RUNTIME_ROLES = ["roles/bigquery.dataEditor", "roles/bigquery.jobUser", "roles/integrations.integrationInvoker",
-                 "roles/integrations.viewer", "roles/aiplatform.user"]
+BASE_ROLES = ["roles/bigquery.dataEditor", "roles/bigquery.jobUser", "roles/aiplatform.user",
+              "roles/integrations.integrationInvoker"]
+# The agent reads the integration definition when it first needs its tools (ADK calls generateOpenApiSpec).
+# Which predefined role contains that permission is looked up at run time; these are tried least-privileged first.
+READ_ROLE_CANDIDATES = ["roles/integrations.integrationViewer", "roles/integrations.integrationEditor",
+                        "roles/integrations.integrationAdmin"]
+SPEC_PERMISSION_HINT = "generateopenapispec"
+RUNTIME_ROLES = BASE_ROLES + [READ_ROLE_CANDIDATES[0]]  # default when the lookup is not possible
+
+
+def role_permissions(role: str) -> set[str] | None:
+    r = subprocess.run(["gcloud", "iam", "roles", "describe", role, "--format=value(includedPermissions)"],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        return None
+    return {p.strip() for p in r.stdout.replace(";", "\n").splitlines() if p.strip()}
+
+
+def choose_runtime_roles() -> list[str]:
+    """BASE_ROLES plus the least-privileged Application Integration role that can read the integration."""
+    for role in READ_ROLE_CANDIDATES:
+        perms = role_permissions(role)
+        if perms and any(SPEC_PERMISSION_HINT in p.lower() for p in perms):
+            return BASE_ROLES + [role]
+    print("  NOTE: could not look up which role lets the agent read the integration; granting "
+          f"{READ_ROLE_CANDIDATES[1]} to be safe.")
+    return BASE_ROLES + [READ_ROLE_CANDIDATES[1]]
 
 
 def runtime_member(project: str, service_account: str | None) -> str | None:
@@ -94,14 +119,15 @@ def runtime_member(project: str, service_account: str | None) -> str | None:
     return f"serviceAccount:service-{number}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
 
 
-def grant_runtime_roles(project: str, member: str | None) -> str:
+def grant_runtime_roles(project: str, member: str | None, roles: list[str] | None = None) -> str:
     """Give the deployed agent's identity the roles it needs. Returns ok | missing_identity | denied | error.
     Problems are printed, never raised."""
     if not member:
         print("  PROBLEM: could not work out the identity the agent runs as (gcloud projects describe failed).")
         return "error"
     status = "ok"
-    for role in RUNTIME_ROLES:
+    roles = roles or choose_runtime_roles()
+    for role in roles:
         r = subprocess.run(["gcloud", "projects", "add-iam-policy-binding", project, f"--member={member}",
                             f"--role={role}", "--condition=None", "--quiet"], capture_output=True, text=True)
         if r.returncode == 0:
@@ -112,28 +138,13 @@ def grant_runtime_roles(project: str, member: str | None) -> str:
             return "missing_identity"
         if "permission" in err or "403" in err or "denied" in err:
             print(f"  PROBLEM: you are not allowed to grant roles in {project} (needs Project IAM Admin).\n"
-                  f"           Ask an admin to grant {member} these roles: {', '.join(RUNTIME_ROLES)}")
+                  f"           Ask an admin to grant {member} these roles: {', '.join(roles)}")
             return "denied"
         print(f"  PROBLEM granting {role}: {(r.stderr or '').strip()[:300]}")
         status = "error"
     if status == "ok":
-        print(f"  OK  {member} has: {', '.join(r.split('/')[1] for r in RUNTIME_ROLES)}")
+        print(f"  OK  {member} has: {', '.join(r.split('/')[1] for r in roles)}")
     return status
-
-
-def iam_help(project: str) -> str:
-    return f"""
-Give the deployed agent permission to use your data and workflow. It runs as the Vertex AI Agent Engine service
-agent (or your custom service account). Replace the member if you used --service-account:
-
-  PROJECT_NUMBER=$(gcloud projects describe {project} --format='value(projectNumber)')
-  MEMBER="serviceAccount:service-${{PROJECT_NUMBER}}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
-  for ROLE in roles/bigquery.dataEditor roles/bigquery.jobUser \\
-              roles/integrations.integrationInvoker roles/integrations.viewer roles/aiplatform.user; do
-    gcloud projects add-iam-policy-binding {project} --member="$MEMBER" --role="$ROLE" --condition=None
-  done
-
-(To confirm the exact identity, open IAM in the console and tick "Include Google-provided role grants".)"""
 
 
 @guarded

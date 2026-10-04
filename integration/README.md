@@ -104,7 +104,7 @@ inside Application Integration instead, see `docs/DEMO_RUN.md` section 4.2.
   that still covers the amount. It runs **after**: stores the PO and audit events in BigQuery.
 
 **Deployed agent:** when the agent runs on Agent Engine it calls this integration as its own identity, which needs
-`roles/integrations.integrationInvoker` and `roles/integrations.viewer` (see `docs/DEMO_RUN.md` section 14.3).
+`roles/integrations.integrationInvoker` and a role that can read the integration (`roles/integrations.integrationViewer`, or Editor if Viewer is not enough; the deploy script picks it) (see `docs/DEMO_RUN.md` section 14.3).
 
 ## Status of this guide
 

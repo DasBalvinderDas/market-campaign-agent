@@ -78,6 +78,19 @@ def notify_approver_unavailable(request_id: str, campaign_id: str, amount: float
 _LAST_ERROR = {"message": ""}
 
 
+def runtime_identity() -> str:
+    """Best-effort: the service account this process runs as (shown in errors to make permission problems obvious)."""
+    try:
+        import google.auth
+        from google.auth.transport.requests import Request
+
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        creds.refresh(Request())
+        return getattr(creds, "service_account_email", None) or "an unknown identity"
+    except Exception:  # noqa: BLE001
+        return "an unknown identity"
+
+
 def _unavailable_result() -> dict:
     return {"status": "ERROR", "error": "The Application Integration workflow could not be loaded: "
             f"{_LAST_ERROR['message']}. Tell the user this step failed; do not retry."}
@@ -97,7 +110,7 @@ def _build_toolset(trigger: str, hint: str):
             f"Application Integration '{config.APP_INTEGRATION_NAME}' (trigger {trigger}) was not found or is not "
             f"readable by this identity in project '{config.PROJECT}', region '{config.APP_INTEGRATION_LOCATION}'. "
             "Create it with scripts/setup_application_integration.py and give the running identity "
-            "roles/integrations.integrationInvoker and roles/integrations.viewer.") from exc
+            "roles/integrations.integrationInvoker and roles/integrations.integrationViewer (or Editor).") from exc
 
 
 class LazyIntegrationToolset(BaseToolset):
@@ -118,8 +131,10 @@ class LazyIntegrationToolset(BaseToolset):
             try:
                 self._inner = await asyncio.to_thread(_build_toolset, self._trigger, self._hint)
             except Exception as exc:  # noqa: BLE001 - report instead of crashing the agent
-                _LAST_ERROR["message"] = str(exc)[:400]
-                logger.error("Application Integration tool %s unavailable: %s", self._trigger, exc)
+                identity = await asyncio.to_thread(runtime_identity)
+                _LAST_ERROR["message"] = f"{str(exc)[:300]} (running as {identity})"
+                logger.error("Application Integration tool %s unavailable: %s | running as %s | cause: %s",
+                             self._trigger, exc, identity, exc.__cause__)
                 return [FunctionTool(self._fallback)]
         return await self._inner.get_tools(readonly_context)
 
