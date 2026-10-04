@@ -27,23 +27,24 @@ A central **root agent** governs three **sub-agents** (Google ADK multi-agent hi
 
 ```
                        campaign_provisioner  (root / orchestrator)
-        tools: register_campaign_request, get_campaign_overview, get_audit_trail
+        tools: register_campaign_request, get_campaign_overview, get_audit_trail,
+               approve_budget  (the human approval gate, HITL confirmation)
         ┌────────────────────────┼─────────────────────────────┐
   inventory_agent          procurement_agent              budget_agent
   find_sku                 get_vendor_quotes              check_budget
   check_inventory          create_purchase_order  ──┐     get_approval_policy
   reserve_inventory        (Application Integration)│     notify_approver (Application Integration)
-  release_inventory        guard: before / after ◄──┘     approve_budget  (HITL confirmation)
+  release_inventory        guard: before / after ◄──┘     (reports back; never approves)
         │                         │                               │
         └──────────── Repository (BigQuery) ◄─────────────────────┘
 ```
 
 | Agent | Responsibility | Never does |
 |---|---|---|
-| Root `campaign_provisioner` | Understands the request, registers it, delegates in order, enforces rules, aggregates results | Specialist work itself |
+| Root `campaign_provisioner` | Understands the request, registers it, delegates in order, **holds the human approval gate (`approve_budget`)**, aggregates results | Specialist work itself |
 | `inventory_agent` | Maps descriptions to SKUs, checks stock, reserves, reports shortfall, releases on decline | Buy or discuss budget |
 | `procurement_agent` | Quotes vendors, recommends one, creates POs once approved | Approve budget |
-| `budget_agent` | Checks funds and the approval tier, alerts the approver, approves spend | Place orders |
+| `budget_agent` | Checks funds and the approval tier, emails the approver, reports back | Approve spend, place orders |
 
 ## 4. Code layout
 
@@ -94,8 +95,8 @@ Example: *"NEXT27-MAIN needs 1 booth LED video wall."*
 2. **Inventory.** `find_sku` maps "LED video wall" to `BOOTH-LEDWALL`; `check_inventory` reads `v_inventory_available` (0 free); nothing to reserve; shortfall 1.
 3. **Quotes.** `get_vendor_quotes` reads `vendor_catalog`: ExpoVision $18,000 (21 days) vs KioskWorks $20,500 (14 days). The agent recommends one.
 4. **Budget.** `check_budget` reads `v_campaign_budget`; `get_approval_policy` reads `approval_policy`: $18,000 is tier MANAGER (Marketing Director).
-   - The agent calls the **notify_approver** Application Integration trigger so the approver is alerted.
-   - `approve_budget` is wrapped in ADK `FunctionTool(require_confirmation=requires_human)`. ADK **pauses** and asks a human to Confirm or Reject. On confirm the function inserts a COMMIT entry (`approved_by = human:Marketing Director`).
+   - The budget agent calls the **notify_approver** Application Integration trigger so the approver is emailed, then hands back to the root with the tier, approver role and remaining budget. It never approves.
+   - The **root** then calls `approve_budget`, which is wrapped in ADK `FunctionTool(require_confirmation=requires_human)`. ADK **pauses** and asks a human to Confirm or Reject. On confirm the function inserts a COMMIT entry (`approved_by = human:Marketing Director`), and because the root owns the tool the run continues straight to the purchase orders.
    - AUTO tier amounts skip the pause. Amounts above the remaining budget skip it too and are rejected directly.
 5. **Order.** `create_purchase_order` is the Application Integration trigger. A `before_tool_callback` recomputes the amount from the vendor price list and checks `v_request_headroom`; with no covering approval it returns `BLOCKED`. After a successful call the `after_tool_callback` stores the PO (with the integration execution id) in `purchase_orders` and writes an audit event.
 6. **Decline path.** If the human rejects, nothing is committed, and the root asks `inventory_agent` to `release_inventory` for the request.
@@ -108,7 +109,7 @@ Example: *"NEXT27-MAIN needs 1 booth LED video wall."*
 | Prompt | The root instruction fixes the order; sub-agents hand back to the root |
 | Policy | Approval tiers live in BigQuery (`approval_policy`) and decide who must approve |
 | Platform | ADK tool confirmation pauses tiers that need a human |
-| Code | The PO guard blocks orders without a covering ledger approval; `approve_budget` rejects overspend |
+| Code | The PO guard blocks orders without a covering ledger approval; `approve_budget` rejects overspend; the approval tool lives on the orchestrator so the flow after a human decision does not depend on a sub-agent handing back |
 
 ## 7. Application Integration
 

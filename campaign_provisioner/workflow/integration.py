@@ -132,7 +132,7 @@ class LazyIntegrationToolset(BaseToolset):
                 self._inner = await asyncio.to_thread(_build_toolset, self._trigger, self._hint)
             except Exception as exc:  # noqa: BLE001 - report instead of crashing the agent
                 identity = await asyncio.to_thread(runtime_identity)
-                _LAST_ERROR["message"] = f"{str(exc)[:300]} (running as {identity})"
+                _LAST_ERROR["message"] = f"running as {identity}; {str(exc)[:300]}"
                 logger.error("Application Integration tool %s unavailable: %s | running as %s | cause: %s",
                              self._trigger, exc, identity, exc.__cause__)
                 return [FunctionTool(self._fallback)]

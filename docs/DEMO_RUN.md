@@ -109,9 +109,9 @@ project, dataset, region and approver emails. You only check the Gemini lines. T
       ├─► inventory_agent  ──► BigQuery   find item, read free stock, insert reservation
       ├─► procurement_agent ─► BigQuery   read vendor prices (quotes)
       ├─► budget_agent ──────► BigQuery   read budget + approval tier + approver emails
-      │        ├─► Application Integration: notify_approver   (EMAILS the approver)
-      │        └─► ADK confirmation in the chat: Confirm / Reject   (the human decision)
-      │             └─► BigQuery: insert COMMIT into budget_ledger
+      │        └─► Application Integration: notify_approver   (EMAILS the approver), then hands back
+      ├─► ROOT calls approve_budget  ──►  ADK confirmation in the chat: Confirm / Reject   (the human decision)
+      │        └─► BigQuery: insert COMMIT into budget_ledger
       └─► procurement_agent ─► guard (code) ─► Application Integration: create_purchase_order
                                    └─► BigQuery: insert purchase_orders row + audit_log
 ```

@@ -59,13 +59,13 @@ s.addShape(p.ShapeType.roundRect,{x:3.15,y:1.38,w:1.0,h:0.22,rectRadius:0.05,fil
 txt('Root Agent',3.15,1.38,1.0,0.22,{sz:8,b:true,c:'FFFFFF'});
 txt('Campaign Provisioner Agent (Orchestrator)',3.2,1.64,6.9,0.34,{sz:13,c:NAVY,b:true});
 box(3.25,2.02,6.8,0.5,{round:true,fill:'FFFFFF',line:LINE});
-txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:NAVY}},{text:'Greeting & Intent  \u2022  Multi-Agent Coordination  \u2022  State Coordination  \u2022  Human Approval Gate  \u2022  Result Aggregation',options:{color:INK}}],3.3,2.04,6.7,0.46,{sz:8.5});
+txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:NAVY}},{text:'Greeting & Intent  \u2022  Multi-Agent Coordination  \u2022  State Coordination  \u2022  Human Approval Gate (Confirm / Reject)  \u2022  Result Aggregation',options:{color:INK}}],3.3,2.04,6.7,0.46,{sz:8.5});
 // sub agents
 box(3.1,2.8,7.1,2.05,{fill:'E8F0FF',line:LINE,dash:'dash'});
 s.addShape(p.ShapeType.roundRect,{x:3.15,y:2.73,w:1.0,h:0.22,rectRadius:0.05,fill:{color:BLUE},line:{color:BLUE}}); txt('3 Sub Agents',3.15,2.73,1.0,0.22,{sz:8,b:true,c:'FFFFFF'});
 const subs=[['1. Inventory Agent','(Check & Reserve Stock)',['Read stock (BigQuery)','Reserve units (BigQuery)','Report shortfall to procure'],'F0F7FF'],
  ['2. Procurement Agent','(Quote & Create PO)',['Fetch quotes (BigQuery)','Rank on price & lead time','Create PO (App Integration)'],LILAC],
- ['3. Budget Agent','(Validate & Approve - HITL)',['Check budget & tier (BigQuery)','Email approver (App Integration)','Human Confirm / Reject in chat'],'FFF7ED']];
+ ['3. Budget Agent','(Validate & Notify)',['Check budget & tier (BigQuery)','Email approver (App Integration)','Report back (never approves)'],'FFF7ED']];
 subs.forEach((q,i)=>{ const x=3.2+i*2.33; box(x,3.05,2.25,1.7,{fill:q[3],line:LINE});
  txt(q[0],x+0.05,3.08,2.15,0.28,{b:true,sz:10,c:PURPLE}); txt(q[1],x+0.05,3.34,2.15,0.22,{sz:8,c:PURPLE});
  box(x+0.1,3.62,2.05,1.05,{fill:'FFFFFF',line:'D6E0F5'});

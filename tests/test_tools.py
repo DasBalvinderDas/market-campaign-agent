@@ -194,12 +194,9 @@ def test_budget_agent_registers_the_guard_before_tool():
     assert procurement_agent.before_tool_callback is not None
 
 
-def test_approve_budget_hands_control_back_to_the_orchestrator():
-    ctx = types.SimpleNamespace(actions=types.SimpleNamespace(transfer_to_agent=None))
-    rid = new_request()
-    ok = budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000.0, "wall", ctx)
-    assert ok["status"] == "approved" and ctx.actions.transfer_to_agent == "campaign_provisioner"
-    assert "purchase orders" in ok["next_step"]
-    ctx2 = types.SimpleNamespace(actions=types.SimpleNamespace(transfer_to_agent=None))
-    no = budget_tools.approve_budget(new_request("NEXT27-DEVLOUNGE"), "NEXT27-DEVLOUNGE", 18000.0, "wall", ctx2)
-    assert no["status"] == "rejected" and ctx2.actions.transfer_to_agent == "campaign_provisioner"
+def test_the_orchestrator_holds_the_approval_gate_not_the_budget_agent():
+    from campaign_provisioner.agent import root_agent
+    from campaign_provisioner.sub_agents.budget_agent import budget_agent
+    root_tools = [getattr(t, "name", getattr(t, "__name__", "")) for t in root_agent.tools]
+    budget_tools_names = [getattr(t, "name", getattr(t, "__name__", "")) for t in budget_agent.tools]
+    assert "approve_budget" in root_tools and "approve_budget" not in budget_tools_names
