@@ -33,14 +33,15 @@ that builds `po_number` (for example `PO-<request_id>-<sku>`) and maps it to the
 | Direction | Variable | Type |
 |---|---|---|
 | in | `request_id`, `campaign_id`, `approver_role`, `summary` | String |
-| in | `approver_emails` | String | Comma-separated recipients. Filled by the platform from the BigQuery `approvers` table, never by the model |
+| in | `approver_email`, `email_subject`, `email_body` | String | One recipient address, subject and body. Filled by the platform (address from the BigQuery `approvers` table), never by the model |
 | in | `amount` | Double |
 | out | `status` | String |
 
-Tasks (created by the setup script): a Data Mapping task splits `approver_emails` into a list and builds the subject and body,
-a **Send Email** task mails the approvers, and a last mapping sets `status = NOTIFIED`. The recipients live in BigQuery
-(`approvers` table), not in the integration, so changing an address needs no integration change. You can add a Google Chat
-task in the console if you also want a chat message.
+Tasks (created by the setup script): a **Send Email** task mails `approver_email` using `email_subject` and `email_body`, then a
+Data Mapping task sets `status = NOTIFIED`. The email references only the trigger's input variables, the same pattern as Google's
+published email sample. The workflow emails **one address per call**; when a role has several addresses in the BigQuery `approvers`
+table, the platform calls the trigger once per address. Recipients live in BigQuery, so changing an address needs no integration
+change. You can add a Google Chat task in the console if you also want a chat message.
 The actual approve / reject click still happens in the ADK confirmation prompt; the notification tells the
 approver a decision is waiting.
 
@@ -54,9 +55,9 @@ python scripts/setup_application_integration.py --test     # run both triggers o
 
 The script calls the Application Integration REST API (`integrations.versions.create` then `:publish`) with the contract
 above. Each trigger starts one Data Mapping task: `create_purchase_order` sets `po_number` to `PO-<request_id>-<sku>` and
-`execution_id` to the execution id; `notify_approver` emails the approvers (list from `approver_emails`) and then sets `status` to `NOTIFIED`. It assumes the Application Integration API is
+`execution_id` to the execution id; `notify_approver` emails the approver (`approver_email`) and then sets `status` to `NOTIFIED`. It assumes the Application Integration API is
 enabled and tells you which API to enable if not. `--provision-region` is a one-time step for a region that has never used
-Application Integration. Use `--no-email` to skip the email task, and `--test --test-email you@example.com` to send one real test email.
+Application Integration. Use `--no-email` to skip the email task, `--print-definition` to see the JSON that is sent, and `--test --test-email you@example.com` to send one real test email.
 The whole setup (BigQuery + this + `.env`) is also available as one command: `python scripts/setup_all.py`.
 
 ## Manual alternative (Cloud Console)
@@ -106,8 +107,8 @@ inside Application Integration instead, see `docs/DEMO_RUN.md` section 4.2.
 
 The ADK side and the setup script's logic are covered by offline tests, the integration definition was checked field by field
 against Google's published API schema (discovery document), and the Send Email task's parameter keys were copied from
-Google's published `foreach-loop-send-email` sample. Two details are not verified: that the Send Email task accepts a list
-variable (`$recipient_list$`) in `To`, and the Data Mapping `SPLIT` function. `--test` exercises both. It has **not** been sent to a live project, so the
+Google's published `foreach-loop-send-email` sample. It has **not** been accepted by a live project end to end yet (an earlier
+version that used a list variable for the recipients was rejected by the API and was replaced). The
 first run is the real test; if it fails the script prints the API's message and you can use the manual steps above.
 The console screens and the `execute` call may differ slightly; use `verify_setup.py --integration` to confirm.
 
