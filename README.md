@@ -53,6 +53,7 @@ API and Vertex AI API must be enabled in the project.
 
 | Document | What is in it |
 |---|---|
+| [docs/FRESH_SETUP.md](docs/FRESH_SETUP.md) | Cheat sheet: fresh setup, reset demo data, full BigQuery rebuild, update after new code, change approver emails |
 | [docs/DEMO_RUN.md](docs/DEMO_RUN.md) | Step-by-step setup, how the flow works, how to set up and change the data and approver emails, and the test prompts with the human-in-the-loop cases highlighted |
 | [docs/SOLUTION.md](docs/SOLUTION.md) | The problem, design, code flow, BigQuery data model, assumptions and limitations |
 | [integration/README.md](integration/README.md) | The Application Integration workflow: variables, tasks and how it is created |
