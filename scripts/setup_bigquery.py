@@ -104,6 +104,7 @@ def run(args, project=""):
     ds = f"{project}.{args.dataset}"
 
     if args.reset_demo:
+        client.query(ddl(ds)).result()  # creates any table or view added since the dataset was first built
         for t in TRANSACTION_TABLES:
             client.query(f"TRUNCATE TABLE `{ds}.{t}`").result()
         client.query(f"DELETE FROM `{ds}.budget_ledger` WHERE request_id != 'BASELINE'").result()

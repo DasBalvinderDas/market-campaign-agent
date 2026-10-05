@@ -26,6 +26,11 @@ def run(args, project=""):
 
     repo = get_repo()
     print(f"Project: {project}\nBigQuery dataset: {repo.ds}")
+    from campaign_provisioner.data.schema import TABLES
+    have = {t.table_id for t in repo.client.list_tables(repo.ds)}
+    missing = [t for t in TABLES if t not in have]
+    if missing:
+        sys.exit(f"BigQuery tables missing: {', '.join(missing)}. Run:  python scripts/setup_bigquery.py")
     budgets = repo.list_budgets()
     if not budgets:
         sys.exit("No campaigns found. Run:  python scripts/setup_bigquery.py")
