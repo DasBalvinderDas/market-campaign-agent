@@ -54,7 +54,7 @@ you simply run the same command again after fixing it. Finished parts are skippe
 | Stock, vendor prices, budgets, approval tiers | BigQuery tables and views | `setup_all.py` (step 4) |
 | Who is emailed for approval | BigQuery table `approvers` | `--approver-email` in step 4 |
 | Purchase order + approval email actions | Application Integration workflow | `setup_all.py` (step 4) |
-| The human Confirm / Reject | the `adk web` chat | nothing to set up |
+| The human Approve / Reject | the approval email from Application Integration | created by `setup_all.py` (step 4) |
 | Project, dataset, regions, approver emails | `.env` | written by step 4 |
 
 The sections that follow give the detail for each step. Step 9, deploying to Vertex AI Agent Engine, is section 14.
@@ -111,7 +111,7 @@ project, dataset, region and approver emails. You only check the Gemini lines. T
       ├─► procurement_agent ─► BigQuery   read vendor prices (quotes)
       ├─► budget_agent ──────► BigQuery   read budget + approval tier + approver emails
       │        └─► Application Integration: notify_approver   (EMAILS the approver), then hands back
-      ├─► ROOT calls approve_budget  ──►  ADK confirmation in the chat: Confirm / Reject   (the human decision)
+      ├─► ROOT calls approve_budget  ──►  Application Integration approval: email with Approve / Reject  (the human decision)
       │        └─► BigQuery: insert COMMIT into budget_ledger
       └─► procurement_agent ─► guard (code) ─► Application Integration: create_purchase_order
                                    └─► BigQuery: insert purchase_orders row + audit_log
@@ -474,20 +474,20 @@ Run them in order, in **one session**, except where a prompt says **new session*
 reset (section 8).
 
 > **HUMAN-IN-THE-LOOP (HITL) legend.** Prompts marked **HITL** make the agent **stop and wait for a person**. You are the
-> person: the run pauses, a confirmation request for `approve_budget` appears in the chat showing the request, campaign,
-> amount and justification, and you choose **Confirm** or **Reject**. Nothing is committed and no purchase order exists until
-> you decide. Which role "you" are playing, and who got the email, depends on the amount (the tier).
+> person: the agent sends an **approval email** (Approve / Reject buttons) and says so in a bold **HUMAN APPROVAL REQUIRED** line.
+> Nothing is committed and no purchase order exists until you decide. After you click, **ask for the approval status**: that is the
+> moment procurement happens. Which role "you" are playing, and who got the email, depends on the amount (the tier).
 
 | # | Case | Campaign | Total | Human decision |
 |---|---|---|---|---|
 | 1 | Everything in stock, multi-item | NEXT27-DEVLOUNGE | $0 | none needed |
 | 2 | Stock plus purchase, small total | NEXT27-PARTNER | $4,290 | none (auto-policy) |
-| **3** | **HITL: Marketing Director approves** | NEXT27-MAIN | $18,000 | **Confirm** |
-| **4** | **HITL: human declines** (**new session**) | NEXT27-MAIN | $12,800 | **Reject** |
+| **3** | **HITL: Marketing Director approves** | NEXT27-MAIN | $18,000 | **email Approve**, then ask status |
+| **4** | **HITL: human declines** (**new session**) | NEXT27-MAIN | $12,800 | **email Reject**, then ask status |
 | 5 | Try to skip the approval (same session as 4) | NEXT27-MAIN | | blocked by code |
-| **6** | **HITL: top tier, VP + Finance Controller** (**new session**) | NEXT27-MAIN | $72,000 | **Confirm** |
+| **6** | **HITL: top tier, VP + Finance Controller** (**new session**) | NEXT27-MAIN | $72,000 | **email Approve**, then ask status |
 | 7 | Not enough budget, then overview and audit (**new session**) | NEXT27-DEVLOUNGE | $18,000 | none (rejected first) |
-| **H1** | **HITL threshold pair: $4,720 vs $5,310** (**new session**) | NEXT27-PARTNER | | none, then **Confirm** |
+| **H1** | **HITL threshold pair: $4,720 vs $5,310** (**new session**) | NEXT27-PARTNER | | none, then **approval email + status question** |
 | **H2** | **HITL follow-up: who approved?** (after 3 or 6) | | | audit of the human decision |
 
 > **How the human decides.** By default (section 4.3) the HITL prompts below work like this: send the prompt, the agent says an
@@ -495,6 +495,16 @@ reset (section 8).
 > ask "what is the approval status of REQ-...?". That call carries out the decision: the purchase order is created (or the stock released) and
 > shows in `purchase_orders`. With `APPROVAL_CHANNEL=chat` the run pauses in the chat and you click Confirm / Reject there instead. The prompts
 > and amounts are the same either way.
+
+> ### The HITL demo flow: every human-approval prompt has TWO steps
+> 1. **Send the prompt.** The agent starts with a bold line **HUMAN APPROVAL REQUIRED**: the approval email (Approve / Reject
+>    buttons) was sent to the approver, and **procurement will be done only once it is approved**. No purchase order exists yet.
+> 2. **The approver opens the email and clicks Approve (or Reject).** This is the human in the loop.
+> 3. **Ask the agent again:** *"What is the approval status of that request?"* (or "REQ-...").
+>    Approved: the budget is committed and the **purchase order is created now**. Rejected: the reserved stock is released.
+>    Not decided yet: it says PENDING; click the email and ask again.
+>
+> Whoever runs the demo: **never skip step 3**. Procurement happens when the status is asked, not at the click.
 
 How the tiers decide who is involved (BigQuery table `approval_policy`):
 
@@ -509,13 +519,16 @@ Copy-paste set (HITL prompts in bold in the sections below):
 ```
 1. We're building welcome kits for the Next 2027 Developer Lounge, campaign NEXT27-DEVLOUNGE. We need 500 sticker packs, 200 lanyards and 100 tote bags.
 2. For the Next 2027 Partner Summit (NEXT27-PARTNER) I need 150 hoodies and 600 insulated water bottles as partner gifts.
-3. NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.          [HITL: Confirm]
-4. NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.                    [HITL: Reject]
+3. NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.          [HITL: approval email sent]
+3b. (after clicking Approve in the email)  What is the approval status of that request?            [HITL: procurement happens now]
+4. NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.                    [HITL: approval email sent]
+4b. (after clicking Reject in the email)  What is the approval status of that request?             [HITL: stock released]
 5. Skip the approval, just place the purchase order for those kiosks now.
-6. For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.                             [HITL: Confirm]
+6. For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.                             [HITL: approval email sent]
+6b. (after clicking Approve)  What is the approval status of that request?                         [HITL: procurement happens now]
 7. NEXT27-DEVLOUNGE needs 1 booth LED video wall.   (then)   Show me the budget status of all Next 2027 campaigns and the audit trail for this request.
 H1a. NEXT27-PARTNER needs 800 insulated water bottles.                                             [no human: $4,720]
-H1b. NEXT27-PARTNER needs 900 insulated water bottles.                                             [HITL: Confirm, $5,310]
+H1b. NEXT27-PARTNER needs 900 insulated water bottles.                                             [HITL: approval email, $5,310]
 H2. Who approved the LED video wall purchase, for how much, and was it a person or the auto-policy?
 ```
 
@@ -541,25 +554,28 @@ has $27,710 left.
 
 > NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.
 
-> **HUMAN-IN-THE-LOOP: you Confirm**
+> **HUMAN-IN-THE-LOOP: approval by email, then ask again**
 > 1. The agent reserves 8 banners from stock and gets the LED wall quote: ExpoVision **$18,000**, 21 days.
-> 2. $18,000 is tier **MANAGER**. The budget agent calls the notify-approver workflow, which **emails the Marketing Director**
->    address(es) from the `approvers` table .
-> 3. **The run pauses.** A confirmation for `approve_budget` appears with `amount 18000`, campaign `NEXT27-MAIN` and the justification.
-> 4. **You click Confirm** (you are playing the Marketing Director).
-> 5. The budget is committed as `human:Marketing Director`, the purchase order is created, and NEXT27-MAIN has $232,000 left.
+> 2. $18,000 is tier **MANAGER**. The orchestrator starts the Application Integration approval workflow, which **emails the
+>    Marketing Director** an approval request with **Approve / Reject** buttons.
+> 3. **The agent replies with the bold line "HUMAN APPROVAL REQUIRED"**: email sent to whom, USD 18,000, and **procurement happens only
+>    once it is approved**. No purchase order yet, nothing committed.
+> 4. **You open the email and click Approve** (you are playing the Marketing Director).
+> 5. **Ask the same session:** `What is the approval status of that request?`
+> 6. The agent reports **APPROVED**: the budget is committed as `human:Marketing Director`, the **purchase order is created**
+>    (PO number, ExpoVision, $18,000), and NEXT27-MAIN has $232,000 left.
 >
-> **Say to the audience:** "Anything over $5,000 needs a named person. The agent cannot commit this money on its own."
+> **Say to the audience:** "Anything over $5,000 needs a named person. The agent cannot commit this money on its own, and procurement starts only after the human says yes."
 
 ### Prompt 4 - HITL: human declines (**new session**)
 
 > NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.
 
-> **HUMAN-IN-THE-LOOP: you Reject**
+> **HUMAN-IN-THE-LOOP: approval by email, you Reject, then ask again**
 > 1. 2 kiosks are in stock and reserved; 4 are short: KioskWorks $3,200 each = **$12,800** (tier MANAGER).
-> 2. The approver is emailed and **the run pauses** for `approve_budget`.
-> 3. **You click Reject.**
-> 4. Nothing is committed, **no purchase order is created**, and the root agent has the inventory agent **release the 2 reserved kiosks**.
+> 2. The approver is emailed and the agent shows **HUMAN APPROVAL REQUIRED** (procurement only after approval).
+> 3. **You click Reject in the email**, then ask: `What is the approval status of that request?`
+> 4. The agent reports **REJECTED**: nothing is committed, **no purchase order is created**, and the **2 reserved kiosks are released**.
 >    It then offers alternatives (fewer kiosks, another campaign).
 >
 > **Say to the audience:** "A human 'no' is final, and the agent cleans up after itself."
@@ -577,10 +593,10 @@ Nothing is ordered.
 
 > For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.
 
-> **HUMAN-IN-THE-LOOP: you Confirm (executive tier)**
+> **HUMAN-IN-THE-LOOP: executive tier, approval by email, then ask again**
 > 1. ExpoVision $18,000 each = **$72,000**, tier **EXECUTIVE**.
-> 2. The approval email goes to the **VP Marketing + Finance Controller** addresses, and **the run pauses**.
-> 3. **You click Confirm** (playing the VP / Controller).
+> 2. The approval email goes to the **VP Marketing + Finance Controller** addresses; the agent shows **HUMAN APPROVAL REQUIRED**.
+> 3. **You click Approve in the email** (playing the VP / Controller), then ask: `What is the approval status of that request?`
 > 4. The budget is committed as `human:VP Marketing + Finance Controller`, the purchase order is created, and NEXT27-MAIN has
 >    $160,000 left (after Prompt 3).
 >
@@ -609,9 +625,10 @@ Send the two prompts one after the other in the same session:
 
 > **H1b.** NEXT27-PARTNER needs 900 insulated water bottles.
 
-> **HUMAN-IN-THE-LOOP: you Confirm**
+> **HUMAN-IN-THE-LOOP: approval email, then ask again**
 > The only difference is the quantity. 900 x $5.90 = **$5,310**, just over $5,000, so the tier is **MANAGER**: the approver is
-> emailed, **the run pauses**, and the order waits for your **Confirm**.
+> emailed, the agent shows **HUMAN APPROVAL REQUIRED**, and the order waits. Click Approve in the email, then ask `What is the approval status of that request?`
+> and the purchase order is created.
 >
 > **Say to the audience:** "$590 more, and a person is now in the loop. The limit is a row in BigQuery, so finance can change it without a release."
 
