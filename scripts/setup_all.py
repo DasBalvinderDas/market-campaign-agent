@@ -51,6 +51,8 @@ def main():
     ap.add_argument("--location", default=os.getenv("BQ_LOCATION", "US"), help="BigQuery location")
     ap.add_argument("--region", default=os.getenv("APP_INTEGRATION_LOCATION", "us-central1"),
                     help="Application Integration region")
+    ap.add_argument("--service-account", default=None,
+                    help="service account the deployed agent and approval service run as (saved as AGENT_SERVICE_ACCOUNT)")
     ap.add_argument("--no-email", action="store_true", help="do not add the Send Email task")
     ap.add_argument("--test", action="store_true", help="run both Application Integration triggers once (sends a test email)")
     ap.add_argument("--test-email", default=None)
@@ -90,6 +92,8 @@ def main():
     if not args.no_env and all(v == "OK" for v in results.values()):
         updates = {"GOOGLE_CLOUD_PROJECT": project, "BQ_DATASET": args.dataset, "BQ_LOCATION": args.location,
                    "APP_INTEGRATION_LOCATION": args.region}
+        if args.service_account:
+            updates["AGENT_SERVICE_ACCOUNT"] = args.service_account
         if args.approver_email:
             updates["APPROVER_EMAILS"] = ";".join(args.approver_email)
         write_env(ROOT / ".env", updates)

@@ -45,6 +45,9 @@ def explain(message: str, project: str) -> str | None:
             lines.append(f"      or https://console.cloud.google.com/apis/library/{a}?project={project}")
         lines.append("Wait about a minute after enabling, then run this script again.")
         return "\n".join(lines)
+    if "actas" in m or "iam.serviceaccounts.actas" in m:
+        return ("Your account is not allowed to run things as that service account. Ask an admin to give you the "
+                "Service Account User role (roles/iam.serviceAccountUser) on it.")
     if "default credentials" in m or "could not automatically determine credentials" in m \
             or "reauthentication" in m or "invalid_grant" in m:
         return "No usable credentials. Run:  gcloud auth application-default login"

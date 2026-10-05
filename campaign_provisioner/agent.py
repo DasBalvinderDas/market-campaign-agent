@@ -6,7 +6,27 @@ from .sub_agents.budget_agent import budget_agent
 from .sub_agents.inventory_agent import inventory_agent
 from .sub_agents.procurement_agent import procurement_agent
 from .tools.budget_tools import approve_budget_tool
-from .tools.orchestration_tools import get_audit_trail, get_campaign_overview, register_campaign_request
+from .tools.orchestration_tools import (get_approval_status, get_audit_trail, get_campaign_overview,
+                                        register_campaign_request)
+
+_CHAT_APPROVAL = '''   For tiers that need a human the platform pauses until the person confirms or rejects in the chat; do not ask
+   for approval yourself.
+   - Approved: transfer to procurement_agent to create the purchase orders (Application Integration workflow).
+   - Rejected or declined (or over budget): ask inventory_agent to release the request's stock, then explain and
+     offer alternatives (smaller quantity, cheaper vendor, other campaign). Never create purchase orders.'''
+
+_EMAIL_APPROVAL = '''   - If it returns status approved (small amounts are auto-approved): transfer to procurement_agent to create the
+     purchase orders (Application Integration workflow).
+   - If it returns pending_approval: the approver was emailed Approve / Reject links. Do NOT create purchase orders
+     and do NOT transfer to procurement_agent. Tell the user who was emailed, the amount and that the purchase
+     orders are created automatically when the approver clicks Approve (stock is released on Reject). They can ask
+     for the status later (get_approval_status). Then finish.
+   - If it says no purchase plan exists: transfer to inventory_agent to reserve_inventory every item (even when 0
+     are free), then call approve_budget again.
+   - If it returns rejected (over budget): ask inventory_agent to release the request's stock, explain and offer
+     alternatives. If it returns an error or NO_APPROVERS: explain the problem; do not create purchase orders.'''
+
+_APPROVAL_TEXT = _EMAIL_APPROVAL if config.APPROVAL_CHANNEL == "email" else _CHAT_APPROVAL
 
 INSTRUCTION = f"""
 You are The Campaign Provisioner, the central governing agent for {config.EVENT_NAME} marketing logistics.
@@ -20,13 +40,11 @@ Workflow for every request:
 3. Transfer to inventory_agent: check and reserve stock; get shortfalls.
 4. If everything is covered by stock, skip steps 5-7 and go to 8 (no purchase, no approval).
 5. Otherwise transfer to procurement_agent for vendor quotes (no ordering yet).
-6. Transfer to budget_agent with the total quoted cost. It checks the budget, finds the approval tier (small
-   amounts are auto-approved, higher tiers need a named human) and emails the approver, then hands back to you.
-7. YOU hold the approval gate: call approve_budget (request_id, campaign_id, total, justification). For tiers that
-   need a human the platform pauses until the person confirms or rejects; do not ask for approval in chat.
-   - Approved: transfer to procurement_agent to create the purchase orders (Application Integration workflow).
-   - Rejected or declined (or over budget): ask inventory_agent to release the request's stock, then explain and
-     offer alternatives (smaller quantity, cheaper vendor, other campaign). Never create purchase orders.
+6. Transfer to budget_agent with the total quoted cost. It checks the budget and finds the approval tier (small
+   amounts are auto-approved, higher tiers need a named human), then hands back to you.
+7. YOU hold the approval gate: call approve_budget (request_id, campaign_id, total, justification). Do this even if
+   the approver email could not be sent (mention that in your summary).
+{_APPROVAL_TEXT}
 8. Aggregate: reserved stock, purchase orders (PO number, vendor, cost, lead time), budget remaining,
    approver. Offer get_audit_trail.
 
@@ -40,6 +58,6 @@ root_agent = LlmAgent(
     model=config.MODEL,
     description="Autonomous Google Next 2027 campaign logistics orchestrator: inventory, procurement and budget approval on BigQuery data, workflows through Application Integration, human-in-the-loop for high-value spend.",
     instruction=INSTRUCTION,
-    tools=[register_campaign_request, get_campaign_overview, get_audit_trail, approve_budget_tool],
+    tools=[register_campaign_request, get_campaign_overview, get_audit_trail, get_approval_status, approve_budget_tool],
     sub_agents=[inventory_agent, procurement_agent, budget_agent],
 )

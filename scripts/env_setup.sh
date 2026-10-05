@@ -3,6 +3,7 @@
 #
 #   source scripts/env_setup.sh                              # prepare the shell
 #   source scripts/env_setup.sh --project my-project         # use a specific project
+#   source scripts/env_setup.sh --service-account app-svc@my-project.iam.gserviceaccount.com   # save it in .env
 #   source scripts/env_setup.sh --approver-email you@x.com   # also create the BigQuery data + Application
 #                                                            # Integration workflow if they do not exist yet
 #
@@ -20,6 +21,7 @@ _ES_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 _ES_PROJECT=""
 _ES_EMAIL=""
 _ES_REGION="${GOOGLE_CLOUD_LOCATION:-us-central1}"
+_ES_SA=""
 _ES_PROBLEMS=0
 
 while [ $# -gt 0 ]; do
@@ -27,6 +29,7 @@ while [ $# -gt 0 ]; do
     --project) _ES_PROJECT="$2"; shift 2 ;;
     --region) _ES_REGION="$2"; shift 2 ;;
     --approver-email) _ES_EMAIL="$2"; shift 2 ;;
+    --service-account) _ES_SA="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; shift ;;
   esac
 done
@@ -89,6 +92,16 @@ if [ -n "$GOOGLE_CLOUD_PROJECT" ] && [ -n "$_ES_ACCOUNT" ]; then
   fi
 fi
 
+if [ -n "$_ES_SA" ] && [ -z "$_ES_EMAIL" ]; then
+  python - "$_ES_SA" <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+from setup_all import write_env, ROOT
+write_env(ROOT / ".env", {"AGENT_SERVICE_ACCOUNT": sys.argv[1]})
+print("  OK  AGENT_SERVICE_ACCOUNT=" + sys.argv[1] + " saved to .env")
+PY
+fi
+
 echo "== Config file"
 if [ -f campaign_provisioner/.env ]; then
   _es_problem "campaign_provisioner/.env exists and would override the repo-root .env. Delete it:  rm campaign_provisioner/.env"
@@ -98,7 +111,7 @@ fi
 
 if [ -n "$_ES_EMAIL" ] && [ -n "$GOOGLE_CLOUD_PROJECT" ] && [ "$_ES_PROBLEMS" -eq 0 ]; then
   echo "== Data setup (BigQuery + Application Integration)"
-  python scripts/setup_all.py --approver-email "$_ES_EMAIL" || _es_problem "data setup did not finish (see the message above)"
+  python scripts/setup_all.py --approver-email "$_ES_EMAIL" ${_ES_SA:+--service-account "$_ES_SA"} || _es_problem "data setup did not finish (see the message above)"
 fi
 
 if [ -n "$GOOGLE_CLOUD_PROJECT" ] && [ "$_ES_PROBLEMS" -eq 0 ] && [ -z "$ENV_SETUP_SKIP_CHECK" ]; then
@@ -115,5 +128,5 @@ if [ "$_ES_PROBLEMS" -eq 0 ]; then
 else
   echo "$_ES_PROBLEMS problem(s) above. Fix them and run this again:  source scripts/env_setup.sh"
 fi
-unset _ES_ROOT _ES_PROJECT _ES_EMAIL _ES_REGION _ES_PROBLEMS _ES_ACCOUNT _ES_ENABLED _ES_MISSING
+unset _ES_SA _ES_ROOT _ES_PROJECT _ES_EMAIL _ES_REGION _ES_PROBLEMS _ES_ACCOUNT _ES_ENABLED _ES_MISSING
 unset -f _es_problem _es_ok

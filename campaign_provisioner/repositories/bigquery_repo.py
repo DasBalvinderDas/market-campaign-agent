@@ -99,6 +99,62 @@ class BigQueryRepository(Repository):
                          role=role)
         return [r["email"] for r in rows]
 
+    # ---- request lines and email approvals
+    def _dml(self, sql: str, **params) -> int:
+        sql = sql.replace("{ds}", self.ds)
+        cfg = self._bq.QueryJobConfig(query_parameters=[self._param(k, v) for k, v in params.items()])
+        job = self.client.query(sql, job_config=cfg)
+        job.result()
+        return int(getattr(job, "num_dml_affected_rows", 0) or 0)
+
+    def record_line(self, request_id, sku, requested, reserved):
+        self._run("INSERT INTO `{ds}.request_lines` (request_id, sku, requested, reserved, shortfall, created_at) "
+                  "VALUES (@rid, @sku, @req, @res, @short, @ts)",
+                  rid=request_id, sku=sku, req=int(requested), res=int(reserved), short=int(requested - reserved),
+                  ts=now())
+
+    def get_lines(self, request_id):
+        return self._run("SELECT sku, requested, reserved, shortfall FROM `{ds}.request_lines` "
+                         "WHERE request_id = @rid "
+                         "QUALIFY ROW_NUMBER() OVER (PARTITION BY sku ORDER BY created_at DESC) = 1", rid=request_id)
+
+    _APPROVAL_COLS = ("approval_id, request_id, campaign_id, tier, approver_role, approver_emails, amount, plan, "
+                      "justification, status, created_at, expires_at, decided_by, decided_at, decision_note")
+
+    def create_approval(self, approval):
+        self._run("INSERT INTO `{ds}.approval_requests` (approval_id, request_id, campaign_id, tier, approver_role, "
+                  "approver_emails, amount, plan, justification, status, created_at, expires_at) "
+                  "VALUES (@id, @rid, @cid, @tier, @role, @emails, @amount, @plan, @just, 'PENDING', @ts, @exp)",
+                  id=approval["approval_id"], rid=approval["request_id"], cid=approval["campaign_id"],
+                  tier=approval["tier"], role=approval["approver_role"], emails=approval["approver_emails"],
+                  amount=float(approval["amount"]), plan=approval.get("plan"), just=approval.get("justification"),
+                  ts=now(), exp=approval["expires_at"])
+
+    def get_approval(self, approval_id):
+        rows = self._run(f"SELECT {self._APPROVAL_COLS} FROM `{{ds}}.approval_requests` WHERE approval_id = @id",
+                         id=approval_id)
+        return rows[0] if rows else None
+
+    def get_approval_for_request(self, request_id):
+        rows = self._run(f"SELECT {self._APPROVAL_COLS} FROM `{{ds}}.approval_requests` WHERE request_id = @rid "
+                         "ORDER BY created_at DESC LIMIT 1", rid=request_id)
+        return rows[0] if rows else None
+
+    def decide_approval(self, approval_id, status, decided_by, note=""):
+        """Atomic: only the first decision on a PENDING, unexpired approval wins."""
+        affected = self._dml("UPDATE `{ds}.approval_requests` SET status = @status, decided_by = @by, decided_at = @ts, "
+                             "decision_note = @note WHERE approval_id = @id AND status = 'PENDING' "
+                             "AND expires_at > @ts", status=status, by=decided_by, ts=now(), note=note, id=approval_id)
+        return affected > 0
+
+    def set_approval_note(self, approval_id, status, note):
+        self._dml("UPDATE `{ds}.approval_requests` SET status = @status, decision_note = @note WHERE approval_id = @id",
+                  status=status, note=note, id=approval_id)
+
+    def list_purchase_orders(self, request_id):
+        return self._run("SELECT po_number, sku, quantity, vendor_id, total_amount, status FROM "
+                         "`{ds}.purchase_orders` WHERE request_id = @rid ORDER BY created_at", rid=request_id)
+
     # ---- requests, POs, audit
     def create_request(self, campaign_id, summary):
         rid = new_id("REQ")

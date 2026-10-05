@@ -1,7 +1,9 @@
 """Tools for the Budget Agent, including the human-in-the-loop gate."""
 from google.adk.tools import FunctionTool
 
+from .. import config
 from ..repositories import get_repo
+from ..workflow.integration_client import IntegrationExecutor
 from .audit import audit
 
 
@@ -41,12 +43,36 @@ def approve_budget(request_id: str, campaign_id: str, amount: float, justificati
         amount: Total USD to commit.
         justification: Why the spend is needed (shown to the human approver).
     """
+    if config.APPROVAL_CHANNEL == "email":
+        gated = _email_approval_if_needed(request_id, campaign_id, amount, justification)
+        if gated is not None:
+            return gated
     result = _approve(request_id, campaign_id, amount, justification)
     if result.get("status") == "approved":
         result["next_step"] = "Budget approved. Now transfer to procurement_agent to create the purchase orders."
     elif result.get("status") == "rejected":
         result["next_step"] = "Budget not approved. Have inventory_agent release the reserved stock, then explain to the user."
     return result
+
+
+def _email_approval_if_needed(request_id, campaign_id, amount, justification):
+    """Email channel: a tier that needs a human is not decided here. The approver gets Approve / Reject links by
+    email and the decision is taken by the approval-link service. Returns None when no human is needed."""
+    from .. import approval_flow
+
+    repo = get_repo()
+    plan = approval_flow.build_plan(repo, request_id)
+    total = plan["total"] if plan["lines"] else float(amount)
+    policy = repo.get_policy(float(total))
+    if not policy["requires_human"]:
+        return None
+    budget = repo.get_budget(campaign_id)
+    if budget is not None and total > float(budget["remaining"]):
+        return None  # over budget: _approve rejects it directly, no human needed
+    if not repo.get_request(request_id):
+        return {"status": "error", "message": f"Unknown request '{request_id}'."}
+    return approval_flow.request_human_approval(repo, IntegrationExecutor(), request_id, campaign_id, justification,
+                                                policy)
 
 
 def _approve(request_id: str, campaign_id: str, amount: float, justification: str) -> dict:
@@ -76,6 +102,8 @@ def requires_human(amount: float, campaign_id: str = "", **_) -> bool:
     The tier comes from BigQuery. Amounts that exceed the remaining budget skip the
     human prompt, because there is nothing to approve: the tool rejects them directly.
     """
+    if config.APPROVAL_CHANNEL == "email":
+        return False  # the human decides through the emailed link, not in the chat
     repo = get_repo()
     budget = repo.get_budget(campaign_id) if campaign_id else None
     if budget is not None and amount > float(budget["remaining"]):

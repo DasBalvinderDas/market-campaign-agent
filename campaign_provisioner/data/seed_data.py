@@ -74,6 +74,8 @@ SEED = {
     ],
     "approvers": [],  # filled by scripts/setup_bigquery.py from --approver-email / APPROVER_EMAILS
     "inventory_reservations": [],
+    "request_lines": [],
+    "approval_requests": [],
     "campaign_requests": [],
     "purchase_orders": [],
     "audit_log": [],

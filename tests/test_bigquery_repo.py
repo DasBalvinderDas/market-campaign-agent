@@ -1,3 +1,4 @@
+import pytest
 """BigQueryRepository against a stub client (no network): checks SQL targets and parameters."""
 from campaign_provisioner.data import schema
 from campaign_provisioner.repositories.bigquery_repo import BigQueryRepository
@@ -60,3 +61,25 @@ def test_approver_emails_query():
     assert r.get_approver_emails("Marketing Director") == ["a@x.com", "b@x.com"]
     sql, params = c.calls[0]
     assert "`proj.ds.approvers`" in sql and "AND active" in sql and params == {"role": "Marketing Director"}
+
+
+def test_new_approval_queries_target_the_right_tables_and_are_valid_sql():
+    sqlglot = pytest.importorskip("sqlglot")
+    r, c = repo([{"approval_id": "A", "status": "PENDING"}])
+    from datetime import datetime, timezone
+    exp = datetime(2027, 1, 1, tzinfo=timezone.utc)
+    r.record_line("REQ-1", "SKU", 5, 2)
+    r.get_lines("REQ-1")
+    r.create_approval({"approval_id": "A", "request_id": "REQ-1", "campaign_id": "C", "tier": "MANAGER",
+                       "approver_role": "Marketing Director", "approver_emails": "a@x.com", "amount": 18000.0,
+                       "plan": "{}", "justification": "j", "expires_at": exp})
+    r.get_approval("A")
+    r.get_approval_for_request("REQ-1")
+    r.decide_approval("A", "APPROVED", "a@x.com")
+    r.set_approval_note("A", "FAILED", "n")
+    r.list_purchase_orders("REQ-1")
+    for sql, _ in c.calls:
+        sqlglot.parse_one(sql.replace("{ds}", "p.d"), read="bigquery")
+    decide_sql, params = next((s, p) for s, p in c.calls if s.startswith("UPDATE") and "decided_by" in s)
+    assert "status = 'PENDING'" in decide_sql and "expires_at > @ts" in decide_sql   # atomic, first click wins
+    assert params["id"] == "A" and params["status"] == "APPROVED"

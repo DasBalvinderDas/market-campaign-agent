@@ -20,5 +20,17 @@ NOTIFY_TRIGGER = os.getenv("APP_INTEGRATION_NOTIFY_TRIGGER", "api_trigger/notify
 
 EVENT_NAME = "Google Next 2027"
 
+# Who runs the deployed agent and the approval-link service (a service account with BigQuery + Application
+# Integration access). Empty: Agent Engine's default service agent is used.
+AGENT_SERVICE_ACCOUNT = os.getenv("AGENT_SERVICE_ACCOUNT", "")
+
+# Human approval by email link. APPROVAL_BASE_URL is the public URL of the approval-link service
+# (scripts/deploy_approval_service.py writes it to .env). With it set, approvers get Approve / Reject links by
+# email and need no login; without it the approval is asked in the chat.
+APPROVAL_BASE_URL = os.getenv("APPROVAL_BASE_URL", "").rstrip("/")
+APPROVAL_LINK_SECRET = os.getenv("APPROVAL_LINK_SECRET", "")
+APPROVAL_LINK_TTL_HOURS = float(os.getenv("APPROVAL_LINK_TTL_HOURS", "72"))
+APPROVAL_CHANNEL = (os.getenv("APPROVAL_CHANNEL") or ("email" if APPROVAL_BASE_URL else "chat")).lower()
+
 # Approver notification emails: "Role=a@x.com,b@x.com;Other Role=c@x.com" (or just "a@x.com" for every role).
 APPROVER_EMAILS = os.getenv("APPROVER_EMAILS", "")

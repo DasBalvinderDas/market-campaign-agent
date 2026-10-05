@@ -88,6 +88,37 @@ TABLES = {
             ("active", "BOOL", "REQUIRED", "Only active rows are notified"),
         ],
     },
+    "request_lines": {
+        "description": "What each request asked for and what stock covered; the shortfall becomes the purchase plan.",
+        "columns": [
+            ("request_id", "STRING", "REQUIRED", ""),
+            ("sku", "STRING", "REQUIRED", ""),
+            ("requested", "INT64", "REQUIRED", "Units wanted"),
+            ("reserved", "INT64", "REQUIRED", "Units taken from stock"),
+            ("shortfall", "INT64", "REQUIRED", "Units still to buy"),
+            ("created_at", "TIMESTAMP", "REQUIRED", ""),
+        ],
+    },
+    "approval_requests": {
+        "description": "Human approvals requested by email. The decision is taken by a signed link in the email.",
+        "columns": [
+            ("approval_id", "STRING", "REQUIRED", ""),
+            ("request_id", "STRING", "REQUIRED", ""),
+            ("campaign_id", "STRING", "REQUIRED", ""),
+            ("tier", "STRING", "REQUIRED", ""),
+            ("approver_role", "STRING", "REQUIRED", ""),
+            ("approver_emails", "STRING", "REQUIRED", "Comma separated; only these may decide"),
+            ("amount", "FLOAT64", "REQUIRED", "USD, computed from the purchase plan"),
+            ("plan", "STRING", "NULLABLE", "JSON: purchase lines (sku, quantity, vendor, price)"),
+            ("justification", "STRING", "NULLABLE", ""),
+            ("status", "STRING", "REQUIRED", "PENDING, APPROVED, REJECTED or FAILED"),
+            ("created_at", "TIMESTAMP", "REQUIRED", ""),
+            ("expires_at", "TIMESTAMP", "REQUIRED", "Links stop working after this"),
+            ("decided_by", "STRING", "NULLABLE", "Email of the person who clicked"),
+            ("decided_at", "TIMESTAMP", "NULLABLE", ""),
+            ("decision_note", "STRING", "NULLABLE", ""),
+        ],
+    },
     "campaign_requests": {
         "description": "Every request registered by the orchestrator.",
         "columns": [
@@ -161,4 +192,5 @@ GROUP BY l.request_id
 }
 
 # Tables that hold transactions (cleared by --reset-demo).
-TRANSACTION_TABLES = ["inventory_reservations", "campaign_requests", "purchase_orders", "audit_log"]
+TRANSACTION_TABLES = ["inventory_reservations", "campaign_requests", "purchase_orders", "audit_log", "request_lines",
+                      "approval_requests"]

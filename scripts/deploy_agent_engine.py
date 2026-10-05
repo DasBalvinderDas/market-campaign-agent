@@ -39,7 +39,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import guarded, preflight, resolve_project  # noqa: E402
 
 RUNTIME_KEYS = ["BQ_DATASET", "BQ_LOCATION", "APP_INTEGRATION_NAME", "APP_INTEGRATION_LOCATION",
-                "APP_INTEGRATION_PO_TRIGGER", "APP_INTEGRATION_NOTIFY_TRIGGER", "CAMPAIGN_MODEL"]
+                "APP_INTEGRATION_PO_TRIGGER", "APP_INTEGRATION_NOTIFY_TRIGGER", "CAMPAIGN_MODEL",
+                "APPROVAL_BASE_URL", "APPROVAL_LINK_SECRET", "APPROVAL_LINK_TTL_HOURS"]
 RESOURCE_RE = re.compile(r"projects/[^/\s]+/locations/[^/\s]+/reasoningEngines/\d+")
 
 
@@ -159,6 +160,24 @@ def write_admin_script(project: str, member: str, roles: list[str]) -> Path:
     return path
 
 
+def check_runtime_roles(project: str, member: str) -> str:
+    """For a service account you configured (so someone already set it up): only check, never try to grant.
+    Returns ok | missing | unknown. Missing roles are listed with a ready-to-run script for an admin."""
+    roles = choose_runtime_roles()
+    have = granted_roles(project, member)
+    if have is None:
+        print(f"  NOTE: could not read the project's IAM policy to confirm {member} has: {', '.join(roles)}")
+        return "unknown"
+    missing = [r for r in roles if r not in have]
+    if not missing:
+        print(f"  OK  {member} has the roles the agent needs")
+        return "ok"
+    script = write_admin_script(project, member, missing)
+    print(f"  PROBLEM: {member} is missing: {', '.join(missing)}\n"
+          f"           The agent cannot use those services until an admin grants them. Ready-to-run script: {script}")
+    return "missing"
+
+
 def grant_runtime_roles(project: str, member: str | None, roles: list[str] | None = None) -> str:
     """Give the deployed agent's identity the roles it needs. Returns ok | missing_identity | denied | error.
     Problems are printed, never raised."""
@@ -224,7 +243,13 @@ def run(args, project=""):
         ai.run_with(_Http(), argparse.Namespace(test=False, check_only=True, provision_region=False,
                                                 no_email=False, test_email=None), project)
 
-    update_id = pick_update_id(args, read_env(ROOT / ".env"))
+    env_values = read_env(ROOT / ".env")
+    args.service_account = args.service_account or env_values.get("AGENT_SERVICE_ACCOUNT") or None
+    print(f"  Runs as: {args.service_account or 'the Agent Engine service agent (default)'}")
+    if not env_values.get("APPROVAL_BASE_URL"):
+        print("  NOTE: no approval-link service yet, so approvals are asked in the chat. For emailed Approve / Reject links "
+              "run: python scripts/deploy_approval_service.py")
+    update_id = pick_update_id(args, env_values)
     args.update = update_id
     print(f"  {'Updating the existing deployment ' + update_id + ' (use --new for a separate one)' if update_id else 'Creating a new deployment'}")
     env = runtime_env(read_env(ROOT / ".env"))
@@ -242,7 +267,10 @@ def run(args, project=""):
         return
     print("\nPermissions for the deployed agent:")
     member = runtime_member(project, args.service_account)
-    grant_status = grant_runtime_roles(project, member)
+    if args.service_account:
+        grant_status = "denied" if check_runtime_roles(project, member) == "missing" else "ok"
+    else:
+        grant_status = grant_runtime_roles(project, member)
 
     print("\nDeploying (this takes several minutes: it builds a container image) ...\n")
     returncode, text = run_deploy(cmd)
@@ -324,7 +352,8 @@ def main():
                     help="redeploy to an existing Agent Engine (no value: the one saved in .env). This is already the "
                          "default when .env has AGENT_ENGINE_RESOURCE")
     ap.add_argument("--new", action="store_true", help="create a separate new deployment even if one is saved in .env")
-    ap.add_argument("--service-account", default=None, help="run the agent as this service account instead of the default")
+    ap.add_argument("--service-account", default=None,
+                    help="run the agent as this service account (default: AGENT_SERVICE_ACCOUNT in .env)")
     ap.add_argument("--dry-run", action="store_true", help="run the checks and print the command, deploy nothing")
     ap.add_argument("--no-smoke-test", action="store_true", help="do not ask the deployed agent a test question")
     ap.add_argument("--skip-checks", action="store_true", help="skip the BigQuery / Application Integration check")

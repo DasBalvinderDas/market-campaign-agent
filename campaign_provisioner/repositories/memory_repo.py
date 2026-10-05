@@ -96,6 +96,44 @@ class MemoryRepository(Repository):
     def get_approver_emails(self, role):
         return [a['email'] for a in self.t['approvers'] if a['approver_role'] == role and a['active']]
 
+    # ---- request lines and email approvals
+    def record_line(self, request_id, sku, requested, reserved):
+        self.t["request_lines"].append({"request_id": request_id, "sku": sku, "requested": requested,
+                                        "reserved": reserved, "shortfall": requested - reserved, "created_at": now()})
+
+    def get_lines(self, request_id):
+        latest = {}
+        for r in self.t["request_lines"]:
+            if r["request_id"] == request_id:
+                latest[r["sku"]] = r
+        return list(latest.values())
+
+    def create_approval(self, approval):
+        self.t["approval_requests"].append({"status": "PENDING", "decided_by": None, "decided_at": None,
+                                            "decision_note": None, "created_at": now(), **approval})
+
+    def get_approval(self, approval_id):
+        return next((dict(a) for a in self.t["approval_requests"] if a["approval_id"] == approval_id), None)
+
+    def get_approval_for_request(self, request_id):
+        rows = [a for a in self.t["approval_requests"] if a["request_id"] == request_id]
+        return dict(rows[-1]) if rows else None
+
+    def decide_approval(self, approval_id, status, decided_by, note=""):
+        for a in self.t["approval_requests"]:
+            if a["approval_id"] == approval_id and a["status"] == "PENDING" and a["expires_at"] > now():
+                a.update(status=status, decided_by=decided_by, decided_at=now(), decision_note=note)
+                return True
+        return False
+
+    def set_approval_note(self, approval_id, status, note):
+        for a in self.t["approval_requests"]:
+            if a["approval_id"] == approval_id:
+                a.update(status=status, decision_note=note)
+
+    def list_purchase_orders(self, request_id):
+        return [dict(p) for p in self.t["purchase_orders"] if p["request_id"] == request_id]
+
     # ---- requests, POs, audit
     def create_request(self, campaign_id, summary):
         rid = f"REQ-{len(self.t['campaign_requests']) + 1:03d}"

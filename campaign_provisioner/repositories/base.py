@@ -38,6 +38,16 @@ class Repository:
 
     def get_approver_emails(self, role: str) -> list[str]: raise NotImplementedError
 
+    # ---- request lines and email approvals
+    def record_line(self, request_id: str, sku: str, requested: int, reserved: int) -> None: raise NotImplementedError
+    def get_lines(self, request_id: str) -> list[dict]: raise NotImplementedError
+    def create_approval(self, approval: dict) -> None: raise NotImplementedError
+    def get_approval(self, approval_id: str) -> dict | None: raise NotImplementedError
+    def get_approval_for_request(self, request_id: str) -> dict | None: raise NotImplementedError
+    def decide_approval(self, approval_id: str, status: str, decided_by: str, note: str = "") -> bool: raise NotImplementedError
+    def set_approval_note(self, approval_id: str, status: str, note: str) -> None: raise NotImplementedError
+    def list_purchase_orders(self, request_id: str) -> list[dict]: raise NotImplementedError
+
     # ---- requests, POs, audit
     def create_request(self, campaign_id: str, summary: str) -> str: raise NotImplementedError
     def get_request(self, request_id: str) -> dict | None: raise NotImplementedError

@@ -56,6 +56,7 @@ def reserve_inventory(request_id: str, sku: str, quantity: int) -> dict:
     reserved = max(0, min(int(item["free"]), quantity))
     if reserved:
         get_repo().reserve(request_id, sku, reserved)
+    get_repo().record_line(request_id, sku, quantity, reserved)
     audit(request_id, "inventory_agent", "stock_reserved", sku=sku, reserved=reserved, requested=quantity)
     return {"status": "ok", "request_id": request_id, "sku": sku, "reserved": reserved,
             "shortfall_to_procure": quantity - reserved}

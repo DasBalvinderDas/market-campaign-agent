@@ -204,3 +204,23 @@ def test_denied_grant_writes_a_script_for_the_admin(monkeypatch, tmp_path, capsy
 def test_not_found_detection_for_a_deleted_deployment():
     assert dep.is_not_found("Failed to deploy: 404 NOT_FOUND. Reasoning Engine [..] is not found.")
     assert not dep.is_not_found("403 PERMISSION_DENIED")
+
+
+def test_approval_service_staging_and_command(tmp_path):
+    import deploy_approval_service as svc
+    svc.stage(tmp_path)
+    assert (tmp_path / "approval_service" / "main.py").exists() and (tmp_path / "campaign_provisioner" / "approval_flow.py").exists()
+    assert "approval_service.main:app" in (tmp_path / "Procfile").read_text()
+    assert "flask" in (tmp_path / "requirements.txt").read_text()
+    env = svc.service_env("p", {"BQ_DATASET": "cp", "GOOGLE_API_KEY": "secret", "APPROVER_EMAILS": "a@x.com"}, "k")
+    assert env == {"GOOGLE_CLOUD_PROJECT": "p", "APPROVAL_LINK_SECRET": "k", "BQ_DATASET": "cp"}  # no unrelated secrets
+    assert 'APPROVAL_LINK_SECRET: "k"' in svc.env_yaml(env)
+    cmd = svc.deploy_command("p", "us-central1", "/s", "/e.yaml", "app-svc@p.iam.gserviceaccount.com")
+    assert "--allow-unauthenticated" in cmd and "--service-account=app-svc@p.iam.gserviceaccount.com" in cmd
+
+
+def test_approval_service_failure_advice():
+    import deploy_approval_service as svc
+    assert "organisation" in svc.advice("ERROR: ... iam.allowedPolicyMemberDomains ...", "p", None)
+    assert "Service Account User" in svc.advice("Permission 'iam.serviceaccounts.actAs' denied", "p", "sa@p")
+    assert svc.advice("something else", "p", None) is None

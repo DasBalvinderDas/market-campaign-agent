@@ -38,7 +38,7 @@ def fc(name, **args):
     return types.Part(function_call=types.FunctionCall(name=name, args=args))
 
 
-_STATE = {"calls": {}, "request_id": ""}
+_STATE = {"calls": {}, "request_id": "", "email": False}
 
 
 def _agent_key(system: str) -> str:
@@ -66,13 +66,16 @@ class ScriptedLlm(BaseLlm):
         back = fc("transfer_to_agent", agent_name="campaign_provisioner")
         if key == "Inventory Agent":
             return [fc("find_sku", description="booth LED video wall"),
-                    fc("check_inventory", sku="BOOTH-LEDWALL", quantity_needed=1), back][min(n, 3) - 1]
+                    fc("check_inventory", sku="BOOTH-LEDWALL", quantity_needed=1),
+                    fc("reserve_inventory", request_id=req, sku="BOOTH-LEDWALL", quantity=1), back][min(n, 4) - 1]
         if key == "Procurement Agent":
             plan = [fc("get_vendor_quotes", sku="BOOTH-LEDWALL", quantity=1), back,
                     fc("create_purchase_order", request_id=req, sku="BOOTH-LEDWALL", quantity=1, vendor_id="V-EXPOVISION"),
                     types.Part(text="Purchase order created.")]
             return plan[min(n, 4) - 1]
         if key == "Budget Agent":
+            if _STATE["email"]:  # the orchestrator sends the approval email itself in this channel
+                return [fc("check_budget", campaign_id="NEXT27-MAIN"), fc("get_approval_policy", amount=18000), back][min(n, 3) - 1]
             plan = [fc("check_budget", campaign_id="NEXT27-MAIN"), fc("get_approval_policy", amount=18000),
                     fc("notify_approver", request_id=req, campaign_id="NEXT27-MAIN", amount=18000,
                        approver_role="Marketing Director", summary="1 LED wall"), back]
@@ -85,6 +88,8 @@ class ScriptedLlm(BaseLlm):
                     fc("transfer_to_agent", agent_name="budget_agent"),
                     fc("approve_budget", request_id=req, campaign_id="NEXT27-MAIN", amount=18000,
                        justification="1 LED wall")][n - 1]
+        if n == 6 and _STATE["email"]:
+            return types.Part(text="Approval requested by email; the order follows automatically after the click.")
         if n == 6:
             return fc("transfer_to_agent", agent_name="procurement_agent") if approved else \
                 types.Part(text="Not approved, nothing was ordered.")
@@ -97,7 +102,7 @@ def _use_scripted_model(agent):
         _use_scripted_model(sub)
 
 
-async def _run(confirm: bool):
+async def _run(confirm: bool, expect_pause: bool = True):
     _STATE["calls"], _STATE["request_id"] = {}, ""
     from campaign_provisioner.agent import root_agent
     _use_scripted_model(root_agent)
@@ -114,6 +119,9 @@ async def _run(confirm: bool):
                     pending.append(p.function_call.id)
 
     await stream(types.Content(role="user", parts=[types.Part(text="NEXT27-MAIN needs 1 booth LED video wall.")]))
+    if not expect_pause:
+        assert not pending, "email channel: the chat must not pause"
+        return events
     assert pending, "the run must pause for a human decision"
     reply = types.Content(role="user", parts=[types.Part(function_response=types.FunctionResponse(
         id=pending[0], name="adk_request_confirmation", response={"confirmed": confirm}))])
@@ -144,3 +152,45 @@ def test_rejected_request_creates_nothing():
     assert "create_purchase_order" not in _tool_names(events)
     assert not get_repo().t["purchase_orders"]
     assert "budget_approved" not in [a["action"] for a in get_repo().t["audit_log"]]
+
+
+def test_email_channel_end_to_end_request_then_click(monkeypatch):
+    """Chat run ends with a pending approval and an email with links; clicking Approve then creates the PO."""
+    from urllib.parse import parse_qs, urlparse
+    from campaign_provisioner import config
+    from campaign_provisioner.repositories import get_repo
+    from campaign_provisioner.tools import budget_tools
+    from approval_service import main
+
+    class Executor:
+        def __init__(self):
+            self.calls = []
+
+        def execute(self, trigger_id, inputs):
+            self.calls.append((trigger_id, inputs))
+            return {"po_number": "PO-1", "execution_id": "e1"} if trigger_id == config.PO_TRIGGER else {"status": "NOTIFIED"}
+
+    ex = Executor()
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "email")
+    monkeypatch.setattr(config, "APPROVAL_BASE_URL", "https://approve.example")
+    monkeypatch.setattr(config, "APPROVAL_LINK_SECRET", "s3cret")
+    monkeypatch.setattr(budget_tools, "IntegrationExecutor", lambda: ex)
+    monkeypatch.setattr(main, "_executor", lambda: ex)
+    _STATE["email"] = True
+    try:
+        repo = get_repo()
+        repo.t["approvers"] = [{"approver_role": "Marketing Director", "email": "md@example.com", "active": True}]
+        events = asyncio.run(_run(confirm=True, expect_pause=False))
+    finally:
+        _STATE["email"] = False
+    tools = _tool_names(events)
+    assert "approve_budget" in tools and "create_purchase_order" not in tools
+    assert repo.get_approval_for_request(_STATE["request_id"])["status"] == "PENDING"
+    assert repo.get_budget("NEXT27-MAIN")["committed"] == 30000.0
+    body = next(i["email_body"] for t, i in ex.calls if t == config.NOTIFY_TRIGGER)
+    approve_url = next(l.split(": ", 1)[1].strip() for l in body.splitlines() if l.startswith("APPROVE:"))
+    token = parse_qs(urlparse(approve_url).query)["t"][0]
+    main.app.testing = True
+    r = main.app.test_client().post("/decide", data={"t": token})
+    assert r.status_code == 200 and b"PO-1" in r.data
+    assert repo.get_budget("NEXT27-MAIN")["committed"] == 48000.0 and repo.list_purchase_orders(_STATE["request_id"])

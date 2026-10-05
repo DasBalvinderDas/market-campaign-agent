@@ -28,6 +28,17 @@ def get_campaign_overview() -> dict:
         for b in get_repo().list_budgets()]}
 
 
+def get_approval_status(request_id: str) -> dict:
+    """Status of the emailed human approval for a request (PENDING, APPROVED, REJECTED, FAILED or EXPIRED) and
+    the purchase orders created after it.
+
+    Args:
+        request_id: Campaign request id.
+    """
+    from .. import approval_flow
+    return {"request_id": request_id, **approval_flow.approval_status(get_repo(), request_id)}
+
+
 def get_audit_trail(request_id: str = "") -> dict:
     """Return the audit trail from BigQuery (all events, or only one request).
 

@@ -61,6 +61,33 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.approvers` (
   active BOOL NOT NULL OPTIONS(description="Only active rows are notified")
 ) OPTIONS(description="Who is notified (email) when a role must approve. Configured at setup time; edit with SQL.");
 
+CREATE TABLE IF NOT EXISTS `{project}.{dataset}.request_lines` (
+  request_id STRING NOT NULL,
+  sku STRING NOT NULL,
+  requested INT64 NOT NULL OPTIONS(description="Units wanted"),
+  reserved INT64 NOT NULL OPTIONS(description="Units taken from stock"),
+  shortfall INT64 NOT NULL OPTIONS(description="Units still to buy"),
+  created_at TIMESTAMP NOT NULL
+) OPTIONS(description="What each request asked for and what stock covered; the shortfall becomes the purchase plan.");
+
+CREATE TABLE IF NOT EXISTS `{project}.{dataset}.approval_requests` (
+  approval_id STRING NOT NULL,
+  request_id STRING NOT NULL,
+  campaign_id STRING NOT NULL,
+  tier STRING NOT NULL,
+  approver_role STRING NOT NULL,
+  approver_emails STRING NOT NULL OPTIONS(description="Comma separated; only these may decide"),
+  amount FLOAT64 NOT NULL OPTIONS(description="USD, computed from the purchase plan"),
+  plan STRING OPTIONS(description="JSON: purchase lines (sku, quantity, vendor, price)"),
+  justification STRING,
+  status STRING NOT NULL OPTIONS(description="PENDING, APPROVED, REJECTED or FAILED"),
+  created_at TIMESTAMP NOT NULL,
+  expires_at TIMESTAMP NOT NULL OPTIONS(description="Links stop working after this"),
+  decided_by STRING OPTIONS(description="Email of the person who clicked"),
+  decided_at TIMESTAMP,
+  decision_note STRING
+) OPTIONS(description="Human approvals requested by email. The decision is taken by a signed link in the email.");
+
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.campaign_requests` (
   request_id STRING NOT NULL,
   campaign_id STRING NOT NULL,
