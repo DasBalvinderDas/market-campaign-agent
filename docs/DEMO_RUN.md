@@ -33,7 +33,6 @@ for the agent. Everything is configured through `.env` (section 3), which the se
  8. Reset for next run  python scripts/setup_bigquery.py --reset-demo
         │
  9. Deploy (final)      source scripts/env_setup.sh
-        │               python scripts/deploy_approval_service.py   -> the page behind the email Approve / Reject links
         │               python scripts/deploy_agent_engine.py       -> Vertex AI Agent Engine   (section 14)
 ```
 
@@ -175,37 +174,36 @@ section 4.1. Moving to 4.2 means building the `campaign-flow` integration in the
 For Each Loop, conditions, approval step) and replacing the three sub-agents' tools with calls to the new triggers.
 The exact task names depend on what your region offers, and the flow has not been built or run yet.
 
-### 4.3 Human approval by emailed link (no login)
+### 4.3 Human approval inside Application Integration (default)
 
-When the amount needs a person (above $5,000), the approver gets an **email with an Approve link and a Reject link**. They
-click, see a confirmation page with the items and total, press the button, and the flow carries on. **Nobody has to sign in to
-Google Cloud or Application Integration**: the links go to a small public web service, the **approval-link service** (Cloud Run).
+When the amount needs a person (above $5,000), the agent starts the Application Integration workflow **`request_approval`**.
+Its native **Approval** task pauses the run and emails the approver(s) an approval request with **Approve** and **Reject**.
+The approver decides on the Google-hosted approval page; nothing has to be deployed, and no public endpoint is needed.
 
 ```
- Agent (chat)                         Approver                              Approval-link service (Cloud Run)
-   │ builds the purchase plan from BigQuery                                         │
-   │ stores a PENDING approval in BigQuery (approval_requests)                      │
-   │ Application Integration "notify_approver" ──► email with APPROVE / REJECT links │
-   │ tells the user "approval requested", ends                                      │
-   │                                          click APPROVE ───────────────────────►│ checks the signed link, approver, still PENDING
-   │                                          confirmation page, press the button ─►│ marks APPROVED (once), commits the budget,
-   │                                                                                │ Application Integration "create_purchase_order",
-   │                                                                                │ writes the PO + audit rows in BigQuery
-   │                                          REJECT instead ─────────────────────► │ marks REJECTED, releases the reserved stock
+ Agent (chat)                               Application Integration                        Approver
+   │ builds the purchase plan from BigQuery, stores a PENDING approval (approval_requests)
+   │ trigger request_approval ─────────────► Approval task: run SUSPENDED, email ─────────► Approve / Reject
+   │ tells the user "approval requested", ends                                                   │
+   │                                           APPROVED ─► decision = APPROVED  ◄───────────────┤
+   │                                           REJECTED ─► decision = REJECTED  ◄───────────────┘
+   │ user: "approval status of REQ-...?"  (get_approval_status reads the execution)
+   │   APPROVED: commit budget, trigger create_purchase_order, PO + audit rows in BigQuery
+   │   REJECTED: release the reserved stock;  still waiting: reports PENDING
 ```
 
 | Question | Answer |
 |---|---|
-| Is the link safe without a login? | Each link carries a **signed token** (HMAC with `APPROVAL_LINK_SECRET`) naming the approval, the approver's email, the action and an expiry (72 hours by default). A changed or expired link is refused. |
-| Can the link be used twice or by someone else? | No. The approval must still be PENDING (the first click wins, atomically in BigQuery), and the email in the link must be one of the configured approvers for that role. |
-| What if an email scanner opens the link? | Opening a link only shows the confirmation page. The decision is taken by the button (a POST), so scanners cannot approve anything. |
-| Who decides the amount and the items? | Not the model. The amount and purchase lines are computed from BigQuery (stock shortfall x cheapest active vendor) when the approval is requested. |
-| Who runs the service? | The service account in `AGENT_SERVICE_ACCOUNT` (needs BigQuery and Application Integration access). |
-| How does the user learn the result? | Ask the agent "What is the approval status of REQ-...?" (it reads BigQuery), or look at `purchase_orders` and `audit_log`. |
-| Without the service? | If `APPROVAL_BASE_URL` is not set, approvals are asked in the chat as before (sections 9 and 14.5). |
+| Who is emailed? | The addresses given to `setup_application_integration.py --approver-email` (or `setup_all.py`), else `APPROVER_EMAILS`, else your gcloud account. They are part of the published integration version; to change them run `python scripts/setup_application_integration.py --approver-email "a@x.com" --republish`. |
+| Does the approver need to log in? | The approval page is hosted by Google, so expect a Google sign-in for the address that received the email. A login-free link needs a public endpoint (the parked Cloud Run service, below). |
+| Who decides the amount and the items? | Not the model. They are computed from BigQuery (stock shortfall x cheapest active vendor) when the approval is requested. |
+| How does the flow continue after the click? | The click resolves the suspended execution and the workflow ends with `decision`. The next `get_approval_status` call reads it, then commits the budget and creates the purchase orders (or releases the stock). First reader wins, so asking twice never orders twice. |
+| Can I check it in the console? | Yes: Application Integration > integration `campaign-provisioner-workflows` > Execution logs (suspended runs show the Approval task) and the BigQuery tables `approval_requests`, `purchase_orders`, `audit_log`. |
+| Approval workflow settings unverified | The approval task was modelled on Google's published `sample_order_processing` sample; its exact behaviour was not run against a real project. If `--check-only` / the first approval misbehaves, send the error text. |
 
-The email body contains the links as plain URLs. Turning them into styled buttons needs an HTML email task in the workflow,
-which has not been set up.
+**Parked: signed links via Cloud Run.** Setting `APPROVAL_CHANNEL=email` (and deploying `scripts/deploy_approval_service.py`)
+switches to emailed Approve / Reject links served by a public Cloud Run service with no login. It needs an organisation that allows
+public Cloud Run endpoints, so it is not the default. **Chat:** `APPROVAL_CHANNEL=chat` asks Confirm / Reject in the chat (sections 9 and 14.5).
 
 ## 5. Set up BigQuery and Application Integration
 
@@ -295,26 +293,17 @@ message, **sends an email** to the approvers and returns `status = NOTIFIED`. Th
 integration: the agent passes them in from the BigQuery `approvers` table, so changing an address needs no integration
 change. `--test` sends one real test email (to `--test-email`, default your gcloud account). Details and the manual alternative: [`integration/README.md`](../integration/README.md).
 
-### 5.3b Service account and approval links (optional but recommended)
+### 5.3b Service account (optional but recommended)
 
-If you have a service account with BigQuery and Application Integration access, set it once and the agent and the
-approval service both run as it:
+If you have a service account with BigQuery and Application Integration access, set it once and the deployed agent runs as it:
 
 ```bash
 source scripts/env_setup.sh --service-account app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com
 # or add this line to .env:  AGENT_SERVICE_ACCOUNT=app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com
 ```
 
-Then, for emailed Approve / Reject links without login (section 4.3):
-
-```bash
-python scripts/deploy_approval_service.py --dry-run   # checks everything, deploys nothing
-python scripts/deploy_approval_service.py             # deploys the Cloud Run service, saves APPROVAL_BASE_URL in .env
-```
-
-It needs the Cloud Run, Cloud Build and Artifact Registry APIs (it tells you if one is missing), the right to run things as the
-service account (Service Account User role on it), and an organisation that allows a public Cloud Run service (the approvers
-have no Google login). Problems are printed with what to do.
+Approvals use Application Integration (section 4.3), so no extra service is needed. (The parked Cloud Run link service is deployed
+with `python scripts/deploy_approval_service.py` and `APPROVAL_CHANNEL=email`; it needs a public Cloud Run endpoint.)
 
 ### 5.4 Configure `.env`
 
@@ -501,11 +490,11 @@ reset (section 8).
 | **H1** | **HITL threshold pair: $4,720 vs $5,310** (**new session**) | NEXT27-PARTNER | | none, then **Confirm** |
 | **H2** | **HITL follow-up: who approved?** (after 3 or 6) | | | audit of the human decision |
 
-> **Two ways the human decides.** With the approval-link service deployed (`APPROVAL_BASE_URL` in `.env`, section 4.3) the HITL
-> prompts below work like this: send the prompt, the agent says the approval was **emailed**, you open the email and click **Approve**
-> (or **Reject**) and press the button on the page; the purchase order is created and appears in `purchase_orders` (ask "what is the
-> approval status of REQ-...?"). Without it, the run pauses in the chat and you click Confirm / Reject there. The prompts and amounts are the
-> same either way.
+> **How the human decides.** By default (section 4.3) the HITL prompts below work like this: send the prompt, the agent says an
+> approval was **requested** in Application Integration, you open the approval email, click **Approve** (or **Reject**) on the Google page, then
+> ask "what is the approval status of REQ-...?". That call carries out the decision: the purchase order is created (or the stock released) and
+> shows in `purchase_orders`. With `APPROVAL_CHANNEL=chat` the run pauses in the chat and you click Confirm / Reject there instead. The prompts
+> and amounts are the same either way.
 
 How the tiers decide who is involved (BigQuery table `approval_policy`):
 
@@ -792,7 +781,7 @@ python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall a
 python scripts/query_agent_engine.py          # interactive chat; type exit to leave
 ```
 
-With emailed links (section 4.3) the agent answers "approval requested, emailed to <role>" and the purchase order is created when the approver clicks the link. Without the approval service (`APPROVAL_BASE_URL` not set), when a request needs a person (above $5,000), the approver gets the email and the client stops and shows:
+With the default Application Integration approval (section 4.3) the agent answers "approval requested from <role>"; after the approver clicks Approve, ask for the approval status and the purchase order is created. With `APPROVAL_CHANNEL=chat`, when a request needs a person (above $5,000), the approver gets the email and the client stops and shows:
 
 ```
   *** HUMAN APPROVAL NEEDED ***

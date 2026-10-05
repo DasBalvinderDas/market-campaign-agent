@@ -19,7 +19,7 @@ s.addText([
 s.addShape(p.ShapeType.rect,{x:7.2,y:0,w:6.13,h:7.5,fill:{color:'2B4BD8'},line:{color:'2B4BD8'}});
 const pillars = [
  ['1','Autonomous Stock & Sourcing','Reads live stock, vendor prices and budgets from BigQuery, reserves available units and calculates shortfalls. Procurement compares vendor quotes on price and lead time and recommends the best fit.'],
- ['2','Tiered Human Approval','Approval tiers and approver emails are stored in BigQuery. Routine spend is approved by policy. Higher tiers email the approver an Approve / Reject link (no login needed); the click triggers the order (Marketing Director, or VP Marketing and Finance Controller).'],
+ ['2','Tiered Human Approval','Approval tiers and approver emails are stored in BigQuery. Routine spend is approved by policy. Higher tiers start an Application Integration approval: the approver gets an Approve / Reject email, and the decision creates the order or releases the stock (Marketing Director, or VP Marketing and Finance Controller).'],
  ['3','Controlled Execution & Audit','Purchase orders are created through Application Integration and hard-blocked until an approved budget covers them. Every action is written to a BigQuery audit log, and the orchestrator returns one consolidated summary.']];
 pillars.forEach((q,i)=>{ const y=0.7+i*2.15;
  s.addText(q[0],{x:7.5,y:y+0.35,w:0.6,h:0.8,fontFace:F,fontSize:40,color:'FFFFFF',margin:0,isTextBox:true});
@@ -49,11 +49,11 @@ card(0.55,4.4,1.7,0.3,'Custom Apps / ADK Web',null,{sz:8});
 arrow(2.4,3.2,2.95,3.2); txt('Request',2.35,2.95,0.6,0.2,{sz:7,c:MUTE});
 arrow(2.95,3.9,2.4,3.9); txt('Results',2.35,3.95,0.6,0.2,{sz:7,c:MUTE});
 
-// Left: approval link service (email links, no login)
+// Left: approver (native Application Integration approval)
 box(0.4,5.0,2.0,1.35,{fill:LIGHT});
 txt('Approver (HITL)',0.45,5.03,1.9,0.28,{b:true,sz:10,c:NAVY});
-card(0.55,5.32,1.7,0.42,'Email: Approve / Reject link',null,{sz:8});
-card(0.55,5.8,1.7,0.45,'Approval Link Service','Cloud Run, no login',{sz:8});
+card(0.55,5.32,1.7,0.42,'Email: Approve / Reject',null,{sz:8});
+card(0.55,5.8,1.7,0.45,'Approval task','Application Integration',{sz:8});
 arrow(2.4,5.95,2.95,5.95);
 // Center: Google Cloud runtime
 box(2.95,1.05,7.4,5.55,{fill:'FFFFFF',line:BLUE,lw:1.25});
@@ -65,13 +65,13 @@ s.addShape(p.ShapeType.roundRect,{x:3.15,y:1.38,w:1.0,h:0.22,rectRadius:0.05,fil
 txt('Root Agent',3.15,1.38,1.0,0.22,{sz:8,b:true,c:'FFFFFF'});
 txt('Campaign Provisioner Agent (Orchestrator)',3.2,1.64,6.9,0.34,{sz:13,c:NAVY,b:true});
 box(3.25,2.02,6.8,0.5,{round:true,fill:'FFFFFF',line:LINE});
-txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:NAVY}},{text:'Greeting & Intent  \u2022  Multi-Agent Coordination  \u2022  State Coordination  \u2022  Human Approval Gate (email link)  \u2022  Result Aggregation',options:{color:INK}}],3.3,2.04,6.7,0.46,{sz:8.5});
+txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:NAVY}},{text:'Greeting & Intent  \u2022  Multi-Agent Coordination  \u2022  State Coordination  \u2022  Human Approval Gate (Application Integration)  \u2022  Result Aggregation',options:{color:INK}}],3.3,2.04,6.7,0.46,{sz:8.5});
 // sub agents
 box(3.1,2.8,7.1,2.05,{fill:'E8F0FF',line:LINE,dash:'dash'});
 s.addShape(p.ShapeType.roundRect,{x:3.15,y:2.73,w:1.0,h:0.22,rectRadius:0.05,fill:{color:BLUE},line:{color:BLUE}}); txt('3 Sub Agents',3.15,2.73,1.0,0.22,{sz:8,b:true,c:'FFFFFF'});
 const subs=[['1. Inventory Agent','(Check & Reserve Stock)',['Read stock (BigQuery)','Reserve units (BigQuery)','Report shortfall to procure'],'F0F7FF'],
  ['2. Procurement Agent','(Quote & Create PO)',['Fetch quotes (BigQuery)','Rank on price & lead time','Create PO (App Integration)'],LILAC],
- ['3. Budget Agent','(Validate & Notify)',['Check budget & tier (BigQuery)','Report back (never approves)','Approver emailed a link by the Orchestrator'],'FFF7ED']];
+ ['3. Budget Agent','(Validate)',['Check budget & tier (BigQuery)','Report back (never approves)','Orchestrator starts the approval'],'FFF7ED']];
 subs.forEach((q,i)=>{ const x=3.2+i*2.33; box(x,3.05,2.25,1.7,{fill:q[3],line:LINE});
  txt(q[0],x+0.05,3.08,2.15,0.28,{b:true,sz:10,c:PURPLE}); txt(q[1],x+0.05,3.34,2.15,0.22,{sz:8,c:PURPLE});
  box(x+0.1,3.62,2.05,1.05,{fill:'FFFFFF',line:'D6E0F5'});
@@ -93,9 +93,9 @@ arrow(10.2,3.3,10.45,3.3,true);
 const rcol=(y,h,title,items)=>{ box(10.9,y,2.1,h,{fill:LIGHT}); txt(title,10.95,y+0.03,2.0,0.28,{b:true,sz:9,c:NAVY});
  items.forEach((q,i)=>card(11.0,y+0.35+i*0.62,1.9,0.55,q[0],q[1],{sz:8}));};
 rcol(1.05,2.0,'Google BigQuery (Data)',[['Stock, Vendors, Budgets','Tables + views, read & write'],['Approval Policy & Audit','Tiers, approver emails, log']]);
-rcol(3.2,2.0,'Application Integration',[['create_purchase_order','API trigger: creates the PO'],['notify_approver','API trigger: emails the links']]);
+rcol(3.2,2.0,'Application Integration',[['create_purchase_order','API trigger: creates the PO'],['request_approval','Approval task: Approve / Reject email']]);
 rcol(5.35,1.25,'LLM & AI Framework',[['Gemini  |  ADK 2.x','Reasoning & Agent Framework']]);
 arrow(10.75,2.0,10.9,2.0,true); arrow(10.75,4.1,10.9,4.1,true); arrow(10.75,5.95,10.9,5.95,true);
 txt('HCLTech  |  Confidential',0.5,6.95,5,0.3,{sz:9,al:'left',c:MUTE});
-s.addNotes('Reference architecture. Every element is a native, editable PowerPoint shape or text box - no images. Google BigQuery holds all data (inventory, vendor prices, budget ledger, approval policy, approver emails, audit log). Google Application Integration runs the two workflow actions: create_purchase_order and notify_approver (sends the approval email). The agent is deployed to Vertex AI Agent Engine (hosted runtime and managed sessions). The human approval is an emailed Approve / Reject link handled by a small Cloud Run service (signed link, no login), which then triggers the order; purchase orders are blocked in code without an approved budget.');
+s.addNotes('Reference architecture. Every element is a native, editable PowerPoint shape or text box - no images. Google BigQuery holds all data (inventory, vendor prices, budget ledger, approval policy, approver emails, audit log). Google Application Integration runs the workflow actions: create_purchase_order and request_approval (a native Approval task that emails the approver Approve / Reject and waits; a notify_approver email trigger also exists). The agent is deployed to Vertex AI Agent Engine (hosted runtime and managed sessions). The human approval is an emailed Approve / Reject link handled by a small Cloud Run service (signed link, no login), which then triggers the order; purchase orders are blocked in code without an approved budget.');
 p.writeFile({fileName:'/home/user/market-campaign-agent/docs/Campaign_Provisioner_Management_Deck.pptx'}).then(()=>console.log('ok'));

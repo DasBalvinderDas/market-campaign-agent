@@ -42,8 +42,21 @@ Data Mapping task sets `status = NOTIFIED`. The email references only the trigge
 published email sample. The workflow emails **one address per call**; when a role has several addresses in the BigQuery `approvers`
 table, the platform calls the trigger once per address. Recipients live in BigQuery, so changing an address needs no integration
 change. You can add a Google Chat task in the console if you also want a chat message.
-The actual approve / reject click still happens in the ADK confirmation prompt; the notification tells the
-approver a decision is waiting.
+
+### Trigger `request_approval` (the human approval)
+
+| Direction | Variable | Type |
+|---|---|---|
+| in | `request_id`, `campaign_id`, `approver_role`, `approval_message` | String |
+| in | `amount` | Double |
+| out | `decision` | String (`APPROVED` / `REJECTED`) |
+
+Tasks: **Approval** (task `SuspensionTask`; message `$approval_message$`, notifications = the approver emails given to the setup
+script, reminder after 1 day, expiry after 3 days) with two branches, `isApproved = true` -> Data Mapping `decision = APPROVED`,
+`isApproved = false` -> Data Mapping `decision = REJECTED`. The run is suspended until an approver clicks Approve / Reject in the
+Google-hosted approval page. The agent reads the execution afterwards (`get_approval_status`) and carries the decision out
+(purchase orders or stock release). To build it by hand: add an **Approval** task, set the approvers, add a condition on each
+outgoing edge, and map `decision` as above.
 
 ## Automatic setup (recommended)
 

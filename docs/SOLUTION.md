@@ -59,7 +59,7 @@ campaign_provisioner/
   workflow/integration.py     Application Integration toolsets (test doubles for unit tests)
   workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit
   sub_agents/                 inventory_agent, procurement_agent, budget_agent
-approval_service/             Cloud Run service behind the email Approve / Reject links (main.py)
+approval_service/             Cloud Run service behind signed Approve / Reject links (parked, main.py)
 scripts/                      setup_all.py, setup_bigquery.py, setup_application_integration.py, verify_setup.py,
                               deploy_approval_service.py, deploy_agent_engine.py, query_agent_engine.py
 .env                          single config file in the repo root (written by setup_all.py)
@@ -82,7 +82,7 @@ docs/                         this guide, DEMO_RUN.md, management deck
 | `approvers` | Role -> email addresses notified for approval (configured at setup) |
 | `campaign_requests`, `purchase_orders` | Registered requests and created POs |
 | `request_lines` | What each request asked for, what stock covered and the shortfall (the purchase plan) |
-| `approval_requests` | Emailed human approvals: approver, amount, plan, status (PENDING / APPROVED / REJECTED / FAILED), who clicked |
+| `approval_requests` | Human approvals: approver, amount, plan, status (PENDING / APPROVED / REJECTED / FAILED), workflow execution id, decision |
 | `v_request_headroom` | Approved amount minus PO total per request (used by the guard) |
 | `audit_log` | Append-only trail of every governed action |
 
@@ -105,17 +105,22 @@ Example: *"NEXT27-MAIN needs 1 booth LED video wall."*
 6. **Decline path.** If the human rejects, nothing is committed, and the root asks `inventory_agent` to `release_inventory` for the request.
 7. **Summary.** The root aggregates stock, POs, remaining budget and approver; `get_audit_trail` reads `audit_log`.
 
-### Approval by emailed link
+### Approval by Application Integration (default)
 
 For tiers that need a person, `approve_budget` (on the orchestrator) does not pause the chat. It builds the purchase plan from
-`request_lines` and the vendor price list, stores a PENDING row in `approval_requests`, and emails each approver a signed Approve and
-Reject link through the Application Integration `notify_approver` trigger. The links lead to the **approval-link service**
-(`approval_service/`, Cloud Run, public, no login). A link carries an HMAC-signed, expiring token naming the approval, the approver's
-email and the action; the service also requires the approval to be PENDING (first click wins, atomic update in BigQuery) and the
-email to be a configured approver. Opening a link only shows a confirmation page; a button (POST) takes the decision, so email
-scanners cannot approve. On Approve the service commits the budget, creates the purchase orders through the `create_purchase_order`
-trigger and writes the audit rows; on Reject it releases the reserved stock. Without `APPROVAL_BASE_URL` the approval is asked in the
-chat instead. The service and the deployed agent run as the service account in `AGENT_SERVICE_ACCOUNT`.
+`request_lines` and the vendor price list, stores a PENDING row in `approval_requests`, and starts the Application Integration
+trigger `request_approval`. That workflow contains a native **Approval** task (a suspension): the run pauses and the configured
+approver(s) receive an Application Integration approval email with **Approve** and **Reject**. Both outcomes are branches of
+the flow and end by setting `decision = APPROVED / REJECTED`; the execution id is stored on the PENDING row.
+When the user asks `get_approval_status`, the platform reads that execution from the Application Integration API; if it carries a
+decision it is recorded atomically (first one wins) and carried out: Approve commits the budget and creates the purchase orders
+through `create_purchase_order`; Reject releases the reserved stock. Both write audit rows. The approver addresses are set in
+the published integration version (`--approver-email` on `setup_application_integration.py`, `--republish` to change them);
+the approval page is Google-hosted, so the approver is likely asked to sign in with the Google account of that address.
+
+Parked alternative (`APPROVAL_CHANNEL=email`, needs a public Cloud Run endpoint): signed HMAC links to the approval-link service
+(`approval_service/`) that decides without any login. The code stays in the repo. With `APPROVAL_CHANNEL=chat` the approval is a
+Confirm / Reject prompt in the chat.
 
 ### Governance in four layers
 
