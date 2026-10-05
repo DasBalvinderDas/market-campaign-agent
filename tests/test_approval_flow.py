@@ -275,3 +275,22 @@ def test_workflow_start_failure_is_reported(integration_channel):
     out = budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
     assert out["status"] == "error" and "403" in out["message"]
     assert repo.get_approval_for_request(rid)["status"] == "FAILED"
+
+
+def test_decision_is_found_in_other_places_of_the_execution(integration_channel):
+    repo, ex = integration_channel
+    rid = wall_request(repo)
+    budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
+    ex.execution = {"executionDetails": {"state": "SUCCEEDED", "executionSnapshots": [
+        {"executionSnapshotMetadata": {}, "checkpointTaskNumber": "1",
+         "taskExecutionDetails": [{"x": {"decision": {"stringValue": "APPROVED"}}}]}]}}
+    assert approval_flow.approval_status(repo, rid)["status"] == "APPROVED"
+
+
+def test_suspension_record_is_the_fallback(integration_channel):
+    repo, ex = integration_channel
+    rid = wall_request(repo)
+    budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
+    ex.execution = {"executionDetails": {"state": "SUCCEEDED"}}
+    ex.list_suspensions = lambda _id: [{"state": "LIFTED"}]
+    assert approval_flow.approval_status(repo, rid)["status"] == "APPROVED"

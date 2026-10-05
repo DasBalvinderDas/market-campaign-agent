@@ -50,6 +50,13 @@ class IntegrationExecutor:
     def execute(self, trigger_id: str, inputs: dict) -> dict:
         return self.start(trigger_id, inputs).get("outputParameters") or {}
 
+    def list_suspensions(self, execution_id: str) -> list:
+        """Approval (suspension) records of an execution: state PENDING / LIFTED / REJECTED."""
+        resp = self._session().get(f"{self._base()}/executions/{execution_id}/suspensions", timeout=60)
+        if resp.status_code != 200:
+            raise IntegrationError(f"Application Integration returned HTTP {resp.status_code}: {resp.text[:300]}")
+        return resp.json().get("suspensions", [])
+
     def get_execution(self, execution_id: str) -> dict:
         """State and response parameters of a (possibly suspended) execution."""
         resp = self._session().get(f"{self._base()}/executions/{execution_id}", timeout=60)

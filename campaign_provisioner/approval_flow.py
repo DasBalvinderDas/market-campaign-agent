@@ -165,6 +165,38 @@ def _param(params, name):
     return v
 
 
+def _find_decision(obj):
+    """Look for a decision value anywhere in an execution record (the field's location varies by API version)."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k == "decision":
+                found = v.get("stringValue") if isinstance(v, dict) else v
+                if str(found).upper() in ("APPROVED", "REJECTED"):
+                    return str(found).upper()
+            hit = _find_decision(v)
+            if hit:
+                return hit
+    elif isinstance(obj, list):
+        for v in obj:
+            hit = _find_decision(v)
+            if hit:
+                return hit
+    return ""
+
+
+def _suspension_decision(executor, execution_id):
+    """Fallback: the approval record itself. REJECTED = rejected; LIFTED = approved; PENDING = still waiting."""
+    try:
+        states = {str(s.get("state", "")).upper() for s in executor.list_suspensions(execution_id)}
+    except Exception:  # noqa: BLE001 - optional fallback
+        return ""
+    if "REJECTED" in states:
+        return "REJECTED"
+    if states == {"LIFTED"}:
+        return "APPROVED"
+    return ""
+
+
 def request_integration_approval(repo, executor, request_id: str, campaign_id: str, justification: str,
                                  policy: dict, now: datetime | None = None) -> dict:
     """Start the Application Integration approval workflow. It emails the approver(s) an Approve / Reject request and
@@ -223,7 +255,9 @@ def sync_integration_decision(repo, executor, approval: dict) -> dict:
         approval["decision_note"] = f"could not read the approval workflow yet: {str(exc)[:150]}"
         return approval
     state = str((ex.get("executionDetails") or {}).get("state") or ex.get("state") or "").upper()
-    decision = str(_param(ex.get("responseParameters") or ex.get("responseParams"), "decision") or "").upper()
+    exec_id = note[len(_EXEC_PREFIX):]
+    decision = (str(_param(ex.get("responseParameters") or ex.get("responseParams"), "decision") or "").upper()
+                or _find_decision(ex) or _suspension_decision(executor, exec_id))
     if state in ("FAILED", "CANCELLED", "CANCELED"):
         repo.set_approval_note(approval["approval_id"], "FAILED", f"approval workflow {state.lower()}")
         _audit(repo, approval["request_id"], "orchestrator", "approval_workflow_failed", state=state)
