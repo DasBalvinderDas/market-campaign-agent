@@ -205,3 +205,72 @@ def test_status_tool(email_channel):
     approval_flow.request_human_approval(repo, FakeExecutor(), rid, "NEXT27-MAIN", "x", repo.get_policy(18000))
     assert orchestration_tools.get_approval_status(rid)["status"] == "PENDING"
     assert orchestration_tools.get_approval_status("REQ-NONE")["status"] == "none"
+
+
+# ---------------------------------------------------------------- native Application Integration approval
+class IntegrationExecutorFake(FakeExecutor):
+    def __init__(self):
+        super().__init__()
+        self.execution = {"executionDetails": {"state": "SUSPENDED"}}
+
+    def start(self, trigger_id, inputs):
+        self.calls.append((trigger_id, inputs))
+        return {"executionId": "exec-9", "executionFailed": False}
+
+    def get_execution(self, execution_id):
+        assert execution_id == "exec-9"
+        return self.execution
+
+
+@pytest.fixture
+def integration_channel(monkeypatch, repo):
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "integration")
+    repo.t["approvers"] = [{"approver_role": "Marketing Director", "email": "md@example.com", "active": True}]
+    ex = IntegrationExecutorFake()
+    monkeypatch.setattr(budget_tools, "IntegrationExecutor", lambda: ex)
+    monkeypatch.setattr(approval_flow, "_default_executor", lambda: ex)
+    return repo, ex
+
+
+def test_integration_channel_starts_the_workflow_and_commits_nothing(integration_channel):
+    repo, ex = integration_channel
+    rid = wall_request(repo)
+    assert budget_tools.requires_human(18000, "NEXT27-MAIN") is False  # no chat pause
+    out = budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
+    assert out["status"] == "pending_approval" and out["channel"] == "application_integration"
+    trig, inputs = ex.calls[0]
+    assert trig == config.APPROVAL_TRIGGER and inputs["amount"] == 18000.0 and "ExpoVision" in inputs["approval_message"]
+    assert repo.get_approval_for_request(rid)["status"] == "PENDING"
+    assert repo.get_budget("NEXT27-MAIN")["committed"] == 30000.0 and not repo.list_purchase_orders(rid)
+    assert approval_flow.approval_status(repo, rid)["status"] == "PENDING"  # still suspended: nothing happens
+
+
+def test_approved_in_integration_creates_the_po_once(integration_channel):
+    repo, ex = integration_channel
+    rid = wall_request(repo)
+    budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
+    ex.execution = {"executionDetails": {"state": "SUCCEEDED"}, "responseParameters": {"decision": {"stringValue": "APPROVED"}}}
+    out = approval_flow.approval_status(repo, rid)
+    assert out["status"] == "APPROVED" and [p["po_number"] for p in out["purchase_orders"]] == ["PO-BOOTH-LEDWALL"]
+    assert repo.get_budget("NEXT27-MAIN")["committed"] == 48000.0
+    approval_flow.approval_status(repo, rid)  # asking again must not order again
+    assert len(repo.list_purchase_orders(rid)) == 1
+
+
+def test_rejected_in_integration_releases_stock(integration_channel):
+    repo, ex = integration_channel
+    rid = wall_request(repo)
+    budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
+    ex.execution = {"executionDetails": {"state": "SUCCEEDED"}, "responseParameters": {"decision": "REJECTED"}}
+    out = approval_flow.approval_status(repo, rid)
+    assert out["status"] == "REJECTED" and not out["purchase_orders"]
+    assert repo.get_budget("NEXT27-MAIN")["committed"] == 30000.0
+
+
+def test_workflow_start_failure_is_reported(integration_channel):
+    repo, ex = integration_channel
+    ex.start = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("403 no permission"))
+    rid = wall_request(repo)
+    out = budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
+    assert out["status"] == "error" and "403" in out["message"]
+    assert repo.get_approval_for_request(rid)["status"] == "FAILED"

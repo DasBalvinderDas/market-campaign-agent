@@ -15,18 +15,20 @@ _CHAT_APPROVAL = '''   For tiers that need a human the platform pauses until the
    - Rejected or declined (or over budget): ask inventory_agent to release the request's stock, then explain and
      offer alternatives (smaller quantity, cheaper vendor, other campaign). Never create purchase orders.'''
 
-_EMAIL_APPROVAL = '''   - If it returns status approved (small amounts are auto-approved): transfer to procurement_agent to create the
+_ASYNC_APPROVAL = '''   - If it returns status approved (small amounts are auto-approved): transfer to procurement_agent to create the
      purchase orders (Application Integration workflow).
-   - If it returns pending_approval: the approver was emailed Approve / Reject links. Do NOT create purchase orders
-     and do NOT transfer to procurement_agent. Tell the user who was emailed, the amount and that the purchase
-     orders are created automatically when the approver clicks Approve (stock is released on Reject). They can ask
-     for the status later (get_approval_status). Then finish.
+   - If it returns pending_approval: an approval request was sent to the approver (Application Integration email
+     with Approve / Reject). Do NOT create purchase orders and do NOT transfer to procurement_agent. Tell the
+     user the approver role, the amount and that the approver must decide. Once they have, the user asks for the
+     status (get_approval_status): it creates the purchase orders if Approved, or releases the stock if Rejected,
+     and reports the PO numbers. Then finish. When the user asks for the status, call get_approval_status and
+     report its result.
    - If it says no purchase plan exists: transfer to inventory_agent to reserve_inventory every item (even when 0
      are free), then call approve_budget again.
    - If it returns rejected (over budget): ask inventory_agent to release the request's stock, explain and offer
      alternatives. If it returns an error or NO_APPROVERS: explain the problem; do not create purchase orders.'''
 
-_APPROVAL_TEXT = _EMAIL_APPROVAL if config.APPROVAL_CHANNEL == "email" else _CHAT_APPROVAL
+_APPROVAL_TEXT = _ASYNC_APPROVAL if config.async_approval() else _CHAT_APPROVAL
 
 INSTRUCTION = f"""
 You are The Campaign Provisioner, the central governing agent for {config.EVENT_NAME} marketing logistics.

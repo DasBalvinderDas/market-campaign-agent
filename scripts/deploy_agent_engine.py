@@ -40,7 +40,8 @@ from _common import guarded, preflight, resolve_project  # noqa: E402
 
 RUNTIME_KEYS = ["BQ_DATASET", "BQ_LOCATION", "APP_INTEGRATION_NAME", "APP_INTEGRATION_LOCATION",
                 "APP_INTEGRATION_PO_TRIGGER", "APP_INTEGRATION_NOTIFY_TRIGGER", "CAMPAIGN_MODEL",
-                "APPROVAL_BASE_URL", "APPROVAL_LINK_SECRET", "APPROVAL_LINK_TTL_HOURS"]
+                "APPROVAL_BASE_URL", "APPROVAL_LINK_SECRET", "APPROVAL_LINK_TTL_HOURS", "APPROVAL_CHANNEL",
+                "APP_INTEGRATION_APPROVAL_TRIGGER"]
 RESOURCE_RE = re.compile(r"projects/[^/\s]+/locations/[^/\s]+/reasoningEngines/\d+")
 
 
@@ -246,9 +247,10 @@ def run(args, project=""):
     env_values = read_env(ROOT / ".env")
     args.service_account = args.service_account or env_values.get("AGENT_SERVICE_ACCOUNT") or None
     print(f"  Runs as: {args.service_account or 'the Agent Engine service agent (default)'}")
-    if not env_values.get("APPROVAL_BASE_URL"):
-        print("  NOTE: no approval-link service yet, so approvals are asked in the chat. For emailed Approve / Reject links "
-              "run: python scripts/deploy_approval_service.py")
+    if env_values.get("APPROVAL_BASE_URL") or env_values.get("APPROVAL_CHANNEL") == "email":
+        print("  Approvals: emailed links served by the Cloud Run approval service")
+    else:
+        print("  Approvals: native Application Integration approval (the approver gets an Approve / Reject email)")
     update_id = pick_update_id(args, env_values)
     args.update = update_id
     print(f"  {'Updating the existing deployment ' + update_id + ' (use --new for a separate one)' if update_id else 'Creating a new deployment'}")

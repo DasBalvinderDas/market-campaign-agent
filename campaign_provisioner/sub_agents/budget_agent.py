@@ -5,7 +5,7 @@ from ..tools.budget_tools import check_budget, get_approval_policy
 from ..workflow import guard
 from ..workflow.integration import build_notify_tool
 
-_EMAIL = config.APPROVAL_CHANNEL == "email"
+_EMAIL = config.async_approval()
 
 _NOTIFY_STEP = (
     "3) If the policy requires a human, call the notify approver tool (request_id, campaign_id, amount, "
@@ -14,8 +14,7 @@ _NOTIFY_STEP = (
     "mention it. "
 )
 _NO_NOTIFY_STEP = (
-    "3) Do not email anyone: when a human must approve, the orchestrator sends the approval email with its "
-    "Approve / Reject links itself. "
+    "3) Do not email anyone: when a human must approve, the orchestrator starts the approval request itself. "
 )
 
 budget_agent = LlmAgent(

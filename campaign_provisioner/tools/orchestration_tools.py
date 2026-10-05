@@ -29,7 +29,7 @@ def get_campaign_overview() -> dict:
 
 
 def get_approval_status(request_id: str) -> dict:
-    """Status of the emailed human approval for a request (PENDING, APPROVED, REJECTED, FAILED or EXPIRED) and
+    """Status of the human approval (Application Integration approval or emailed links) for a request (PENDING, APPROVED, REJECTED, FAILED or EXPIRED) and
     the purchase orders created after it.
 
     Args:

@@ -43,7 +43,7 @@ def approve_budget(request_id: str, campaign_id: str, amount: float, justificati
         amount: Total USD to commit.
         justification: Why the spend is needed (shown to the human approver).
     """
-    if config.APPROVAL_CHANNEL == "email":
+    if config.async_approval():
         gated = _email_approval_if_needed(request_id, campaign_id, amount, justification)
         if gated is not None:
             return gated
@@ -56,8 +56,9 @@ def approve_budget(request_id: str, campaign_id: str, amount: float, justificati
 
 
 def _email_approval_if_needed(request_id, campaign_id, amount, justification):
-    """Email channel: a tier that needs a human is not decided here. The approver gets Approve / Reject links by
-    email and the decision is taken by the approval-link service. Returns None when no human is needed."""
+    """Email / integration channel: a tier that needs a human is not decided here. The approver is asked outside the
+    chat (Application Integration approval, or emailed links) and the decision is carried out later. Returns None
+    when no human is needed."""
     from .. import approval_flow
 
     repo = get_repo()
@@ -71,8 +72,9 @@ def _email_approval_if_needed(request_id, campaign_id, amount, justification):
         return None  # over budget: _approve rejects it directly, no human needed
     if not repo.get_request(request_id):
         return {"status": "error", "message": f"Unknown request '{request_id}'."}
-    return approval_flow.request_human_approval(repo, IntegrationExecutor(), request_id, campaign_id, justification,
-                                                policy)
+    start = (approval_flow.request_integration_approval if config.APPROVAL_CHANNEL == "integration"
+             else approval_flow.request_human_approval)
+    return start(repo, IntegrationExecutor(), request_id, campaign_id, justification, policy)
 
 
 def _approve(request_id: str, campaign_id: str, amount: float, justification: str) -> dict:
@@ -102,7 +104,7 @@ def requires_human(amount: float, campaign_id: str = "", **_) -> bool:
     The tier comes from BigQuery. Amounts that exceed the remaining budget skip the
     human prompt, because there is nothing to approve: the tool rejects them directly.
     """
-    if config.APPROVAL_CHANNEL == "email":
+    if config.async_approval():
         return False  # the human decides through the emailed link, not in the chat
     repo = get_repo()
     budget = repo.get_budget(campaign_id) if campaign_id else None

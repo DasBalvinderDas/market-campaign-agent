@@ -47,7 +47,7 @@ def run(args, project=""):
 
     if args.integration:
         from google.adk.tools.application_integration_tool import ApplicationIntegrationToolset
-        for trig in (config.PO_TRIGGER, config.NOTIFY_TRIGGER):
+        for trig in (config.PO_TRIGGER, config.NOTIFY_TRIGGER, config.APPROVAL_TRIGGER):
             ts = ApplicationIntegrationToolset(project=project, location=config.APP_INTEGRATION_LOCATION,
                                                integration=config.APP_INTEGRATION_NAME, triggers=[trig])
             print(f"Integration trigger {trig}: tools = {[t.name for t in asyncio.run(ts.get_tools())]}")

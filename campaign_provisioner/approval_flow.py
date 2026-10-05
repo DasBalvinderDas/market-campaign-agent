@@ -151,13 +151,101 @@ def finalize(repo, executor, approval: dict, decision: str, decided_by: str) -> 
     return {"status": "approved", "pos": pos, "failed": failed, "amount": amount}
 
 
-def approval_status(repo, request_id: str) -> dict:
+# ---------------------------------------------------------------- native Application Integration approval
+_EXEC_PREFIX = "execution:"
+
+
+def _param(params, name):
+    """A parameter from an execution's response, whether it is plain or a typed {"stringValue": ...} value."""
+    if isinstance(params, list):  # [{"key": ..., "value": ...}]
+        params = {p.get("key"): p.get("value") for p in params if isinstance(p, dict)}
+    v = (params or {}).get(name)
+    if isinstance(v, dict):
+        v = v.get("stringValue", next(iter(v.values()), None))
+    return v
+
+
+def request_integration_approval(repo, executor, request_id: str, campaign_id: str, justification: str,
+                                 policy: dict, now: datetime | None = None) -> dict:
+    """Start the Application Integration approval workflow. It emails the approver(s) an Approve / Reject request and
+    waits. The decision is picked up by approval_status() and then carried out by finalize()."""
+    plan = build_plan(repo, request_id)
+    if not plan["lines"]:
+        return {"status": "error", "message": "No purchase plan exists for this request: either everything is covered by stock, or the stock step did "
+                                              "not record it. Have inventory_agent call reserve_inventory for every item (even when 0 units "
+                                              "are free), then call approve_budget again."}
+    role = policy["approver_role"]
+    emails = repo.get_approver_emails(role)
+    now = now or datetime.now(timezone.utc)
+    approval = {"approval_id": new_id("APR"), "request_id": request_id, "campaign_id": campaign_id,
+                "tier": policy["tier"], "approver_role": role, "approver_emails": ",".join(emails) or "(integration)",
+                "amount": plan["total"], "plan": json.dumps(plan), "justification": justification,
+                "expires_at": now + timedelta(hours=config.APPROVAL_LINK_TTL_HOURS)}
+    items = "; ".join(f"{ln['quantity']} x {ln['sku']} from {ln['vendor']} (USD {ln['total']:,.2f})"
+                      for ln in plan["lines"])
+    message = (f"{justification or 'A campaign purchase needs your approval.'} Request {request_id} for {campaign_id}: "
+               f"{items}. Total USD {plan['total']:,.2f} (approver role: {role}). Approve to create the purchase "
+               f"orders, Reject to release the reserved stock.")
+    repo.create_approval(approval)
+    try:
+        body = executor.start(config.APPROVAL_TRIGGER, {
+            "request_id": request_id, "campaign_id": campaign_id, "approver_role": role,
+            "amount": float(plan["total"]), "approval_message": message})
+        execution_id = body.get("executionId")
+        if not execution_id:
+            raise RuntimeError("the workflow returned no executionId")
+    except Exception as exc:  # noqa: BLE001
+        repo.set_approval_note(approval["approval_id"], "FAILED", f"approval workflow did not start: {str(exc)[:200]}")
+        _audit(repo, request_id, "orchestrator", "approval_workflow_failed", error=str(exc)[:300])
+        return {"status": "error", "message": f"The approval workflow could not be started: {str(exc)[:300]}"}
+    repo.set_approval_note(approval["approval_id"], "PENDING", _EXEC_PREFIX + str(execution_id))
+    _audit(repo, request_id, "orchestrator", "approval_requested", approval_id=approval["approval_id"],
+           approver_role=role, amount=plan["total"], channel="application_integration", execution_id=execution_id)
+    return {"status": "pending_approval", "approval_id": approval["approval_id"], "amount": plan["total"],
+            "approver_role": role, "channel": "application_integration",
+            "next_step": "An approval request was started in Application Integration and the approver was emailed "
+                         "(Approve / Reject). Do NOT create purchase orders. Tell the user the approver must decide, "
+                         "and that when they ask for the status (get_approval_status) the purchase orders are "
+                         "created if it was approved, or the stock is released if it was rejected."}
+
+
+def sync_integration_decision(repo, executor, approval: dict) -> dict:
+    """If the approver has decided in Application Integration, record it and carry it out. Returns the new row."""
+    note = approval.get("decision_note") or ""
+    if approval["status"] != "PENDING" or not note.startswith(_EXEC_PREFIX):
+        return approval
+    try:
+        ex = executor.get_execution(note[len(_EXEC_PREFIX):])
+    except Exception as exc:  # noqa: BLE001 - keep PENDING; the next status check retries
+        approval["decision_note"] = f"could not read the approval workflow yet: {str(exc)[:150]}"
+        return approval
+    state = str((ex.get("executionDetails") or {}).get("state") or ex.get("state") or "").upper()
+    decision = str(_param(ex.get("responseParameters") or ex.get("responseParams"), "decision") or "").upper()
+    if state in ("FAILED", "CANCELLED", "CANCELED"):
+        repo.set_approval_note(approval["approval_id"], "FAILED", f"approval workflow {state.lower()}")
+        _audit(repo, approval["request_id"], "orchestrator", "approval_workflow_failed", state=state)
+    elif decision in ("APPROVED", "REJECTED"):
+        by = "Application Integration approval"
+        if repo.decide_approval(approval["approval_id"], decision, by, "decided in Application Integration"):
+            finalize(repo, executor, approval, "approve" if decision == "APPROVED" else "reject", by)
+    return repo.get_approval(approval["approval_id"]) or approval
+
+
+def approval_status(repo, request_id: str, executor=None) -> dict:
     a = repo.get_approval_for_request(request_id)
     if not a:
-        return {"status": "none", "message": "No email approval was requested for this request."}
+        return {"status": "none", "message": "No human approval was requested for this request."}
+    if config.APPROVAL_CHANNEL == "integration" and a["status"] == "PENDING":
+        a = sync_integration_decision(repo, executor or _default_executor(), a)
     out = {"status": a["status"], "approver_role": a["approver_role"], "amount": float(a["amount"]),
-           "decided_by": a.get("decided_by"), "note": a.get("decision_note"),
+           "decided_by": a.get("decided_by"),
+           "note": None if str(a.get("decision_note") or "").startswith(_EXEC_PREFIX) else a.get("decision_note"),
            "purchase_orders": repo.list_purchase_orders(request_id)}
     if a["status"] == "PENDING" and a["expires_at"] <= datetime.now(timezone.utc):
         out["status"] = "EXPIRED"
     return out
+
+
+def _default_executor():
+    from .workflow.integration_client import IntegrationExecutor
+    return IntegrationExecutor()

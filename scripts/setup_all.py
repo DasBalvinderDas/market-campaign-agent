@@ -86,7 +86,8 @@ def main():
                                     approver_email=args.approver_email, skip_preflight=True)
     step("BigQuery data", lambda: bq.run(bq_args, project=project))
     ai_args = types.SimpleNamespace(test=args.test, check_only=False, provision_region=False,
-                                    no_email=args.no_email, test_email=args.test_email, skip_preflight=True)
+                                    no_email=args.no_email, test_email=args.test_email, skip_preflight=True,
+                                    approver_email=args.approver_email, republish=False)
     step("Application Integration", lambda: ai.run(ai_args, project=project))
 
     if not args.no_env and all(v == "OK" for v in results.values()):

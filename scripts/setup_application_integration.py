@@ -5,7 +5,7 @@
   python scripts/setup_application_integration.py --test     # ...then run both triggers once with sample data
   python scripts/setup_application_integration.py --check-only   # only check, change nothing
 
-It builds integration "campaign-provisioner-workflows" with two API triggers through the Application
+It builds integration "campaign-provisioner-workflows" with three API triggers through the Application
 Integration REST API:
   create_purchase_order  in: request_id, campaign_id, sku, vendor_id, quantity, total_amount
                          out: po_number (PO-<request_id>-<sku>), execution_id
@@ -23,6 +23,7 @@ GOOGLE_CLOUD_PROJECT, else your active gcloud project. If an API is not enabled 
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -35,6 +36,7 @@ NAME = os.getenv("APP_INTEGRATION_NAME", "campaign-provisioner-workflows")
 LOCATION = os.getenv("APP_INTEGRATION_LOCATION", "us-central1")
 PO_TRIGGER = os.getenv("APP_INTEGRATION_PO_TRIGGER", "api_trigger/create_purchase_order")
 NOTIFY_TRIGGER = os.getenv("APP_INTEGRATION_NOTIFY_TRIGGER", "api_trigger/notify_approver")
+APPROVAL_TRIGGER = os.getenv("APP_INTEGRATION_APPROVAL_TRIGGER", "api_trigger/request_approval")
 API = "https://integrations.googleapis.com/v1"
 
 S, I, D = "STRING_VALUE", "INT_VALUE", "DOUBLE_VALUE"
@@ -45,6 +47,8 @@ PO_OUT = {"po_number": S, "execution_id": S}
 NOTIFY_IN = {"request_id": S, "campaign_id": S, "approver_role": S, "approver_email": S, "email_subject": S,
              "email_body": S, "summary": S, "amount": D}
 NOTIFY_OUT = {"status": S}
+APPROVAL_IN = {"request_id": S, "campaign_id": S, "approver_role": S, "amount": D, "approval_message": S}
+APPROVAL_OUT = {"decision": S}
 
 SAMPLE = {
     PO_TRIGGER: {"request_id": {"stringValue": "SETUP-TEST"}, "campaign_id": {"stringValue": "NEXT27-MAIN"},
@@ -112,8 +116,35 @@ def _email_task(task_id, next_id):
                     "jsonValue": json.dumps({"@type": "type.googleapis.com/enterprise.crm.eventbus.proto.EmailConfig"})}}}}
 
 
-def build_version(email: bool = True) -> dict:
-    """The IntegrationVersion body: two API triggers (purchase order, notify approver)."""
+def _approval_task(task_id, approver_emails, approve_id, reject_id):
+    """Native Application Integration approval (task name SuspensionTask), modelled on Google's
+    sample_order_processing sample. The run suspends here; each approver gets an email with Approve / Reject.
+    Edges: isApproved = true -> approve_id, false -> reject_id."""
+    notes = {"protoValues": [{"@type": "type.googleapis.com/enterprise.crm.eventbus.proto.Notification",
+                              "emailAddress": {"email": e}} for e in approver_emails]}
+    expiry = {"@type": "type.googleapis.com/enterprise.crm.eventbus.proto.SuspensionExpiration",
+              "remindAfterMs": 86400000, "expireAfterMs": 259200000}
+    flag = f"$`Task_{task_id}_isApproved`$"
+    return {"task": "SuspensionTask", "taskId": task_id, "displayName": "Approval",
+            "nextTasks": [{"taskId": approve_id, "condition": f"{flag} = true", "displayName": "Approved"},
+                          {"taskId": reject_id, "condition": f"{flag} = false", "displayName": "Rejected"}],
+            "taskExecutionStrategy": "WHEN_ALL_SUCCEED", "successPolicy": {"finalState": "SUSPENDED"},
+            "externalTaskType": "NORMAL_TASK",
+            "parameters": {
+                "customMessage": {"key": "customMessage", "value": {"stringValue": "$approval_message$"}},
+                "isApproved": {"key": "isApproved", "value": {"stringArray": {"stringValues": [flag]}}},
+                "notifications": {"key": "notifications", "value": {"jsonValue": json.dumps(notes)}},
+                "suspensionExpiration": {"key": "suspensionExpiration", "value": {"jsonValue": json.dumps(expiry)}}}}
+
+
+def _decision_task(task_id, decision):
+    field = {"inputField": {"fieldType": S, "transformExpression": _lit(decision)},
+             "outputField": _out_field("decision")}
+    return _mapping_task(task_id, f"Decision: {decision}", [field])
+
+
+def build_version(email: bool = True, approver_emails=None) -> dict:
+    """The IntegrationVersion body: three API triggers (purchase order, notify approver, request approval)."""
     po_number = {"inputField": {"fieldType": S, "transformExpression": {
         "initialValue": {"literalValue": {"stringValue": "PO-"}},
         "transformationFunctions": [_concat(_ref("request_id")), _concat(_lit("-")), _concat(_ref("sku"))]}},
@@ -125,7 +156,8 @@ def build_version(email: bool = True) -> dict:
               "outputField": _out_field("status")}
 
     params = {}
-    for group, kind in ((PO_IN, "IN"), (NOTIFY_IN, "IN"), (PO_OUT, "OUT"), (NOTIFY_OUT, "OUT")):
+    for group, kind in ((PO_IN, "IN"), (NOTIFY_IN, "IN"), (APPROVAL_IN, "IN"), (PO_OUT, "OUT"), (NOTIFY_OUT, "OUT"),
+                        (APPROVAL_OUT, "OUT")):
         for key, typ in group.items():
             params.setdefault(key, {"key": key, "displayName": key, "dataType": typ, "inputOutputType": kind})
     tasks = [_mapping_task("1", "Build PO number", [po_number, execution_id])]
@@ -135,13 +167,27 @@ def build_version(email: bool = True) -> dict:
         tasks += [_email_task("2", "3"), _mapping_task("3", "Mark approver notified", [status])]
     else:
         tasks.append(_mapping_task("2", "Mark approver notified", [status]))
+    tasks += [_approval_task("10", approver_emails or ["approver@example.com"], "11", "12"),
+              _decision_task("11", "APPROVED"), _decision_task("12", "REJECTED")]
     return {
-        "description": "Campaign Provisioner workflows: create purchase order, notify approver by email.",
+        "description": "Campaign Provisioner workflows: create purchase order, notify approver, human approval.",
         "integrationParameters": list(params.values()),
         "triggerConfigs": [_trigger(1, PO_TRIGGER, "1", PO_IN, PO_OUT),
-                           _trigger(2, NOTIFY_TRIGGER, "2", NOTIFY_IN, NOTIFY_OUT)],
+                           _trigger(2, NOTIFY_TRIGGER, "2", NOTIFY_IN, NOTIFY_OUT),
+                           _trigger(3, APPROVAL_TRIGGER, "10", APPROVAL_IN, APPROVAL_OUT)],
         "taskConfigs": tasks,
     }
+
+
+def approver_addresses(specs=None):
+    """Emails the native approval step notifies: from --approver-email specs ([ROLE=]EMAIL[,EMAIL]), else the
+    APPROVER_EMAILS env var, else the active gcloud account. They are fixed in the published integration version;
+    re-run with --republish to change them."""
+    text = ";".join(specs or []) or os.getenv("APPROVER_EMAILS", "")
+    found = list(dict.fromkeys(re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", text)))
+    if not found and default_account_email():
+        found = [default_account_email()]
+    return found
 
 
 # ---------------------------------------------------------------- API calls
@@ -187,7 +233,7 @@ def run(args, project=""):
 def run_with(http, args, project):
     parent = f"{API}/projects/{project}/locations/{LOCATION}"
     base = f"{parent}/integrations/{NAME}"
-    wanted = {PO_TRIGGER, NOTIFY_TRIGGER}
+    wanted = {PO_TRIGGER, NOTIFY_TRIGGER, APPROVAL_TRIGGER}
     print(f"Project: {project}   Integration: {NAME}   Region: {LOCATION}")
 
     if args.provision_region:
@@ -199,15 +245,16 @@ def run_with(http, args, project):
     exists, found = _published_triggers(http, base)
     if exists is None:
         _fail(found, project)
+    approvers = approver_addresses(getattr(args, "approver_email", None))
 
-    if wanted <= found:
+    if wanted <= found and not getattr(args, "republish", False):
         print(f"  OK  already published: {', '.join(sorted(wanted))}")
     elif args.check_only:
         sys.exit(f"\nNot set up yet (missing: {', '.join(sorted(wanted - found))}). Run without --check-only to create it.")
     else:
         print("  creating the integration and publishing it ..." if not exists else "  adding a new version and publishing it ...")
         r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
-                      json=build_version(email=not args.no_email))
+                      json=build_version(email=not args.no_email, approver_emails=approvers))
         if r.status_code != 200:
             _fail(r, project)
         version = r.json()["name"]
@@ -244,6 +291,9 @@ def main():
     ap.add_argument("--project", default=None)
     ap.add_argument("--test", action="store_true", help="execute both triggers once with sample data")
     ap.add_argument("--test-email", default=None, help="recipient for the --test approval email (default: your gcloud account)")
+    ap.add_argument("--approver-email", action="append", default=[], metavar="[ROLE=]EMAIL[,EMAIL]",
+                    help="who gets the native approval email (Approve / Reject); default: APPROVER_EMAILS, else your gcloud account")
+    ap.add_argument("--republish", action="store_true", help="publish a new version even if the triggers exist (e.g. new approver emails)")
     ap.add_argument("--no-email", action="store_true", help="do not add the Send Email task to notify_approver")
     ap.add_argument("--check-only", action="store_true", help="check only; do not create anything")
     ap.add_argument("--provision-region", action="store_true",
@@ -251,7 +301,7 @@ def main():
     ap.add_argument("--print-definition", action="store_true", help="print the integration definition JSON and exit")
     args = ap.parse_args()
     if args.print_definition:
-        print(json.dumps(build_version(email=not args.no_email), indent=2))
+        print(json.dumps(build_version(email=not args.no_email, approver_emails=approver_addresses(args.approver_email)), indent=2))
         return
     run(args, project=resolve_project(args.project))
 

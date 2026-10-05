@@ -13,14 +13,14 @@ def test_version_definition_is_consistent():
     v = sai.build_version()
     task_ids = {t["taskId"] for t in v["taskConfigs"]}
     declared = {p["key"] for p in v["integrationParameters"]}
-    assert [t["triggerId"] for t in v["triggerConfigs"]] == [sai.PO_TRIGGER, sai.NOTIFY_TRIGGER]
+    assert [t["triggerId"] for t in v["triggerConfigs"]] == [sai.PO_TRIGGER, sai.NOTIFY_TRIGGER, sai.APPROVAL_TRIGGER]
     for t in v["triggerConfigs"]:
         assert {s["taskId"] for s in t["startTasks"]} <= task_ids
         assert set(t["inputVariables"]["names"]) | set(t["outputVariables"]["names"]) <= declared
         assert t["properties"]["Trigger name"] == t["triggerId"].split("/", 1)[1]
     # the contract the agent's guard relies on
     assert {"request_id", "sku", "quantity", "vendor_id", "total_amount", "campaign_id"} <= declared
-    assert {"po_number", "execution_id", "status"} <= declared
+    assert {"po_number", "execution_id", "status", "decision", "approval_message"} <= declared
 
 
 def test_mapping_config_is_valid_json_and_sets_outputs():
@@ -44,7 +44,7 @@ class FakeHttp:
         self.calls.append(("GET", url, None))
         if not self.existing:
             return Resp(404)
-        trig = [{"triggerId": sai.PO_TRIGGER}, {"triggerId": sai.NOTIFY_TRIGGER}] if self.published else []
+        trig = [{"triggerId": sai.PO_TRIGGER}, {"triggerId": sai.NOTIFY_TRIGGER}, {"triggerId": sai.APPROVAL_TRIGGER}] if self.published else []
         return Resp(200, {"integrationVersions": [{"state": "ACTIVE" if self.published else "DRAFT", "triggerConfigs": trig}]})
 
     def post(self, url, json=None, params=None):
@@ -112,9 +112,31 @@ def test_notify_trigger_sends_one_email_using_only_trigger_inputs():
     for ref in ("approver_email", "email_subject", "email_body"):
         assert declared[ref]["inputOutputType"] == "IN" and declared[ref]["dataType"] == "STRING_VALUE"
     assert [n["taskId"] for n in email["nextTasks"]] == ["3"]
-    assert [t["startTasks"][0]["taskId"] for t in v["triggerConfigs"]] == ["1", "2"]
+    assert [t["startTasks"][0]["taskId"] for t in v["triggerConfigs"]] == ["1", "2", "10"]
     assert not any(k in declared for k in ("recipient_list", "approver_emails"))
 
 
 def test_no_email_variant_has_no_email_task():
     assert all(t["task"] != "EmailTask" for t in sai.build_version(email=False)["taskConfigs"])
+
+
+def test_native_approval_task_branches_on_the_decision():
+    v = sai.build_version(approver_emails=["a@x.com", "b@x.com"])
+    tasks = {t["taskId"]: t for t in v["taskConfigs"]}
+    a = tasks["10"]
+    assert a["task"] == "SuspensionTask" and a["successPolicy"] == {"finalState": "SUSPENDED"}
+    notes = json.loads(a["parameters"]["notifications"]["value"]["jsonValue"])["protoValues"]
+    assert [n["emailAddress"]["email"] for n in notes] == ["a@x.com", "b@x.com"]
+    assert a["parameters"]["customMessage"]["value"]["stringValue"] == "$approval_message$"
+    assert {n["taskId"]: n["condition"] for n in a["nextTasks"]} == {
+        "11": "$`Task_10_isApproved`$ = true", "12": "$`Task_10_isApproved`$ = false"}
+    outs = {}
+    for tid in ("11", "12"):
+        cfg = json.loads(tasks[tid]["parameters"]["FieldMappingConfigTaskParameterKey"]["value"]["jsonValue"])
+        outs[tid] = cfg["mappedFields"][0]["inputField"]["transformExpression"]["initialValue"]["literalValue"]["stringValue"]
+    assert outs == {"11": "APPROVED", "12": "REJECTED"}
+
+
+def test_approver_addresses_are_taken_from_role_specs():
+    got = sai.approver_addresses(["Marketing Director=md@x.com,md2@x.com", "VP=vp@x.com;md@x.com"])
+    assert got == ["md@x.com", "md2@x.com", "vp@x.com"]

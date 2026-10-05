@@ -30,7 +30,17 @@ AGENT_SERVICE_ACCOUNT = os.getenv("AGENT_SERVICE_ACCOUNT", "")
 APPROVAL_BASE_URL = os.getenv("APPROVAL_BASE_URL", "").rstrip("/")
 APPROVAL_LINK_SECRET = os.getenv("APPROVAL_LINK_SECRET", "")
 APPROVAL_LINK_TTL_HOURS = float(os.getenv("APPROVAL_LINK_TTL_HOURS", "72"))
-APPROVAL_CHANNEL = (os.getenv("APPROVAL_CHANNEL") or ("email" if APPROVAL_BASE_URL else "chat")).lower()
+# APPROVAL_CHANNEL: "integration" = native Application Integration approval (the approver gets an Application
+# Integration email with Approve / Reject; default with the real workflow backend), "email" = signed links served by
+# the Cloud Run approval service, "chat" = confirmation inside the chat.
+APPROVAL_TRIGGER = os.getenv("APP_INTEGRATION_APPROVAL_TRIGGER", "api_trigger/request_approval")
+APPROVAL_CHANNEL = (os.getenv("APPROVAL_CHANNEL") or (
+    "email" if APPROVAL_BASE_URL else "integration" if WORKFLOW_BACKEND == "app_integration" else "chat")).lower()
+
+
+def async_approval() -> bool:
+    """True when the human decides outside the chat (Application Integration approval or emailed links)."""
+    return APPROVAL_CHANNEL in ("email", "integration")
 
 # Approver notification emails: "Role=a@x.com,b@x.com;Other Role=c@x.com" (or just "a@x.com" for every role).
 APPROVER_EMAILS = os.getenv("APPROVER_EMAILS", "")
