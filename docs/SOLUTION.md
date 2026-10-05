@@ -59,8 +59,9 @@ campaign_provisioner/
   workflow/integration.py     Application Integration toolsets (test doubles for unit tests)
   workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit
   sub_agents/                 inventory_agent, procurement_agent, budget_agent
+approval_service/             Cloud Run service behind the email Approve / Reject links (main.py)
 scripts/                      setup_all.py, setup_bigquery.py, setup_application_integration.py, verify_setup.py,
-                              deploy_agent_engine.py, query_agent_engine.py
+                              deploy_approval_service.py, deploy_agent_engine.py, query_agent_engine.py
 .env                          single config file in the repo root (written by setup_all.py)
 bigquery/schema.sql           generated DDL
 integration/README.md         Application Integration contract and build steps
@@ -80,6 +81,8 @@ docs/                         this guide, DEMO_RUN.md, management deck
 | `approval_policy` | Tiers: amount range, whether a human is needed, approver role |
 | `approvers` | Role -> email addresses notified for approval (configured at setup) |
 | `campaign_requests`, `purchase_orders` | Registered requests and created POs |
+| `request_lines` | What each request asked for, what stock covered and the shortfall (the purchase plan) |
+| `approval_requests` | Emailed human approvals: approver, amount, plan, status (PENDING / APPROVED / REJECTED / FAILED), who clicked |
 | `v_request_headroom` | Approved amount minus PO total per request (used by the guard) |
 | `audit_log` | Append-only trail of every governed action |
 
@@ -101,6 +104,18 @@ Example: *"NEXT27-MAIN needs 1 booth LED video wall."*
 5. **Order.** `create_purchase_order` is the Application Integration trigger. A `before_tool_callback` recomputes the amount from the vendor price list and checks `v_request_headroom`; with no covering approval it returns `BLOCKED`. After a successful call the `after_tool_callback` stores the PO (with the integration execution id) in `purchase_orders` and writes an audit event.
 6. **Decline path.** If the human rejects, nothing is committed, and the root asks `inventory_agent` to `release_inventory` for the request.
 7. **Summary.** The root aggregates stock, POs, remaining budget and approver; `get_audit_trail` reads `audit_log`.
+
+### Approval by emailed link
+
+For tiers that need a person, `approve_budget` (on the orchestrator) does not pause the chat. It builds the purchase plan from
+`request_lines` and the vendor price list, stores a PENDING row in `approval_requests`, and emails each approver a signed Approve and
+Reject link through the Application Integration `notify_approver` trigger. The links lead to the **approval-link service**
+(`approval_service/`, Cloud Run, public, no login). A link carries an HMAC-signed, expiring token naming the approval, the approver's
+email and the action; the service also requires the approval to be PENDING (first click wins, atomic update in BigQuery) and the
+email to be a configured approver. Opening a link only shows a confirmation page; a button (POST) takes the decision, so email
+scanners cannot approve. On Approve the service commits the budget, creates the purchase orders through the `create_purchase_order`
+trigger and writes the audit rows; on Reject it releases the reserved stock. Without `APPROVAL_BASE_URL` the approval is asked in the
+chat instead. The service and the deployed agent run as the service account in `AGENT_SERVICE_ACCOUNT`.
 
 ### Governance in four layers
 

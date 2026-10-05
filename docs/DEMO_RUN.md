@@ -32,7 +32,9 @@ for the agent. Everything is configured through `.env` (section 3), which the se
         │
  8. Reset for next run  python scripts/setup_bigquery.py --reset-demo
         │
- 9. Deploy (final)      source scripts/env_setup.sh  ->  python scripts/deploy_agent_engine.py   (section 14)
+ 9. Deploy (final)      source scripts/env_setup.sh
+        │               python scripts/deploy_approval_service.py   -> the page behind the email Approve / Reject links
+        │               python scripts/deploy_agent_engine.py       -> Vertex AI Agent Engine   (section 14)
 ```
 
 | Step | Command | You should see |
@@ -173,6 +175,38 @@ section 4.1. Moving to 4.2 means building the `campaign-flow` integration in the
 For Each Loop, conditions, approval step) and replacing the three sub-agents' tools with calls to the new triggers.
 The exact task names depend on what your region offers, and the flow has not been built or run yet.
 
+### 4.3 Human approval by emailed link (no login)
+
+When the amount needs a person (above $5,000), the approver gets an **email with an Approve link and a Reject link**. They
+click, see a confirmation page with the items and total, press the button, and the flow carries on. **Nobody has to sign in to
+Google Cloud or Application Integration**: the links go to a small public web service, the **approval-link service** (Cloud Run).
+
+```
+ Agent (chat)                         Approver                              Approval-link service (Cloud Run)
+   │ builds the purchase plan from BigQuery                                         │
+   │ stores a PENDING approval in BigQuery (approval_requests)                      │
+   │ Application Integration "notify_approver" ──► email with APPROVE / REJECT links │
+   │ tells the user "approval requested", ends                                      │
+   │                                          click APPROVE ───────────────────────►│ checks the signed link, approver, still PENDING
+   │                                          confirmation page, press the button ─►│ marks APPROVED (once), commits the budget,
+   │                                                                                │ Application Integration "create_purchase_order",
+   │                                                                                │ writes the PO + audit rows in BigQuery
+   │                                          REJECT instead ─────────────────────► │ marks REJECTED, releases the reserved stock
+```
+
+| Question | Answer |
+|---|---|
+| Is the link safe without a login? | Each link carries a **signed token** (HMAC with `APPROVAL_LINK_SECRET`) naming the approval, the approver's email, the action and an expiry (72 hours by default). A changed or expired link is refused. |
+| Can the link be used twice or by someone else? | No. The approval must still be PENDING (the first click wins, atomically in BigQuery), and the email in the link must be one of the configured approvers for that role. |
+| What if an email scanner opens the link? | Opening a link only shows the confirmation page. The decision is taken by the button (a POST), so scanners cannot approve anything. |
+| Who decides the amount and the items? | Not the model. The amount and purchase lines are computed from BigQuery (stock shortfall x cheapest active vendor) when the approval is requested. |
+| Who runs the service? | The service account in `AGENT_SERVICE_ACCOUNT` (needs BigQuery and Application Integration access). |
+| How does the user learn the result? | Ask the agent "What is the approval status of REQ-...?" (it reads BigQuery), or look at `purchase_orders` and `audit_log`. |
+| Without the service? | If `APPROVAL_BASE_URL` is not set, approvals are asked in the chat as before (sections 9 and 14.5). |
+
+The email body contains the links as plain URLs. Turning them into styled buttons needs an HTML email task in the workflow,
+which has not been set up.
+
 ## 5. Set up BigQuery and Application Integration
 
 ### 5.0 The one-command setup
@@ -260,6 +294,27 @@ script says Application Integration has not been used in this region yet).
 message, **sends an email** to the approvers and returns `status = NOTIFIED`. The recipients are not stored in the
 integration: the agent passes them in from the BigQuery `approvers` table, so changing an address needs no integration
 change. `--test` sends one real test email (to `--test-email`, default your gcloud account). Details and the manual alternative: [`integration/README.md`](../integration/README.md).
+
+### 5.3b Service account and approval links (optional but recommended)
+
+If you have a service account with BigQuery and Application Integration access, set it once and the agent and the
+approval service both run as it:
+
+```bash
+source scripts/env_setup.sh --service-account app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com
+# or add this line to .env:  AGENT_SERVICE_ACCOUNT=app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com
+```
+
+Then, for emailed Approve / Reject links without login (section 4.3):
+
+```bash
+python scripts/deploy_approval_service.py --dry-run   # checks everything, deploys nothing
+python scripts/deploy_approval_service.py             # deploys the Cloud Run service, saves APPROVAL_BASE_URL in .env
+```
+
+It needs the Cloud Run, Cloud Build and Artifact Registry APIs (it tells you if one is missing), the right to run things as the
+service account (Service Account User role on it), and an organisation that allows a public Cloud Run service (the approvers
+have no Google login). Problems are printed with what to do.
 
 ### 5.4 Configure `.env`
 
@@ -445,6 +500,12 @@ reset (section 8).
 | 7 | Not enough budget, then overview and audit (**new session**) | NEXT27-DEVLOUNGE | $18,000 | none (rejected first) |
 | **H1** | **HITL threshold pair: $4,720 vs $5,310** (**new session**) | NEXT27-PARTNER | | none, then **Confirm** |
 | **H2** | **HITL follow-up: who approved?** (after 3 or 6) | | | audit of the human decision |
+
+> **Two ways the human decides.** With the approval-link service deployed (`APPROVAL_BASE_URL` in `.env`, section 4.3) the HITL
+> prompts below work like this: send the prompt, the agent says the approval was **emailed**, you open the email and click **Approve**
+> (or **Reject**) and press the button on the page; the purchase order is created and appears in `purchase_orders` (ask "what is the
+> approval status of REQ-...?"). Without it, the run pauses in the chat and you click Confirm / Reject there. The prompts and amounts are the
+> same either way.
 
 How the tiers decide who is involved (BigQuery table `approval_policy`):
 
@@ -692,23 +753,27 @@ the exact fix, for example `PROBLEM: these APIs are not enabled: ...` followed b
 `adk deploy agent_engine`, retries once if the agent's identity only existed after the first attempt, and saves the result as
 `AGENT_ENGINE_RESOURCE` in `.env`. Problems are printed on the console, not shown as stack traces.
 
-### 14.3 Permissions for the deployed agent (done by the script)
+### 14.3 Which identity the agent runs as (service account)
 
-The deployed agent calls BigQuery and Application Integration as **its own identity**, not as you: by default the Vertex AI
-Agent Engine service agent `service-<project number>@gcp-sa-aiplatform-re.iam.gserviceaccount.com`. The deploy script grants it
-BigQuery Data Editor and Job User, Vertex AI User, Application Integration Invoker (`roles/integrations.integrationInvoker`), and the least-privileged
-Application Integration role that is allowed to read the integration definition (the script looks this up: normally
-`roles/integrations.integrationViewer`, otherwise Editor). If the roles are already there (an admin granted them) it says so. If you are not allowed to
-change IAM (that needs Project IAM Admin or Owner), it writes a ready-to-run `grant_agent_permissions.sh` for an admin, prints which
-roles are missing, still deploys, and skips the smoke test; no redeploy is needed after the admin has run the script. To run the agent as a dedicated service account
-instead (recommended for production), create it and pass `--service-account <email>`; the script grants the same roles to it.
+The deployed agent calls BigQuery and Application Integration as **its own identity**, not as you. Two ways:
+
+- **Your service account (recommended).** Set `AGENT_SERVICE_ACCOUNT` in `.env` (or `source scripts/env_setup.sh --service-account <email>`,
+  or `--service-account` on the deploy script), for example `app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com`. The agent
+  and the approval-link service then run as it. The account needs BigQuery Data Editor and Job User, Vertex AI User, Application
+  Integration Invoker and a role that can read the integration (normally `roles/integrations.integrationViewer`, otherwise Editor). The
+  deploy script **only checks** these roles (it does not try to grant): if some are missing it prints which and writes
+  `grant_agent_permissions.sh` for an admin. Your own account needs the Service Account User role on that account to deploy with it
+  (if not, the message says so).
+- **Default.** With no service account set, the agent runs as the Vertex AI Agent Engine service agent
+  `service-<project number>@gcp-sa-aiplatform-re.iam.gserviceaccount.com`. The script tries to grant it the roles above; if you are not a Project IAM
+  Admin it writes the same admin script, still deploys, and skips the smoke test. No redeploy is needed after an admin has run the script.
 
 ### 14.4 Deploy options
 
 | Option | Meaning |
 |---|---|
 | `--project`, `--region` | default: your project, `GOOGLE_CLOUD_LOCATION` or `us-central1` |
-| `--service-account EMAIL` | run the agent as this account |
+| `--service-account EMAIL` | run the agent as this account (default: `AGENT_SERVICE_ACCOUNT` in `.env`) |
 | *(nothing)* | the first run creates the deployment; every later run **updates that same deployment** (its id is saved in `.env`), so redeploying after a code change is just the same command |
 | `--new` | create a separate new deployment instead |
 | `--update ENGINE_ID` | update a specific deployment |
@@ -727,7 +792,7 @@ python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall a
 python scripts/query_agent_engine.py          # interactive chat; type exit to leave
 ```
 
-When a request needs a person (above $5,000), the approver gets the email and the client stops and shows:
+With emailed links (section 4.3) the agent answers "approval requested, emailed to <role>" and the purchase order is created when the approver clicks the link. Without the approval service (`APPROVAL_BASE_URL` not set), when a request needs a person (above $5,000), the approver gets the email and the client stops and shows:
 
 ```
   *** HUMAN APPROVAL NEEDED ***
@@ -759,6 +824,9 @@ work the same way. Reset the data between runs with `python scripts/setup_bigque
 | Deployment fails while the container starts, mentioning Application Integration or BigQuery | The runtime identity lacks roles (14.3), or the integration does not exist in that project/region. Grant the roles, check `setup_application_integration.py --check-only`, redeploy |
 | `404 NOT_FOUND ... Reasoning Engine ... is not found` | The saved deployment was deleted. The script now notices and creates a new one automatically |
 | `you are not allowed to grant roles` | You are not a Project IAM Admin / Owner. Give `grant_agent_permissions.sh` (created in the repo folder) to an admin; the agent cannot read BigQuery or the integration until it has been run |
+| `Permission iam.serviceaccounts.actAs denied` | Your account needs the Service Account User role on the service account in `AGENT_SERVICE_ACCOUNT`. Ask an admin to add it |
+| The approval service deploy says public services are not allowed | An organisation policy blocks public Cloud Run. An admin must allow it for this project; the emailed links need a public address |
+| An approval link says "already decided" or "expired" | Each link works once and for 72 hours (`APPROVAL_LINK_TTL_HOURS`). Ask the agent for a new request |
 | Logs show `403 Forbidden ... generateOpenApiSpec` | The deployed agent's identity cannot read the Application Integration definition. Run `python scripts/deploy_agent_engine.py` again (it updates the saved deployment): it grants the right role and the error message names the identity it runs as |
 | The agent answers with `Reasoning Engine Execution failed ... Internal Server Error` | The container is failing. The query script now prints the deployment's recent logs automatically; you can also run `python scripts/agent_engine_logs.py --errors-only`. Common causes: missing roles for the agent's identity (14.3), the integration not published in that project/region, a missing package |
 | `.../campaign_provisioner/.env exists` | Delete that file; the repo-root `.env` is the one used |

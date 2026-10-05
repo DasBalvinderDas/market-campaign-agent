@@ -9,7 +9,8 @@ A central **root agent** governs three **sub-agents**: inventory, procurement an
 |---|---|---|
 | **Google BigQuery** | All data: stock, vendor prices, budgets (ledger), approval tiers, approver emails, requests, purchase orders, audit log | dataset `campaign_provisioner` |
 | **Google Application Integration** | The two workflow actions: `create_purchase_order` and `notify_approver` (sends the approval email), called through ADK's Application Integration toolset | integration `campaign-provisioner-workflows` |
-| **Human in the loop** | Spend above $5,000 pauses for a Confirm / Reject (the approver is emailed first) | `adk web` chat while testing; the client of the deployed agent on Agent Engine |
+| **Human in the loop** | Spend above $5,000 needs a person: the approver gets an **email with Approve / Reject links** (no login) and the flow continues when they click; in the chat (Confirm / Reject) if the link service is not deployed | `approval_service/` (Cloud Run) or the chat |
+| **Service account** | One account (`AGENT_SERVICE_ACCOUNT`) with BigQuery + Application Integration access runs the deployed agent and the link service | `.env` |
 | **Vertex AI Agent Engine** | Where the finished agent runs (hosted, managed sessions) | `scripts/deploy_agent_engine.py` |
 | **Code guard** | A purchase order is blocked unless an approved budget covers it | `campaign_provisioner/workflow/guard.py` |
 
@@ -35,8 +36,9 @@ adk web --port 8080                      # then open Web Preview on port 8080
 ## Deploy to Vertex AI Agent Engine (final step, Cloud Shell)
 
 ```bash
-source scripts/env_setup.sh                 # 1. venv, packages, project, login/API/data checks (prints any problem)
-python scripts/deploy_agent_engine.py       # 2. grants the agent its permissions and deploys
+source scripts/env_setup.sh --service-account <your-service-account>   # 1. venv, packages, project, login/API/data checks
+python scripts/deploy_approval_service.py   # 2. the page behind the emailed Approve / Reject links (no login for approvers)
+python scripts/deploy_agent_engine.py       # 3. deploys the agent (runs as your service account)
 python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall."   # talk to it; handles Confirm / Reject
 ```
 
@@ -67,6 +69,7 @@ API and Vertex AI API must be enabled in the project.
 | `scripts/setup_application_integration.py` | Application Integration only; `--test` runs both triggers once and sends a test email, `--print-definition` shows what is sent |
 | `scripts/verify_setup.py` | Reads back the BigQuery data and (with `--integration`) the tools ADK builds from the integration |
 | `scripts/env_setup.sh` | Run first with `source`: Python environment, packages, project variables, login / API / data checks |
+| `scripts/deploy_approval_service.py` | Deploys the Cloud Run service behind the email Approve / Reject links and saves its URL in `.env` |
 | `scripts/deploy_agent_engine.py` | Grants the agent's permissions and deploys the agent to Vertex AI Agent Engine (`--dry-run` to check first; run it again after code changes and it updates the saved deployment, `--new` for a separate one) |
 | `scripts/agent_engine_logs.py` | Shows the deployed agent's recent logs (used automatically when a request fails) |
 | `scripts/query_agent_engine.py` | Talks to the deployed agent and handles the human Confirm / Reject |
