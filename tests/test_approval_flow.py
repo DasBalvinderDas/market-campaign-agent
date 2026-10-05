@@ -238,6 +238,7 @@ def test_integration_channel_starts_the_workflow_and_commits_nothing(integration
     assert budget_tools.requires_human(18000, "NEXT27-MAIN") is False  # no chat pause
     out = budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
     assert out["status"] == "pending_approval" and out["channel"] == "application_integration"
+    assert "Procurement" in out["announce"] and "md@example.com" in out["announce"]
     trig, inputs = ex.calls[0]
     assert trig == config.APPROVAL_TRIGGER and inputs["amount"] == 18000.0 and "ExpoVision" in inputs["approval_message"]
     assert repo.get_approval_for_request(rid)["status"] == "PENDING"

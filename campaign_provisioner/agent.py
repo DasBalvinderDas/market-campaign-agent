@@ -18,8 +18,10 @@ _CHAT_APPROVAL = '''   For tiers that need a human the platform pauses until the
 _ASYNC_APPROVAL = '''   - If it returns status approved (small amounts are auto-approved): transfer to procurement_agent to create the
      purchase orders (Application Integration workflow).
    - If it returns pending_approval: an approval request was sent to the approver (Application Integration email
-     with Approve / Reject). Do NOT create purchase orders and do NOT transfer to procurement_agent. Tell the
-     user the approver role, the amount and that the approver must decide. Once they have, the user asks for the
+     with Approve / Reject buttons). Do NOT create purchase orders and do NOT transfer to procurement_agent.
+     Begin your reply with a bold line "HUMAN APPROVAL REQUIRED" saying that the approval email was sent, to whom
+     (role and address), the amount, and that procurement will be done only once it is approved. Then summarise
+     the reserved stock and the pending purchase. Once they have, the user asks for the
      status (get_approval_status): it creates the purchase orders if Approved, or releases the stock if Rejected,
      and reports the PO numbers. Then finish. When the user asks for the status, call get_approval_status and
      report its result.
