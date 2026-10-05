@@ -468,6 +468,24 @@ python scripts/setup_bigquery.py --reset-demo
 This clears requests, reservations, POs and the audit log, and removes every approval from the budget ledger while
 keeping the opening balances. Then restart `adk web` and click **New session**.
 
+### 8.1 Data reset cheat sheet
+
+| Situation | Command (run in Cloud Shell, repo folder, venv active: `source scripts/env_setup.sh`) |
+|---|---|
+| **Before every demo run** (numbers back to section 7, no old requests, approvals or POs) | `python scripts/setup_bigquery.py --reset-demo` |
+| Something is badly broken, a table is missing, or the schema changed after a `git pull` | `python scripts/setup_bigquery.py --reset --approver-email "you@example.com"` (drops and rebuilds every table and view) |
+| Only add missing tables, change nothing else | `python scripts/setup_bigquery.py --approver-email "you@example.com"` |
+| Check the numbers after a reset | `python scripts/verify_setup.py` |
+
+What a reset changes, and what it does not:
+- **Cleared by `--reset-demo`:** requests, stock reservations, purchase orders, approvals, audit log, and every budget commit. Opening balances come back.
+- **Kept:** items, vendors and prices, campaigns, approval tiers, approver emails.
+- **Not touched:** the Application Integration flows and the deployed agent (no redeploy needed after a reset).
+- **After any reset, start a new session** (adk web: **New session**; Agent Engine playground: **New Session**). An old session still remembers the old request ids and will quote old numbers.
+- Approval emails already sent for old requests are harmless but can no longer be used: the reset removed those requests.
+
+More: [`FRESH_SETUP.md`](FRESH_SETUP.md).
+
 ## 9. The test prompts (Google Next 2027), with the human-in-the-loop cases highlighted
 
 Run them in order, in **one session**, except where a prompt says **new session**. The expected numbers assume a fresh
