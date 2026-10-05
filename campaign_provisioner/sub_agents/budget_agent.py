@@ -32,4 +32,5 @@ budget_agent = LlmAgent(
     tools=[check_budget, get_approval_policy] + ([] if _EMAIL else [build_notify_tool()]),
     before_tool_callback=guard.before_tool,  # fills the approver email, subject and body for notify_approver
     after_tool_callback=guard.after_tool,
+    on_tool_error_callback=guard.on_tool_error,
 )

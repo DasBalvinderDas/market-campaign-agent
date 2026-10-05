@@ -2,6 +2,7 @@
 from google.adk.agents import LlmAgent
 
 from . import config
+from .workflow import guard
 from .sub_agents.budget_agent import budget_agent
 from .sub_agents.inventory_agent import inventory_agent
 from .sub_agents.procurement_agent import procurement_agent
@@ -63,5 +64,6 @@ root_agent = LlmAgent(
     description="Autonomous Google Next 2027 campaign logistics orchestrator: inventory, procurement and budget approval on BigQuery data, workflows through Application Integration, human-in-the-loop for high-value spend.",
     instruction=INSTRUCTION,
     tools=[register_campaign_request, get_campaign_overview, get_audit_trail, get_approval_status, approve_budget_tool],
+    on_tool_error_callback=guard.on_tool_error,
     sub_agents=[inventory_agent, procurement_agent, budget_agent],
 )

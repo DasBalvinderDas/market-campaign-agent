@@ -20,4 +20,5 @@ procurement_agent = LlmAgent(
     tools=[get_vendor_quotes, build_po_tool()],
     before_tool_callback=guard.before_tool,
     after_tool_callback=guard.after_tool,
+    on_tool_error_callback=guard.on_tool_error,
 )

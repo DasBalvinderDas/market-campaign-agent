@@ -1,6 +1,7 @@
 from google.adk.agents import LlmAgent
 
 from .. import config
+from ..workflow import guard
 from ..tools.inventory_tools import check_inventory, find_sku, release_inventory, reserve_inventory
 
 inventory_agent = LlmAgent(
@@ -17,4 +18,5 @@ inventory_agent = LlmAgent(
         "When finished, transfer back to campaign_provisioner."
     ),
     tools=[find_sku, check_inventory, reserve_inventory, release_inventory],
+    on_tool_error_callback=guard.on_tool_error,
 )
