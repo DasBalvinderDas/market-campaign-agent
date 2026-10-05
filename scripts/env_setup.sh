@@ -100,6 +100,9 @@ from setup_all import write_env, ROOT
 write_env(ROOT / ".env", {"AGENT_SERVICE_ACCOUNT": sys.argv[1]})
 print("  OK  AGENT_SERVICE_ACCOUNT=" + sys.argv[1] + " saved to .env")
 PY
+elif [ -z "$_ES_SA" ] && [ -f .env ]; then
+  _es_sa_env=$(grep -E '^AGENT_SERVICE_ACCOUNT=.+' .env | tail -1 | cut -d= -f2-)
+  if [ -n "$_es_sa_env" ]; then _es_ok "service account from .env: $_es_sa_env (used by the deploy script)"; fi
 fi
 
 echo "== Config file"
