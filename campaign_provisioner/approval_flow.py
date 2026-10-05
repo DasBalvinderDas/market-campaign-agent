@@ -254,7 +254,8 @@ def sync_integration_decision(repo, executor, approval: dict) -> dict:
     except Exception as exc:  # noqa: BLE001 - keep PENDING; the next status check retries
         approval["decision_note"] = f"could not read the approval workflow yet: {str(exc)[:150]}"
         return approval
-    state = str((ex.get("executionDetails") or {}).get("state") or ex.get("state") or "").upper()
+    state = str((ex.get("executionDetails") or {}).get("state")
+                or (ex.get("eventExecutionDetails") or {}).get("eventExecutionState") or ex.get("state") or "").upper()
     exec_id = note[len(_EXEC_PREFIX):]
     decision = (str(_param(ex.get("responseParameters") or ex.get("responseParams"), "decision") or "").upper()
                 or _find_decision(ex) or _suspension_decision(executor, exec_id))

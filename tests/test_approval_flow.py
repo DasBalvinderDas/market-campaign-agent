@@ -294,3 +294,17 @@ def test_suspension_record_is_the_fallback(integration_channel):
     ex.execution = {"executionDetails": {"state": "SUCCEEDED"}}
     ex.list_suspensions = lambda _id: [{"state": "LIFTED"}]
     assert approval_flow.approval_status(repo, rid)["status"] == "APPROVED"
+
+
+def test_real_shaped_execution_with_lifted_suspension_is_approved(integration_channel):
+    """Shape seen in a real project: state under eventExecutionDetails, approval shown only as a LIFTED suspension."""
+    repo, ex = integration_channel
+    rid = wall_request(repo)
+    budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000, "booth wall")
+    ex.execution = {"eventExecutionDetails": {"eventExecutionState": "SUCCEEDED", "eventExecutionSnapshot": [
+        {"taskExecutionDetails": [{"taskNumber": "10", "taskExecutionState": "SUSPENDED"}]}]},
+        "requestParams": [{"key": "request_id", "value": {"stringValue": rid}}]}
+    ex.list_suspensions = lambda _id: [{"state": "LIFTED", "taskId": "10"}]
+    out = approval_flow.approval_status(repo, rid)
+    assert out["status"] == "APPROVED" and out["purchase_orders"]
+    ex.list_suspensions = lambda _id: [{"state": "REJECTED"}]
