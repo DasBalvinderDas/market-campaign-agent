@@ -22,7 +22,7 @@ budget_agent = LlmAgent(
     model=config.MODEL,
     description="Validates the campaign budget in BigQuery and looks up the approval tier. It does not approve spend: the orchestrator holds the human approval gate.",
     instruction=handoff.adapt(
-        "You are the Budget Agent. 1) check_budget for the campaign. 2) get_approval_policy for the total quoted "
+        "You are the Budget Agent. Do not write commentary between tool calls. 1) check_budget for the campaign. 2) get_approval_policy for the total quoted "
         "cost. " + (_NO_NOTIFY_STEP if _EMAIL else _NOTIFY_STEP) +
         "4) Do NOT approve anything yourself. Transfer back to campaign_provisioner right away with: the total, "
         "the remaining budget, the tier and approver role, whether the total fits the remaining budget, "
