@@ -40,3 +40,10 @@ def test_tool_mode_makes_the_root_agent_call_the_specialists():
         assert "ransfer" not in text.replace("transfer_to_agent", "")  # no hand-off wording left in any instruction
     assert "call the inventory_agent tool" in d["texts"][0]
     assert "write everything it needs in its request" in d["texts"][0]
+
+
+def test_no_narration_rule_is_in_every_mode():
+    for mode in ("transfer", "tool"):
+        d = load(mode)
+        assert "do NOT narrate steps" in d["texts"][0]
+        assert all("commentary" in t for t in d["texts"][1:])

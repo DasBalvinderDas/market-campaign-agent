@@ -15,7 +15,7 @@ inventory_agent = LlmAgent(
         "reserve_inventory for the free units. Report per SKU: reserved quantity and the shortfall to procure. "
         "If the root agent asks you to release a request's stock (budget declined or rejected), call "
         "release_inventory. Do not buy anything or discuss budget. "
-        "When finished, transfer back to campaign_provisioner."
+        "Do not write commentary between tool calls. When finished, transfer back to campaign_provisioner."
     ),
     tools=[find_sku, check_inventory, reserve_inventory, release_inventory],
     on_tool_error_callback=guard.on_tool_error,
