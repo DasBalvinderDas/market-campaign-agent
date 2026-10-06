@@ -573,15 +573,15 @@ has $27,710 left.
 > NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.
 
 > **HUMAN-IN-THE-LOOP: approval by email, then ask again**
-> 1. The agent reserves 8 banners from stock and gets the LED wall quote: ExpoVision **$18,000**, 21 days.
+> 1. The agent reserves 2 of the 8 banners from stock (6 are short) and quotes the LED wall (ExpoVision **$18,000**, 21 days) and the 6 banners (PrintCo $510): total **$18,510**.
 > 2. $18,000 is tier **MANAGER**. The orchestrator starts the Application Integration approval workflow, which **emails the
 >    Marketing Director** an approval request with **Approve / Reject** buttons.
-> 3. **The agent replies with the bold line "HUMAN APPROVAL REQUIRED"**: email sent to whom, USD 18,000, and **procurement happens only
+> 3. **The agent replies with the bold line "HUMAN APPROVAL REQUIRED"**: email sent to whom, USD 18,510, and **procurement happens only
 >    once it is approved**. No purchase order yet, nothing committed.
 > 4. **You open the email and click Approve** (you are playing the Marketing Director).
 > 5. **Ask the same session:** `What is the approval status of that request?`
 > 6. The agent reports **APPROVED**: the budget is committed as `human:Marketing Director`, the **purchase order is created**
->    (PO number, ExpoVision, $18,000), and NEXT27-MAIN has $232,000 left.
+>    (PO numbers for the LED wall at ExpoVision $18,000 and the 6 banners at PrintCo $510), and NEXT27-MAIN has $231,490 left.
 >
 > **Say to the audience:** "Anything over $5,000 needs a named person. The agent cannot commit this money on its own, and procurement starts only after the human says yes."
 
@@ -616,7 +616,7 @@ Nothing is ordered.
 > 2. The approval email goes to the **VP Marketing + Finance Controller** addresses; the agent shows **HUMAN APPROVAL REQUIRED**.
 > 3. **You click Approve in the email** (playing the VP / Controller), then ask: `What is the approval status of that request?`
 > 4. The budget is committed as `human:VP Marketing + Finance Controller`, the purchase order is created, and NEXT27-MAIN has
->    $160,000 left (after Prompt 3).
+>    $159,490 left (after Prompt 3).
 >
 > **Say to the audience:** "Bigger money, different approver. The tiers are data in BigQuery, not code."
 
@@ -723,14 +723,14 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_
 
 ## 13. What has and hasn't been verified
 
-Verified on a real Google Cloud project: the BigQuery setup (dataset, tables, views, seed data, approver rows), creating and
-publishing the Application Integration workflow, executing both triggers (`setup_application_integration.py --test`: the PO trigger
-returned a PO number, the notify trigger completed), reading the data back (`verify_setup.py`), and ADK building the tools
-`create_purchase_order` and `notify_approver` from the integration.
+Verified on a real Google Cloud project: the BigQuery setup, the Application Integration workflows (including the approval
+flow), the Agent Engine deployment as the configured service account, the human-approval round trip (approval email, click,
+status question, purchase order, budget commit) and the agent in the Gemini Enterprise chat (with `SUBAGENT_MODE=tool`).
 
-**Not yet confirmed:** that the approval email reaches an inbox (check the test email), a full agent run with Gemini on your
-project, and the in-chat Confirm / Reject pause. Unit tests cover the tools, tiered policy, purchase-order guard (including
-one email call per approver address), audit trail, the setup scripts and the BigQuery repository (stub client, SQL syntax).
+**Still to confirm on your side:** the Reject path (after clicking Reject run `python scripts/check_approval.py`; the approval record
+should say `REJECTED` and asking for the status should release the stock), the run times with the batch tools (a request should
+take about a minute to a minute and a half in Gemini Enterprise), and the prompts that were not yet run there. Unit tests cover the
+tools, tiered policy, purchase-order guard, approval flow, setup scripts and the BigQuery repository (stub client, SQL syntax).
 Run sections 8 and 9 once before presenting, prompts 1, 3 and 4 first.
 
 ## 14. Deploy to Vertex AI Agent Engine (the final step)
@@ -858,9 +858,20 @@ work the same way. Reset the data between runs with `python scripts/setup_bigque
 | Region error | Use a region where Agent Engine is available, for example `us-central1` (`--region`) |
 | The client prints nothing for a request | Run with a fresh session (just run the script again); check the logs of the Agent Engine resource |
 
-### 14.8 What has and hasn't been verified for deployment
+### 14.8 Verified for deployment
 
-Unit tests cover the deploy script (settings, command, resource-name parsing) and the client's handling of the approval request and
-answer. The deployment itself has **not been run** by the author: the real deployment, the runtime permissions in 14.3 (in particular
-the exact service agent name), `--service-account`, and the approval round trip through Agent Engine are untested. Treat the first
-deploy as a rehearsal, and send any message the script prints back for a fix.
+The deployment, the runtime permissions (as the configured service account), the update path and the approval round trip through
+Agent Engine have been run on a real project. If a deploy prints a problem, send the message back for a fix.
+
+### 14.9 Gemini Enterprise
+
+The deployed agent can be registered in a Gemini Enterprise app (the chat UI for business users).
+- Set `SUBAGENT_MODE=tool` in `.env` and redeploy. The front end showed the run only up to a narrated hand-off ("I'm now transferring
+  to...") and not after it, so in tool mode the root agent calls inventory, procurement and budget as tools and writes every reply.
+  Every instruction also forbids commentary between steps for the same reason.
+- The "Working on the request" panel lists each tool call with a live timer; there is no periodic message. A request takes about a
+  minute to a minute and a half. If a run is cut off at about two minutes, send the Traces view of that Agent Engine session.
+- The human approval works the same way: the reply starts with **HUMAN APPROVAL REQUIRED**, the approver clicks the email, and you ask
+  for the status in the same chat.
+- Use a **new chat** after every data reset (`python scripts/setup_bigquery.py --reset-demo`).
+- Tool mode starts a separate internal session for each specialist call (ADK `AgentTool`); it does not affect Gemini Enterprise's own session.

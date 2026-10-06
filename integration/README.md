@@ -135,3 +135,9 @@ The agent reads BigQuery with the BigQuery client library. If your organisation 
 through Integration Connectors, create a BigQuery connection and use
 `ApplicationIntegrationToolset(connection=..., entity_operations={"campaigns": ["LIST", "GET"]})` instead; only the
 tool bodies in `tools/` and the repository would change.
+
+## Debugging an approval
+
+`python scripts/check_approval.py [REQ-id]` prints the approval row from BigQuery, the workflow execution and its approval records.
+A click on Approve shows as an approval record with state `LIFTED`, Reject as `REJECTED`; the agent reads that record when the
+status is asked.

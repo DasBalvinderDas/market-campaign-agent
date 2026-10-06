@@ -8,10 +8,11 @@ A central **root agent** governs three **sub-agents**: inventory, procurement an
 | Part | What it does | Where it lives |
 |---|---|---|
 | **Google BigQuery** | All data: stock, vendor prices, budgets (ledger), approval tiers, approver emails, requests, purchase orders, audit log | dataset `campaign_provisioner` |
-| **Google Application Integration** | The two workflow actions: `create_purchase_order` and `notify_approver` (sends the approval email), called through ADK's Application Integration toolset | integration `campaign-provisioner-workflows` |
+| **Google Application Integration** | Three workflows: `create_purchase_order`, `request_approval` (the native approval: Approve / Reject email) and `notify_approver` (plain email), called through ADK's Application Integration toolset | integration `campaign-provisioner-workflows` |
 | **Human in the loop** | Spend above $5,000 needs a person: an **Application Integration approval** (a native approval task) emails the approver Approve / Reject; asking the agent for the status then creates the PO or releases the stock. Parked options: signed links via a Cloud Run service, or Confirm / Reject in the chat | Application Integration trigger `request_approval` |
 | **Service account** | One account (`AGENT_SERVICE_ACCOUNT`) with BigQuery + Application Integration access runs the deployed agent and the link service | `.env` |
 | **Vertex AI Agent Engine** | Where the finished agent runs (hosted, managed sessions) | `scripts/deploy_agent_engine.py` |
+| **Front ends** | `adk web`, the Agent Engine playground, **Gemini Enterprise** (set `SUBAGENT_MODE=tool` there, see `docs/DEMO_RUN.md` 14.9) | `.env` |
 | **Code guard** | A purchase order is blocked unless an approved budget covers it | `campaign_provisioner/workflow/guard.py` |
 
 Approval tiers (a BigQuery table, so they can change without code): up to $5,000 auto-approved, $5,000 to $50,000
@@ -71,6 +72,7 @@ API and Vertex AI API must be enabled in the project.
 | `scripts/env_setup.sh` | Run first with `source`: Python environment, packages, project variables, login / API / data checks |
 | `scripts/deploy_approval_service.py` | (Parked: needs a public Cloud Run endpoint) Deploys the Cloud Run service behind signed Approve / Reject links and saves its URL in `.env` |
 | `scripts/deploy_agent_engine.py` | Grants the agent's permissions and deploys the agent to Vertex AI Agent Engine (`--dry-run` to check first; run it again after code changes and it updates the saved deployment, `--new` for a separate one) |
+| `scripts/check_approval.py` | Shows what Application Integration says about an approval (state, approval record) when a status looks wrong |
 | `scripts/agent_engine_logs.py` | Shows the deployed agent's recent logs (used automatically when a request fails) |
 | `scripts/query_agent_engine.py` | Talks to the deployed agent and handles the human Confirm / Reject |
 
@@ -82,8 +84,6 @@ emails are read from the BigQuery `approvers` table, so you change them there.
 
 ## Status
 
-Verified on a real Google Cloud project: the BigQuery setup, creating and publishing the Application Integration workflow,
-running both triggers, reading the data back, and ADK discovering the two integration tools. Not yet confirmed: approval
-email delivery to an inbox, a full agent run with Gemini, the in-chat Confirm / Reject pause, and the Agent Engine deployment (new). See the last section of
+Verified on a real Google Cloud project: the BigQuery setup, the Application Integration workflows (including the approval flow), the Agent Engine deployment running as the configured service account, the full human-approval round trip (approval email, click, status check, purchase order), and the agent in the Gemini Enterprise chat. Still to be confirmed on your side: timings with the batch tools and the Reject path. See the last section of
 `docs/DEMO_RUN.md`. Unit tests (`pytest`) cover the tools, policy, guard, audit trail, setup scripts and the BigQuery
 repository (against a stub client).

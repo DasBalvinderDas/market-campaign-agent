@@ -23,18 +23,23 @@ It takes a plain-language request ("NEXT27-MAIN needs 1 booth LED video wall") a
 
 ## 3. Architecture
 
-A central **root agent** governs three **sub-agents** (Google ADK multi-agent hierarchy).
+A central **root agent** governs three **sub-agents** (Google ADK multi-agent hierarchy). How the root reaches them is a
+setting (`SUBAGENT_MODE`): `transfer` (default, the chat is handed to the specialist, as in `adk web`) or `tool` (the root
+agent calls each specialist as a tool and writes every reply; use it for front ends such as Gemini Enterprise that show only
+the root agent's answers). The specialists keep the same instructions and tools in both modes. Each specialist has batch tools
+(`reserve_items`, `quote_shortfalls`, `assess_budget`) so a request needs a handful of model calls, not one per item.
 
 ```
                        campaign_provisioner  (root / orchestrator)
         tools: register_campaign_request, get_campaign_overview, get_audit_trail,
-               approve_budget  (the human approval gate, HITL confirmation)
+               get_approval_status, approve_budget  (the human approval gate)
         ┌────────────────────────┼─────────────────────────────┐
   inventory_agent          procurement_agent              budget_agent
-  find_sku                 get_vendor_quotes              check_budget
-  check_inventory          create_purchase_order  ──┐     get_approval_policy
-  reserve_inventory        (Application Integration)│     notify_approver (Application Integration)
-  release_inventory        guard: before / after ◄──┘     (reports back; never approves)
+  reserve_items (batch)    quote_shortfalls (batch)       assess_budget (budget + tier)
+  find_sku, check_/        get_vendor_quotes              check_budget, get_approval_policy
+  reserve_inventory        create_purchase_order  ──┐     (reports back; never approves)
+  release_inventory        (Application Integration)│
+                           guard: before / after ◄──┘
         │                         │                               │
         └──────────── Repository (BigQuery) ◄─────────────────────┘
 ```
@@ -57,16 +62,20 @@ campaign_provisioner/
   repositories/               base.py (contract), bigquery_repo.py, memory_repo.py (unit tests only), get_repo()
   tools/                      inventory, procurement, budget, orchestration, audit tools
   workflow/integration.py     Application Integration toolsets (test doubles for unit tests)
-  workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit
+  workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit, tool-error callback
+  workflow/integration_client.py  REST client: start a workflow, read an execution and its approval records
+  approval_flow.py            builds the purchase plan, starts the approval workflow, reads the decision, finishes it
+  handoff.py                  SUBAGENT_MODE: transfer or tool
   sub_agents/                 inventory_agent, procurement_agent, budget_agent
 approval_service/             Cloud Run service behind signed Approve / Reject links (parked, main.py)
 scripts/                      setup_all.py, setup_bigquery.py, setup_application_integration.py, verify_setup.py,
-                              deploy_approval_service.py, deploy_agent_engine.py, query_agent_engine.py
+                              deploy_approval_service.py (parked), deploy_agent_engine.py, query_agent_engine.py,
+                              check_approval.py, agent_engine_logs.py, env_setup.sh
 .env                          single config file in the repo root (written by setup_all.py)
 bigquery/schema.sql           generated DDL
 integration/README.md         Application Integration contract and build steps
 tests/                        tools, guard, policy, BigQuery repo (stub client)
-docs/                         this guide, DEMO_RUN.md, management deck
+docs/                         this guide, DEMO_RUN.md, FRESH_SETUP.md (setup / reset cheat sheet), management deck
 ```
 
 ## 5. Data in BigQuery
@@ -95,14 +104,16 @@ concatenated into SQL). Set it up with `scripts/setup_bigquery.py`; the DDL is i
 Example: *"NEXT27-MAIN needs 1 booth LED video wall."*
 
 1. **Intake (root).** Confirms campaign and items, calls `register_campaign_request`, which validates the campaign in BigQuery and inserts a `campaign_requests` row and an audit event.
-2. **Inventory.** `find_sku` maps "LED video wall" to `BOOTH-LEDWALL`; `check_inventory` reads `v_inventory_available` (0 free); nothing to reserve; shortfall 1.
-3. **Quotes.** `get_vendor_quotes` reads `vendor_catalog`: ExpoVision $18,000 (21 days) vs KioskWorks $20,500 (14 days). The agent recommends one.
-4. **Budget.** `check_budget` reads `v_campaign_budget`; `get_approval_policy` reads `approval_policy`: $18,000 is tier MANAGER (Marketing Director).
-   - The budget agent calls the **notify_approver** Application Integration trigger so the approver is emailed, then hands back to the root with the tier, approver role and remaining budget. It never approves.
-   - The **root** then calls `approve_budget`, which is wrapped in ADK `FunctionTool(require_confirmation=requires_human)`. ADK **pauses** and asks a human to Confirm or Reject. On confirm the function inserts a COMMIT entry (`approved_by = human:Marketing Director`), and because the root owns the tool the run continues straight to the purchase orders.
-   - AUTO tier amounts skip the pause. Amounts above the remaining budget skip it too and are rejected directly.
-5. **Order.** `create_purchase_order` is the Application Integration trigger. A `before_tool_callback` recomputes the amount from the vendor price list and checks `v_request_headroom`; with no covering approval it returns `BLOCKED`. After a successful call the `after_tool_callback` stores the PO (with the integration execution id) in `purchase_orders` and writes an audit event.
-6. **Decline path.** If the human rejects, nothing is committed, and the root asks `inventory_agent` to `release_inventory` for the request.
+2. **Inventory.** One `reserve_items` call maps every item ("LED video wall" to `BOOTH-LEDWALL`, "event banners" to `BANNER-XL`), reads `v_inventory_available`, reserves the free units and records each line in `request_lines` (LED wall: 0 free, shortfall 1; banners: 2 free, shortfall 6).
+3. **Quotes.** One `quote_shortfalls` call reads `vendor_catalog` for every shortfall line and picks the cheapest active vendor: LED wall ExpoVision $18,000 (21 days), 6 banners PrintCo $510. Total $18,510.
+4. **Budget.** One `assess_budget` call reads `v_campaign_budget` and `approval_policy`: $18,510 is tier MANAGER (Marketing Director).
+   - The budget agent reports the total, remaining budget, tier and approver role back to the root. It never approves.
+   - The **root** then calls `approve_budget`. For a tier that needs a person it starts the Application Integration `request_approval`
+     workflow (see "Approval by Application Integration" below) and the reply opens with **HUMAN APPROVAL REQUIRED**. Nothing is
+     committed and no order exists yet.
+   - AUTO tier amounts are approved by policy and the budget is committed at once. Amounts above the remaining budget are rejected directly.
+5. **Order.** After approval (auto-approved, or the approver clicked Approve and the user asked for the status) `create_purchase_order` runs as the Application Integration trigger. A `before_tool_callback` recomputes the amount from the vendor price list and checks `v_request_headroom`; with no covering approval it returns `BLOCKED`. After a successful call the `after_tool_callback` stores the PO (with the integration execution id) in `purchase_orders` and writes an audit event.
+6. **Decline path.** If the approver rejects, nothing is committed and the reserved stock is released (done by the status check).
 7. **Summary.** The root aggregates stock, POs, remaining budget and approver; `get_audit_trail` reads `audit_log`.
 
 ### Approval by Application Integration (default)
@@ -128,13 +139,13 @@ Confirm / Reject prompt in the chat.
 |---|---|
 | Prompt | The root instruction fixes the order; sub-agents hand back to the root |
 | Policy | Approval tiers live in BigQuery (`approval_policy`) and decide who must approve |
-| Platform | ADK tool confirmation pauses tiers that need a human |
+| Platform | The Application Integration approval pauses the flow for tiers that need a human (in-chat Confirm / Reject remains as `APPROVAL_CHANNEL=chat`) |
 | Code | The PO guard blocks orders without a covering ledger approval; `approve_budget` rejects overspend; the approval tool lives on the orchestrator so the flow after a human decision does not depend on a sub-agent handing back |
 
 ## 7. Application Integration
 
-Two API triggers in one integration (`campaign-provisioner-workflows`): `create_purchase_order` and `notify_approver`
-(which sends the approval email through its Send Email task). The recipients come from the BigQuery `approvers` table: the guard
+Three API triggers in one integration (`campaign-provisioner-workflows`): `create_purchase_order`, `request_approval` (the native
+Approval task) and `notify_approver` (a plain email through its Send Email task). The recipients come from the BigQuery `approvers` table: the guard
 reads them, sets the subject and body, and calls the trigger once per address, so the model never supplies an address.
 `python scripts/setup_all.py` sets up BigQuery, the integration and `.env` in one go, and reports missing APIs and permissions up front.
 ADK connects with `ApplicationIntegrationToolset`. Variable names are a contract; see `integration/README.md`.
@@ -156,7 +167,8 @@ Google or customer system. The unit tests use the same seed data in memory, so t
 
 - Single currency (USD); no tax, shipping, discounts or partial deliveries.
 - The vendor choice is simple (cheapest unless lead time is a problem); no contracts or delivery-date optimisation.
-- The approver is whoever confirms in the ADK prompt. Identity and authority are **not verified**; add IAM or role checks for real use. The notification tells the approver role, but the platform does not enforce who clicks.
+- The approver is whoever receives the Application Integration approval email (the addresses given to the setup script, fixed in the published integration version). The platform checks the signed-in Google account on the approval page; the application does not map accounts to roles. The addresses shown by the agent come from the BigQuery `approvers` table, so keep both in sync (`docs/FRESH_SETUP.md`, section E).
+- The decision is carried out when the status is asked (a second message), not at the click. A fully automatic hand-off needs either a public endpoint (the parked Cloud Run link service) or a BigQuery connector inside the integration.
 - The approved amount is committed up front; there is no automatic release if a PO is later cancelled (the ledger supports RELEASE entries, but no tool writes them yet).
 - The guard compares cumulative PO totals with the approved amount per request; it does not detect duplicate POs for the same item.
 - Rejected or declined requests release stock reservations only when the root agent asks the inventory agent to; this depends on the model following the instruction.
@@ -165,19 +177,19 @@ Google or customer system. The unit tests use the same seed data in memory, so t
 - Two users working in parallel against the same BigQuery data can both see the same free stock before either reserves; there is no locking.
 - The Application Integration workflows are defined by you; the PO guard requires the documented variable names.
 
-**Verified** on a real Google Cloud project: the BigQuery setup (dataset, tables, views, seed data, approver rows), creating and
-publishing the Application Integration workflow, executing both triggers (`setup_application_integration.py --test`: the PO trigger
-returned a PO number, the notify trigger completed), reading the data back (`verify_setup.py`), and ADK building the tools
-`create_purchase_order` and `notify_approver` from the integration.
+**Verified** on a real Google Cloud project: the BigQuery setup, the Application Integration workflows including the approval
+flow (created and published by the setup script), the Agent Engine deployment running as the configured service account, the
+human-approval round trip (approval email, Approve click recorded as a `LIFTED` approval record, status check creating the
+purchase order and committing the budget), and the agent answering in the Gemini Enterprise chat (with `SUBAGENT_MODE=tool`).
 
-**Not yet confirmed:** that the approval email reaches an inbox (check the test email), a full agent run with Gemini on your
-project, and the in-chat Confirm / Reject pause. Unit tests cover the tools, tiered policy, purchase-order guard (including
-one email call per approver address), audit trail, the setup scripts and the BigQuery repository (stub client, SQL syntax).
+**Not yet confirmed:** the Reject path in the data, timings after the batch tools, and the Gemini Enterprise time limit for the
+longest request. Unit tests cover the tools (including the batch tools), tiered policy, purchase-order guard, approval flow with
+the real execution shapes seen so far, audit trail, setup scripts and the BigQuery repository (stub client, SQL syntax).
 See DEMO_RUN.md section 13.
 
 ## 9. Production notes
 
-- **Deployment target: Vertex AI Agent Engine.** `scripts/deploy_agent_engine.py` deploys the agent; Agent Engine provides the managed sessions, so a pending human approval survives restarts. The deployed agent runs as its own identity, which needs BigQuery, Application Integration and Vertex AI roles (DEMO_RUN.md section 14). With no `adk web` UI there, the approval request is returned to the client; `scripts/query_agent_engine.py` shows it and sends the Confirm / Reject back, and Gemini Enterprise can provide the chat UI.
+- **Deployment target: Vertex AI Agent Engine.** `scripts/deploy_agent_engine.py` deploys the agent; Agent Engine provides the managed sessions, so a pending human approval survives restarts (the approval state lives in BigQuery and Application Integration). The deployed agent runs as its own identity, which needs BigQuery, Application Integration and Vertex AI roles (DEMO_RUN.md section 14). With no `adk web` UI there, the approval request is returned to the client; `scripts/query_agent_engine.py` shows it and sends the Confirm / Reject back, and Gemini Enterprise can provide the chat UI: set `SUBAGENT_MODE=tool` there, because the front end showed the run up to a narrated hand-off but not after it. The agents are also told not to write commentary between steps, for the same reason.
 - Run the agent under a service account with only the roles it needs (BigQuery Data Editor + Job User, Application Integration Invoker, Vertex AI User).
 - Send the audit table to Cloud Logging or a Looker dashboard; add alerting on `po_blocked` events.
 - Add Model Armor for prompt safety and IAM-based approver checks, as shown in the architecture slide.
