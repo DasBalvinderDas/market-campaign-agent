@@ -39,7 +39,7 @@ adk web --port 8080                      # then open Web Preview on port 8080
 ```bash
 source scripts/env_setup.sh --service-account <your-service-account>   # 1. venv, packages, project, login/API/data checks
 python scripts/deploy_agent_engine.py       # 2. deploys the agent (runs as your service account)
-python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall."   # talk to it; handles Confirm / Reject
+python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall."   # talk to it (the approval itself is the email; then ask for the status)
 ```
 
 New project? `source scripts/env_setup.sh --approver-email you@example.com` also creates the BigQuery data and the workflow.
@@ -75,7 +75,7 @@ API and Vertex AI API must be enabled in the project.
 | `scripts/deploy_agent_engine.py` | Grants the agent's permissions and deploys the agent to Vertex AI Agent Engine (`--dry-run` to check first; run it again after code changes and it updates the saved deployment, `--new` for a separate one) |
 | `scripts/check_approval.py` | Shows what Application Integration says about an approval (state, approval record) when a status looks wrong |
 | `scripts/agent_engine_logs.py` | Shows the deployed agent's recent logs (used automatically when a request fails) |
-| `scripts/query_agent_engine.py` | Talks to the deployed agent and handles the human Confirm / Reject |
+| `scripts/query_agent_engine.py` | Talks to the deployed agent (and handles the in-chat Confirm / Reject when `APPROVAL_CHANNEL=chat`) |
 
 ## Configuration
 

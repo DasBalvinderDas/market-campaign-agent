@@ -152,7 +152,7 @@ ADK connects with `ApplicationIntegrationToolset`. Variable names are a contract
 
 
 **Who directs the flow.** Today the root agent directs the order of the steps, the agents read and write BigQuery
-directly, and Application Integration runs two actions (purchase order, approver alert). Directing the whole flow from
+directly, and Application Integration runs three workflows (purchase order, human approval, plain email). Directing the whole flow from
 inside Application Integration (stock, quotes, approval tier, approval, purchase order as one integration, with the agent
 as the conversational front door) is a possible next step. Both designs are compared in
 [DEMO_RUN.md section 4](DEMO_RUN.md); the second is a design only and is not built yet.
@@ -182,9 +182,11 @@ flow (created and published by the setup script), the Agent Engine deployment ru
 human-approval round trip (approval email, Approve click recorded as a `LIFTED` approval record, status check creating the
 purchase order and committing the budget), and the agent answering in the Gemini Enterprise chat.
 
-**Not yet confirmed:** the Reject path in the data, timings after the batch tools, and the Gemini Enterprise time limit for the
-longest request. Unit tests cover the tools (including the batch tools), tiered policy, purchase-order guard, approval flow with
-the real execution shapes seen so far, audit trail, setup scripts and the BigQuery repository (stub client, SQL syntax).
+The author reports the full prompt set working in the Gemini Enterprise chat (including the human approval). Not separately
+recorded in the data: the Reject path (expected: the approval record says `REJECTED`, the stock is released, no PO) and how a second
+approver sees a request the first has already decided. Unit tests cover the tools (including the batch tools), tiered policy,
+purchase-order guard, approval flow with the real execution shapes seen so far, audit trail, setup scripts and the BigQuery
+repository (stub client, SQL syntax).
 See DEMO_RUN.md section 13.
 
 ## 9. Production notes

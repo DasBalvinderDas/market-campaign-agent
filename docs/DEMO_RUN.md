@@ -112,7 +112,7 @@ project, dataset, region and approver emails. You only check the Gemini lines. T
       ├─► budget_agent ──────► BigQuery   read budget + approval tier + approver emails
       │        (returns the budget position and tier to the root; it never approves)
       ├─► ROOT calls approve_budget  ──►  Application Integration approval: email with Approve / Reject  (the human decision)
-      │        └─► BigQuery: insert COMMIT into budget_ledger
+      │        └─► BigQuery: insert COMMIT into budget_ledger (at once for small amounts; after the approver says yes otherwise)
       └─► procurement_agent ─► guard (code) ─► Application Integration: create_purchase_order
                                    └─► BigQuery: insert purchase_orders row + audit_log
 ```
@@ -122,7 +122,7 @@ project, dataset, region and approver emails. You only check the Gemini lines. T
 | Understanding the request and choosing the next step | The root agent (Gemini), following its instruction |
 | Reading and writing data | The agents' Python tools, directly against **BigQuery** |
 | Approval tier and who must approve | BigQuery table `approval_policy`, read by the tools |
-| The human Confirm / Reject | ADK confirmation prompt in the chat |
+| The human Approve / Reject | Application Integration approval email (`request_approval`); in-chat Confirm / Reject only with `APPROVAL_CHANNEL=chat` |
 | "Never order without an approved budget" | Python guard in `workflow/guard.py` (checks the BigQuery ledger) |
 | Who gets the email | BigQuery table `approvers` (role -> emails), set at setup time; the guard fills it in, never the model |
 | **Emailing the approver** | **Application Integration** trigger `notify_approver` (its Send Email task) |
@@ -160,13 +160,13 @@ What this changes:
 | Step order | Prompt + the root agent calling the specialists (an LLM decision) | A fixed flow you can see and edit as a diagram |
 | Determinism and audit | Guarded by code, but the LLM chooses the route | The route is the flow; the LLM only fills the inputs |
 | Data access | Python tools to BigQuery | BigQuery connector tasks in the flow |
-| Human approval | Confirm / Reject in the chat | An approval step in the flow (email / chat link), or a two-call pattern with the chat prompt |
+| Human approval | Application Integration approval email (Approve / Reject), decision read when the status is asked | An approval step inside the one flow |
 | Changing a business rule | Edit instructions or code | Edit the flow in the console |
 | Natural-language handling | Agent | Still the agent |
 
-Recommended pattern for the demo (keeps the in-chat Confirm / Reject): split the flow into two triggers.
+Possible pattern (keeps the human decision in the approval step): split the flow into two triggers.
 `plan_campaign` runs steps 2 to 4 and returns the plan, the amount and the required approver tier. The agent shows it
-and the human confirms in the chat. Then `execute_campaign` runs steps 5 and 6 (commit budget, create purchase orders,
+and the human decides in the approval step. Then `execute_campaign` runs steps 5 and 6 (commit budget, create purchase orders,
 audit). The process stays inside Application Integration, and the human decision stays in the conversation.
 
 **Status:** this section describes the target design. The code in this repository currently implements the flow in
@@ -199,7 +199,7 @@ The approver decides on the Google-hosted approval page; nothing has to be deplo
 | Who decides the amount and the items? | Not the model. They are computed from BigQuery (stock shortfall x cheapest active vendor) when the approval is requested. |
 | How does the flow continue after the click? | The click resolves the suspended execution and the workflow ends with `decision`. The next `get_approval_status` call reads it, then commits the budget and creates the purchase orders (or releases the stock). First reader wins, so asking twice never orders twice. |
 | Can I check it in the console? | Yes: Application Integration > integration `campaign-provisioner-workflows` > Execution logs (suspended runs show the Approval task) and the BigQuery tables `approval_requests`, `purchase_orders`, `audit_log`. |
-| Approval workflow settings unverified | The approval task was modelled on Google's published `sample_order_processing` sample; its exact behaviour was not run against a real project. If `--check-only` / the first approval misbehaves, send the error text. |
+| Has the approval flow been run on a real project? | Yes: the email arrived, the click was recorded as an approval record (`LIFTED` = approved, `REJECTED` = rejected), and the status question committed the budget and created the purchase orders. |
 
 **Parked: signed links via Cloud Run.** Setting `APPROVAL_CHANNEL=email` (and deploying `scripts/deploy_approval_service.py`)
 switches to emailed Approve / Reject links served by a public Cloud Run service with no login. It needs an organisation that allows
@@ -412,9 +412,9 @@ INSERT INTO `$P.campaign_provisioner.approvers` VALUES ('Marketing Director', 'n
 UPDATE `$P.campaign_provisioner.approvers` SET active = FALSE WHERE email = 'old.person@example.com';
 ```
 
-Roles must match `approval_policy.approver_role` exactly. If a role has no active address, the agent continues, the
-approver can still Confirm in the chat, and the agent tells the user that no email was sent (also written to the audit
-log as `approver_email_skipped_no_recipients`). Notes: `--reset` of the BigQuery script recreates this table (pass
+Roles must match `approval_policy.approver_role` exactly. If a role has no active address here, the approval is still
+started (the email goes to the addresses in the Application Integration approval step) but the agent can only name the role, not an address.
+The approval step's own recipients are set with `setup_application_integration.py --approver-email ... --republish`. Notes: `--reset` of the BigQuery script recreates this table (pass
 `--approver-email` again); `--reset-demo` leaves it alone. The model never supplies email addresses: the platform reads
 them from this table.
 
@@ -672,8 +672,9 @@ Remove the Marketing Director address, then run Prompt 3 again (new session):
 UPDATE `$GOOGLE_CLOUD_PROJECT.campaign_provisioner.approvers` SET active = FALSE WHERE approver_role = 'Marketing Director';
 ```
 
-**Expected:** the notify step reports `NO_APPROVERS` and the agent says **no email was sent**, then the run still **pauses for your
-Confirm / Reject** in the chat (the human gate does not depend on the email). Re-run `setup_bigquery.py --approver-email ...` to restore the address.
+**Expected:** the approval is still started, but the **HUMAN APPROVAL REQUIRED** message names only the role ("the approver (Marketing Director)"),
+because no address is in BigQuery to quote. The approval email itself goes to the addresses in the Application Integration approval step. Restore the BigQuery
+address with `python scripts/setup_bigquery.py --approver-email ...`.
 
 ### Bonus prompts (no human involved)
 
@@ -681,12 +682,13 @@ Confirm / Reject** in the chat (the human gate does not depend on the email). Re
 - *"I need 200 lanyards for NEXT27-KEYNOTE."* -> unknown campaign; the agent lists the three valid campaigns.
 - *"Which Next 2027 campaigns still have budget left?"* -> budget overview, no request registered.
 
-### If the approval prompt does not appear
+### If the approval message does not appear
 
-The approval pause is ADK's built-in confirmation. If the run just continues for an amount over $5,000, check: the amount really is
-above the limit (`approval_policy`), the campaign has enough budget (an unaffordable amount is rejected without a prompt), and the
-event trace shows a confirmation request for `approve_budget`. This pause has not yet been seen in a live run on your project, so
-rehearse prompts 3 and 4 once before the demo.
+For an amount over $5,000 the reply must open with **HUMAN APPROVAL REQUIRED**. If the run just carries on to purchase orders, check: the amount
+really is above the limit (`approval_policy`), the campaign has enough budget (an unaffordable amount is rejected without an approval), and
+`APPROVAL_CHANNEL` is not set to something else in `.env`. If the approval could not start, the reply quotes the error; run
+`python scripts/agent_engine_logs.py --errors-only`. If the approval started but the status does not change after you click, run
+`python scripts/check_approval.py` (`docs/FRESH_SETUP.md`, section F).
 
 ## 10. Check the data in BigQuery (nice for the demo)
 
@@ -727,10 +729,10 @@ Verified on a real Google Cloud project: the BigQuery setup, the Application Int
 flow), the Agent Engine deployment as the configured service account, the human-approval round trip (approval email, click,
 status question, purchase order, budget commit) and the agent in the Gemini Enterprise chat.
 
-**Still to confirm on your side:** the Reject path (after clicking Reject run `python scripts/check_approval.py`; the approval record
-should say `REJECTED` and asking for the status should release the stock), the run times with the batch tools (a request should
-take about a minute to a minute and a half in Gemini Enterprise), and the prompts that were not yet run there. Unit tests cover the
-tools, tiered policy, purchase-order guard, approval flow, setup scripts and the BigQuery repository (stub client, SQL syntax).
+The author reports the full prompt set working in the Gemini Enterprise chat. Not separately recorded: the Reject path (expected: after clicking
+Reject, `python scripts/check_approval.py` shows the approval record as `REJECTED`, and the status question releases the stock and creates no PO),
+and how a second approver sees a request the first has already decided. Unit tests cover the tools, tiered policy, purchase-order guard, approval
+flow, setup scripts and the BigQuery repository (stub client, SQL syntax).
 Run sections 8 and 9 once before presenting, prompts 1, 3 and 4 first.
 
 ## 14. Deploy to Vertex AI Agent Engine (the final step)
@@ -746,7 +748,7 @@ Integration workflow are used; only where the agent runs changes.
 | Where it runs | your Cloud Shell | a container Google builds and hosts |
 | Chat sessions | in memory, lost on restart | Agent Engine managed sessions (survive restarts) |
 | User interface | the `adk web` browser chat | none built in: use `scripts/query_agent_engine.py`, the Agent Engine playground, or Gemini Enterprise |
-| Human Confirm / Reject | buttons in the chat | the agent returns an approval request; the client shows it and sends your answer (the query script does this) |
+| Human approval | the approval email, then ask for the status | the same (with `APPROVAL_CHANNEL=chat` the query script shows the confirmation and sends your answer) |
 | Who it runs as | you | the Agent Engine service agent (or a service account you choose), so **it needs its own permissions** |
 | Settings | `.env` | runtime settings copied from `.env` by the deploy script; project and region are set by Agent Engine |
 | Data and emails | BigQuery, Application Integration | exactly the same (approver emails are still read from BigQuery) |

@@ -125,7 +125,7 @@ The ADK side and the setup script's logic are covered by offline tests, the inte
 against Google's published API schema (discovery document), and the Send Email task's parameter keys were copied from
 Google's published `foreach-loop-send-email` sample. On a real project the script created and published this integration, and
 `--test` executed both triggers successfully (an earlier version that used a list variable for the recipients was rejected by the
-API and was replaced by the one-address-per-call design). Not yet confirmed: that the email lands in an inbox. If something fails
+API and was replaced by the one-address-per-call design). The approval email has been received and answered on a real project (Approve recorded, purchase order created). If something fails
 the script prints the API's message and you can use the manual steps above.
 The console screens and the `execute` call may differ slightly; use `verify_setup.py --integration` to confirm.
 
