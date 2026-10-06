@@ -20,7 +20,7 @@ _TO_TOOL = [
 ]
 
 _REQUEST_RULE = (" When you call a specialist tool, write everything it needs in its request: request_id, "
-                 "campaign_id, each item (SKU or description) with quantity, and any totals or amounts.")
+                 "campaign_id, each item as its catalog SKU (from the inventory agent's report) with the quantity and shortfall, and any totals or amounts.")
 
 
 def adapt(text: str) -> str:

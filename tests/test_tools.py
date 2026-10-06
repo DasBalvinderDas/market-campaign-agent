@@ -200,3 +200,10 @@ def test_the_orchestrator_holds_the_approval_gate_not_the_budget_agent():
     root_tools = [getattr(t, "name", getattr(t, "__name__", "")) for t in root_agent.tools]
     budget_tools_names = [getattr(t, "name", getattr(t, "__name__", "")) for t in budget_agent.tools]
     assert "approve_budget" in root_tools and "approve_budget" not in budget_tools_names
+
+
+def test_vendor_quotes_accept_an_item_description():
+    from campaign_provisioner.tools.procurement_tools import get_vendor_quotes
+    out = get_vendor_quotes("hoodies", 30)
+    assert out["status"] == "ok" and out["sku"] == "HOODIE-NEXT" and out["quotes"]
+    assert get_vendor_quotes("unicorn", 1)["status"] == "error"
