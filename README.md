@@ -59,6 +59,7 @@ API and Vertex AI API must be enabled in the project.
 | [docs/SOLUTION.md](docs/SOLUTION.md) | The problem, design, code flow, BigQuery data model, assumptions and limitations |
 | [integration/README.md](integration/README.md) | The Application Integration workflow: variables, tasks and how it is created |
 | [bigquery/schema.sql](bigquery/schema.sql) | BigQuery DDL (generated from `campaign_provisioner/data/schema.py`) |
+| `docs/Campaign_Provisioner_Agent_Catalog.xlsx` | Agent catalog in the root + sub-agent format: what each agent does, its tools, BigQuery tables and Application Integration triggers, the approval flow (regenerate with `python docs/build_agent_catalog.py`) |
 | `docs/Campaign_Provisioner_Management_Deck.pptx` | Three-slide management deck with an editable architecture diagram showing BigQuery and Application Integration (regenerate with `docs/build_deck.js`) |
 
 ## Scripts
