@@ -26,3 +26,20 @@ def get_vendor_quotes(sku: str, quantity: int) -> dict:
                                               "HOODIE-NEXT), not a description."}
     out = [{**q, "total": round(float(q["unit_price"]) * quantity, 2)} for q in quotes]
     return {"status": "ok", "sku": sku, "quantity": quantity, "quotes": out}
+
+
+def quote_shortfalls(request_id: str) -> dict:
+    """Quote every shortfall line of a request in one call: the cheapest active vendor for each SKU, the line totals
+    and the grand total (read from what the inventory step recorded). Use this instead of one quote call per item.
+
+    Args:
+        request_id: Campaign request id.
+    """
+    from ..approval_flow import build_plan
+
+    plan = build_plan(get_repo(), request_id)
+    if not plan["lines"] and not plan["unfulfillable"]:
+        return {"status": "nothing_to_buy", "request_id": request_id,
+                "message": "No shortfall is recorded for this request: stock covers it, or the stock step did not run."}
+    return {"status": "ok", "request_id": request_id, "lines": plan["lines"], "grand_total": plan["total"],
+            "unfulfillable_skus": plan["unfulfillable"]}

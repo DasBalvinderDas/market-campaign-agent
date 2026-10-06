@@ -207,3 +207,33 @@ def test_vendor_quotes_accept_an_item_description():
     out = get_vendor_quotes("hoodies", 30)
     assert out["status"] == "ok" and out["sku"] == "HOODIE-NEXT" and out["quotes"]
     assert get_vendor_quotes("unicorn", 1)["status"] == "error"
+
+
+def test_batch_reserve_quote_and_assess_in_three_calls():
+    from campaign_provisioner.tools import budget_tools, inventory_tools, orchestration_tools, procurement_tools
+    rid = orchestration_tools.register_campaign_request("NEXT27-PARTNER", "gifts")["request_id"]
+    out = inventory_tools.reserve_items(rid, [inventory_tools.ItemRequest(item="hoodies", quantity=150),
+                                              inventory_tools.ItemRequest(item="insulated water bottles", quantity=600)])
+    assert out["status"] == "ok"
+    by = {i["sku"]: i for i in out["items"]}
+    assert by["HOODIE-NEXT"]["reserved"] == 120 and by["HOODIE-NEXT"]["shortfall_to_procure"] == 30
+    assert by["WATER-BOTTLE"]["reserved"] == 0 and by["WATER-BOTTLE"]["shortfall_to_procure"] == 600
+    quote = procurement_tools.quote_shortfalls(rid)
+    assert quote["status"] == "ok" and len(quote["lines"]) == 2 and quote["grand_total"] > 0
+    a = budget_tools.assess_budget("NEXT27-PARTNER", quote["grand_total"])
+    assert a["status"] == "ok" and a["fits_budget"] and a["tier"] == "AUTO" and not a["requires_human"]
+
+
+def test_batch_reserve_asks_when_an_item_is_unknown_or_ambiguous():
+    from campaign_provisioner.tools import inventory_tools, orchestration_tools
+    rid = orchestration_tools.register_campaign_request("NEXT27-PARTNER", "x")["request_id"]
+    out = inventory_tools.reserve_items(rid, [inventory_tools.ItemRequest(item="unicorn", quantity=1)])
+    assert out["status"] == "needs_clarification" and out["unresolved"][0]["item"] == "unicorn"
+
+
+def test_approved_budget_tells_the_root_to_order_with_the_plan():
+    from campaign_provisioner.tools import budget_tools, inventory_tools, orchestration_tools
+    rid = orchestration_tools.register_campaign_request("NEXT27-PARTNER", "x")["request_id"]
+    inventory_tools.reserve_items(rid, [inventory_tools.ItemRequest(item="insulated water bottles", quantity=100)])
+    out = budget_tools.approve_budget(rid, "NEXT27-PARTNER", 590, "bottles")
+    assert out["status"] == "approved" and "Budget approved for" in out["next_step"] and out["purchase_plan"]

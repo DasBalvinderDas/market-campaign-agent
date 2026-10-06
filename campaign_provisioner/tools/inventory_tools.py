@@ -1,5 +1,8 @@
 """Tools for the Inventory Agent (data from the repository / BigQuery)."""
+from pydantic import BaseModel
+
 from ..repositories import get_repo
+from ..repositories.base import _tokens
 from .audit import audit
 
 
@@ -71,3 +74,54 @@ def release_inventory(request_id: str) -> dict:
     released = get_repo().release_reservations(request_id)
     audit(request_id, "inventory_agent", "stock_released", units=released)
     return {"status": "ok", "request_id": request_id, "units_released": released}
+
+
+class ItemRequest(BaseModel):
+    item: str  # catalog SKU or free-text description, e.g. "hoodies" or "HOODIE-NEXT"
+    quantity: int
+
+
+def _resolve(text: str):
+    """Catalog item for a SKU or description: (item, None) or (None, candidates) when unknown or ambiguous."""
+    repo = get_repo()
+    exact = repo.get_availability(text.strip().upper())
+    if exact:
+        return exact, None
+    matches = repo.find_items(text)
+    if not matches:
+        return None, []
+    wanted = _tokens(text)
+    score = lambda m: len(wanted & _tokens(f"{m['sku']} {m['name']}"))  # noqa: E731
+    if len(matches) > 1 and score(matches[0]) == score(matches[1]):
+        return None, matches[:4]
+    return matches[0], None
+
+
+def reserve_items(request_id: str, items: list[ItemRequest]) -> dict:
+    """Check and reserve stock for ALL requested items in one call (use this instead of calling find_sku,
+    check_inventory and reserve_inventory item by item). Reserves at most what is free for each item.
+
+    Args:
+        request_id: Campaign request id returned by register_campaign_request.
+        items: Every requested item with its quantity; item is a catalog SKU or a description.
+    """
+    results, unresolved = [], []
+    for req in items:
+        resolved, candidates = _resolve(req.item)
+        if not resolved:
+            unresolved.append({"item": req.item, "candidates": [{"sku": c["sku"], "name": c["name"]}
+                                                                 for c in (candidates or get_repo().list_catalog())]})
+            continue
+        sku, free = resolved["sku"], int(resolved["free"])
+        reserved = max(0, min(free, req.quantity))
+        if reserved:
+            get_repo().reserve(request_id, sku, reserved)
+        get_repo().record_line(request_id, sku, req.quantity, reserved)
+        audit(request_id, "inventory_agent", "stock_reserved", sku=sku, reserved=reserved, requested=req.quantity)
+        results.append({"sku": sku, "name": resolved["name"], "requested": req.quantity, "reserved": reserved,
+                        "shortfall_to_procure": req.quantity - reserved})
+    out = {"status": "ok" if not unresolved else "needs_clarification", "request_id": request_id, "items": results}
+    if unresolved:
+        out["unresolved"] = unresolved
+        out["message"] = "Some items did not match one catalog item. Ask the user which item they mean."
+    return out

@@ -1,7 +1,7 @@
 from google.adk.agents import LlmAgent
 
 from .. import config, handoff
-from ..tools.budget_tools import check_budget, get_approval_policy
+from ..tools.budget_tools import assess_budget, check_budget, get_approval_policy
 from ..workflow import guard
 from ..workflow.integration import build_notify_tool
 
@@ -22,14 +22,14 @@ budget_agent = LlmAgent(
     model=config.MODEL,
     description="Validates the campaign budget in BigQuery and looks up the approval tier. It does not approve spend: the orchestrator holds the human approval gate.",
     instruction=handoff.adapt(
-        "You are the Budget Agent. Do not write commentary between tool calls. 1) check_budget for the campaign. 2) get_approval_policy for the total quoted "
-        "cost. " + (_NO_NOTIFY_STEP if _EMAIL else _NOTIFY_STEP) +
+        "You are the Budget Agent. Do not write commentary between tool calls. 1) Call assess_budget ONCE with the campaign and the total quoted cost (budget "
+        "position and approval tier in one call). " + (_NO_NOTIFY_STEP if _EMAIL else _NOTIFY_STEP) +
         "4) Do NOT approve anything yourself. Transfer back to campaign_provisioner right away with: the total, "
         "the remaining budget, the tier and approver role, whether the total fits the remaining budget, "
         + ("" if _EMAIL else "whether the email was sent, ") +
         "and a one-sentence justification for the approval request."
     ),
-    tools=[check_budget, get_approval_policy] + ([] if _EMAIL else [build_notify_tool()]),
+    tools=[assess_budget, check_budget, get_approval_policy] + ([] if _EMAIL else [build_notify_tool()]),
     before_tool_callback=guard.before_tool,  # fills the approver email, subject and body for notify_approver
     after_tool_callback=guard.after_tool,
     on_tool_error_callback=guard.on_tool_error,

@@ -31,6 +31,23 @@ def get_approval_policy(amount: float) -> dict:
             "requires_human": bool(p["requires_human"]), "approver_role": p["approver_role"]}
 
 
+def assess_budget(campaign_id: str, amount: float) -> dict:
+    """Budget position AND approval tier for an amount, in one call (use this instead of check_budget and
+    get_approval_policy separately).
+
+    Args:
+        campaign_id: e.g. "NEXT27-MAIN".
+        amount: Total USD of the purchase.
+    """
+    budget = check_budget(campaign_id)
+    if budget.get("status") != "ok":
+        return budget
+    policy = get_approval_policy(amount)
+    return {"status": "ok", "campaign_id": campaign_id, "amount": amount, "remaining_budget": budget["remaining"],
+            "fits_budget": float(amount) <= float(budget["remaining"]), "tier": policy["tier"],
+            "requires_human": policy["requires_human"], "approver_role": policy["approver_role"]}
+
+
 def approve_budget(request_id: str, campaign_id: str, amount: float, justification: str) -> dict:
     """Approve and commit budget for a request. Writes a COMMIT entry to the budget ledger.
 
@@ -49,7 +66,14 @@ def approve_budget(request_id: str, campaign_id: str, amount: float, justificati
             return gated
     result = _approve(request_id, campaign_id, amount, justification)
     if result.get("status") == "approved":
-        result["next_step"] = "Budget approved. Now have procurement_agent create the purchase orders."
+        from ..approval_flow import build_plan
+        plan = build_plan(get_repo(), request_id)
+        lines = "; ".join(f"{ln['quantity']} x {ln['sku']} from {ln['vendor_id']} (USD {ln['total']:,.2f})"
+                          for ln in plan["lines"])
+        result["purchase_plan"] = plan["lines"]
+        result["next_step"] = ("Budget APPROVED. Now ask procurement_agent to create the purchase orders and say so "
+                               f"explicitly: 'Budget approved for {request_id}. Create these purchase orders now: "
+                               f"{lines}'.")
     elif result.get("status") == "rejected":
         result["next_step"] = "Budget not approved. Have inventory_agent release the reserved stock, then explain to the user."
     return result
