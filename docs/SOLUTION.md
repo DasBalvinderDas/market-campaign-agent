@@ -23,11 +23,12 @@ It takes a plain-language request ("NEXT27-MAIN needs 1 booth LED video wall") a
 
 ## 3. Architecture
 
-A central **root agent** governs three **sub-agents** (Google ADK multi-agent hierarchy). How the root reaches them is a
-setting (`SUBAGENT_MODE`): `transfer` (default, the chat is handed to the specialist, as in `adk web`) or `tool` (the root
-agent calls each specialist as a tool and writes every reply; use it for front ends such as Gemini Enterprise that show only
-the root agent's answers). The specialists keep the same instructions and tools in both modes. Each specialist has batch tools
-(`reserve_items`, `quote_shortfalls`, `assess_budget`) so a request needs a handful of model calls, not one per item.
+A central **root agent** governs three **specialist agents**: inventory, procurement and budget. The root calls each specialist
+as a tool (ADK `AgentTool`), and the specialist returns its result to the root, so the root agent writes every reply the user
+sees. This is the same on every platform (`adk web`, the Agent Engine playground, Gemini Enterprise), because Gemini Enterprise
+shows the root agent's answers only. Each specialist is still its own LLM agent with its own instruction, tools and guards. They
+have batch tools (`reserve_items`, `quote_shortfalls`, `assess_budget`) so a request needs a handful of model calls, not one per
+item, and every instruction forbids commentary between steps (a front end may treat the first text as the end of the answer).
 
 ```
                        campaign_provisioner  (root / orchestrator)
@@ -65,7 +66,6 @@ campaign_provisioner/
   workflow/guard.py           before/after tool callbacks: PO guard, PO recording, audit, tool-error callback
   workflow/integration_client.py  REST client: start a workflow, read an execution and its approval records
   approval_flow.py            builds the purchase plan, starts the approval workflow, reads the decision, finishes it
-  handoff.py                  SUBAGENT_MODE: transfer or tool
   sub_agents/                 inventory_agent, procurement_agent, budget_agent
 approval_service/             Cloud Run service behind signed Approve / Reject links (parked, main.py)
 scripts/                      setup_all.py, setup_bigquery.py, setup_application_integration.py, verify_setup.py,
@@ -137,7 +137,7 @@ Confirm / Reject prompt in the chat.
 
 | Layer | Mechanism |
 |---|---|
-| Prompt | The root instruction fixes the order; sub-agents hand back to the root |
+| Prompt | The root instruction fixes the order; the specialists only return results to the root |
 | Policy | Approval tiers live in BigQuery (`approval_policy`) and decide who must approve |
 | Platform | The Application Integration approval pauses the flow for tiers that need a human (in-chat Confirm / Reject remains as `APPROVAL_CHANNEL=chat`) |
 | Code | The PO guard blocks orders without a covering ledger approval; `approve_budget` rejects overspend; the approval tool lives on the orchestrator so the flow after a human decision does not depend on a sub-agent handing back |
@@ -180,7 +180,7 @@ Google or customer system. The unit tests use the same seed data in memory, so t
 **Verified** on a real Google Cloud project: the BigQuery setup, the Application Integration workflows including the approval
 flow (created and published by the setup script), the Agent Engine deployment running as the configured service account, the
 human-approval round trip (approval email, Approve click recorded as a `LIFTED` approval record, status check creating the
-purchase order and committing the budget), and the agent answering in the Gemini Enterprise chat (with `SUBAGENT_MODE=tool`).
+purchase order and committing the budget), and the agent answering in the Gemini Enterprise chat.
 
 **Not yet confirmed:** the Reject path in the data, timings after the batch tools, and the Gemini Enterprise time limit for the
 longest request. Unit tests cover the tools (including the batch tools), tiered policy, purchase-order guard, approval flow with
@@ -189,7 +189,7 @@ See DEMO_RUN.md section 13.
 
 ## 9. Production notes
 
-- **Deployment target: Vertex AI Agent Engine.** `scripts/deploy_agent_engine.py` deploys the agent; Agent Engine provides the managed sessions, so a pending human approval survives restarts (the approval state lives in BigQuery and Application Integration). The deployed agent runs as its own identity, which needs BigQuery, Application Integration and Vertex AI roles (DEMO_RUN.md section 14). With no `adk web` UI there, the approval request is returned to the client; `scripts/query_agent_engine.py` shows it and sends the Confirm / Reject back, and Gemini Enterprise can provide the chat UI: set `SUBAGENT_MODE=tool` there, because the front end showed the run up to a narrated hand-off but not after it. The agents are also told not to write commentary between steps, for the same reason.
+- **Deployment target: Vertex AI Agent Engine.** `scripts/deploy_agent_engine.py` deploys the agent; Agent Engine provides the managed sessions, so a pending human approval survives restarts (the approval state lives in BigQuery and Application Integration). The deployed agent runs as its own identity, which needs BigQuery, Application Integration and Vertex AI roles (DEMO_RUN.md section 14). With no `adk web` UI there, the approval request is returned to the client; `scripts/query_agent_engine.py` shows it and sends the Confirm / Reject back, and Gemini Enterprise provides the chat UI (the agent is built for it: the root agent writes every reply).
 - Run the agent under a service account with only the roles it needs (BigQuery Data Editor + Job User, Application Integration Invoker, Vertex AI User).
 - Send the audit table to Cloud Logging or a Looker dashboard; add alerting on `po_blocked` events.
 - Add Model Armor for prompt safety and IAM-based approver checks, as shown in the architecture slide.

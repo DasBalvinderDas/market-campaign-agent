@@ -105,12 +105,12 @@ project, dataset, region and approver emails. You only check the Gemini lines. T
  You (adk web chat)
       │  "NEXT27-MAIN needs 1 booth LED video wall"
       ▼
- ROOT AGENT  campaign_provisioner   ◄── decides the order of steps (instructions + sub-agent hand-offs)
+ ROOT AGENT  campaign_provisioner   ◄── decides the order of steps (instructions); calls the specialists as tools
       │
       ├─► inventory_agent  ──► BigQuery   find item, read free stock, insert reservation
       ├─► procurement_agent ─► BigQuery   read vendor prices (quotes)
       ├─► budget_agent ──────► BigQuery   read budget + approval tier + approver emails
-      │        └─► Application Integration: notify_approver   (EMAILS the approver), then hands back
+      │        (returns the budget position and tier to the root; it never approves)
       ├─► ROOT calls approve_budget  ──►  Application Integration approval: email with Approve / Reject  (the human decision)
       │        └─► BigQuery: insert COMMIT into budget_ledger
       └─► procurement_agent ─► guard (code) ─► Application Integration: create_purchase_order
@@ -157,7 +157,7 @@ What this changes:
 
 | | Agent-directed (today) | Application Integration-directed |
 |---|---|---|
-| Step order | Prompt + sub-agent hand-offs (an LLM decision) | A fixed flow you can see and edit as a diagram |
+| Step order | Prompt + the root agent calling the specialists (an LLM decision) | A fixed flow you can see and edit as a diagram |
 | Determinism and audit | Guarded by code, but the LLM chooses the route | The route is the flow; the LLM only fills the inputs |
 | Data access | Python tools to BigQuery | BigQuery connector tasks in the flow |
 | Human approval | Confirm / Reject in the chat | An approval step in the flow (email / chat link), or a two-call pattern with the chat prompt |
@@ -456,8 +456,8 @@ adk web          # run from the repo root (the folder that contains campaign_pro
 ```
 
 Open the URL it prints (http://localhost:8000, or use Cloud Shell's **Web Preview** on port 8000). Pick
-**campaign_provisioner** in the agent dropdown. The Events panel shows each tool call and each hand-off between
-the root agent and the sub-agents.
+**campaign_provisioner** in the agent dropdown. The Events panel shows each tool call, including the root agent
+calling the three specialist agents (inventory_agent, procurement_agent, budget_agent) as tools.
 
 **Reset before every demo run:**
 
@@ -718,14 +718,14 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_
 | No approval email arrives | Check `verify_setup.py` lists an address for the role, check spam, run `setup_application_integration.py --test --test-email you@example.com`, and look at the audit log for `approver_notified` / `approver_notification_failed` / `approver_email_skipped_no_recipients` |
 | Agent says "I already processed this" | Start a **New session**; the chat history is read by the model |
 | `ModuleNotFoundError: campaign_provisioner` in pytest | Keep `pytest.ini` in the repo root |
-| Works in Agent Engine, but **Gemini Enterprise shows no answer after a hand-off** to a specialist (for example procurement) | The front end probably shows only the root agent's replies, and with the default `SUBAGENT_MODE=transfer` the specialists write some of them. Set `SUBAGENT_MODE=tool` in `.env` and redeploy (`python scripts/deploy_agent_engine.py`): the root agent then calls inventory, procurement and budget as tools and writes every reply. If it still shows nothing, look at the session's Traces tab in Agent Engine for the run time and errors (`python scripts/agent_engine_logs.py --errors-only`). |
+| **Gemini Enterprise** shows no final answer, or stops mid-way | Check the session's Traces tab in Agent Engine: the run time (a request should take about a minute to a minute and a half) and any error (`python scripts/agent_engine_logs.py --errors-only`). The agent never writes text between steps on purpose; do not add it back. |
 | PO call shows BLOCKED unexpectedly | The integration's input variable names must match `integration/README.md` exactly |
 
 ## 13. What has and hasn't been verified
 
 Verified on a real Google Cloud project: the BigQuery setup, the Application Integration workflows (including the approval
 flow), the Agent Engine deployment as the configured service account, the human-approval round trip (approval email, click,
-status question, purchase order, budget commit) and the agent in the Gemini Enterprise chat (with `SUBAGENT_MODE=tool`).
+status question, purchase order, budget commit) and the agent in the Gemini Enterprise chat.
 
 **Still to confirm on your side:** the Reject path (after clicking Reject run `python scripts/check_approval.py`; the approval record
 should say `REJECTED` and asking for the status should release the stock), the run times with the batch tools (a request should
@@ -866,12 +866,12 @@ Agent Engine have been run on a real project. If a deploy prints a problem, send
 ### 14.9 Gemini Enterprise
 
 The deployed agent can be registered in a Gemini Enterprise app (the chat UI for business users).
-- Set `SUBAGENT_MODE=tool` in `.env` and redeploy. The front end showed the run only up to a narrated hand-off ("I'm now transferring
-  to...") and not after it, so in tool mode the root agent calls inventory, procurement and budget as tools and writes every reply.
-  Every instruction also forbids commentary between steps for the same reason.
+- No special setting: the root agent always calls inventory, procurement and budget as tools and writes every reply. (Earlier the chat was
+  handed over to the specialists; Gemini Enterprise showed the run only up to a narrated hand-off such as "I'm now transferring to...",
+  so the hand-over was removed.) Every instruction also forbids commentary between steps for the same reason.
 - The "Working on the request" panel lists each tool call with a live timer; there is no periodic message. A request takes about a
   minute to a minute and a half. If a run is cut off at about two minutes, send the Traces view of that Agent Engine session.
 - The human approval works the same way: the reply starts with **HUMAN APPROVAL REQUIRED**, the approver clicks the email, and you ask
   for the status in the same chat.
 - Use a **new chat** after every data reset (`python scripts/setup_bigquery.py --reset-demo`).
-- Tool mode starts a separate internal session for each specialist call (ADK `AgentTool`); it does not affect Gemini Enterprise's own session.
+- Each specialist call runs in its own short-lived internal session (ADK `AgentTool`); it does not affect Gemini Enterprise's own session.

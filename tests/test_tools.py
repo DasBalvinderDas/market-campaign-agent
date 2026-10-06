@@ -120,8 +120,17 @@ def test_unknown_campaign_lists_known():
 
 
 def test_agent_wiring():
+    """The root agent governs the three specialists by calling them as tools (the same on every platform)."""
+    from google.adk.tools.agent_tool import AgentTool
     from campaign_provisioner.agent import root_agent
-    assert [a.name for a in root_agent.sub_agents] == ["inventory_agent", "procurement_agent", "budget_agent"]
+    assert root_agent.sub_agents == []
+    names = [t.agent.name for t in root_agent.tools if isinstance(t, AgentTool)]
+    assert names == ["inventory_agent", "procurement_agent", "budget_agent"]
+    assert root_agent.tools[4].name == "approve_budget"  # only the root can approve
+    for tool in root_agent.tools:
+        if isinstance(tool, AgentTool):
+            assert "ransfer" not in tool.agent.instruction  # no hand-off wording: the specialists reply to the root
+    assert "ransfer" not in root_agent.instruction
 
 
 def test_adk_confirmation_predicate_receives_args():

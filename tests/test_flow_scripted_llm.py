@@ -1,6 +1,6 @@
 """End-to-end run of the real agent tree and ADK runner with a scripted (fake) model.
 
-The model's answers are scripted; everything else is real: ADK's transfer between agents, tool calls, the
+The model's answers are scripted; everything else is real: the root agent calling the specialists as tools (ADK AgentTool), tool calls, the
 human-approval pause and resume, the guard callbacks and the repository. It catches wiring problems that unit tests
 of single tools cannot (for example a callback that was never registered, or a flow that stops after the approval).
 """
@@ -63,7 +63,7 @@ class ScriptedLlm(BaseLlm):
         yield LlmResponse(content=types.Content(role="model", parts=[self.decide(key, n, _STATE["request_id"], approved)]))
 
     def decide(self, key, n, req, approved=False):
-        back = fc("transfer_to_agent", agent_name="campaign_provisioner")
+        back = types.Part(text="Done, here is my report.")  # a specialist ends by replying to the root agent
         if key == "Inventory Agent":
             return [fc("find_sku", description="booth LED video wall"),
                     fc("check_inventory", sku="BOOTH-LEDWALL", quantity_needed=1),
@@ -83,23 +83,25 @@ class ScriptedLlm(BaseLlm):
         # root orchestrator: it holds the approval gate (approve_budget)
         if n <= 5:
             return [fc("register_campaign_request", campaign_id="NEXT27-MAIN", summary="1 LED wall"),
-                    fc("transfer_to_agent", agent_name="inventory_agent"),
-                    fc("transfer_to_agent", agent_name="procurement_agent"),
-                    fc("transfer_to_agent", agent_name="budget_agent"),
+                    fc("inventory_agent", request=f"{req}: 1 booth LED video wall"),
+                    fc("procurement_agent", request=f"Quote the shortfalls of {req}"),
+                    fc("budget_agent", request="NEXT27-MAIN total 18000"),
                     fc("approve_budget", request_id=req, campaign_id="NEXT27-MAIN", amount=18000,
                        justification="1 LED wall")][n - 1]
         if n == 6 and _STATE["email"]:
             return types.Part(text="Approval requested by email; the order follows automatically after the click.")
         if n == 6:
-            return fc("transfer_to_agent", agent_name="procurement_agent") if approved else \
+            return fc("procurement_agent", request=f"Budget approved for {req}. Create the purchase orders now.") if approved else \
                 types.Part(text="Not approved, nothing was ordered.")
         return types.Part(text="All done: stock reserved, budget approved, purchase order created.")
 
 
 def _use_scripted_model(agent):
+    from google.adk.tools.agent_tool import AgentTool
     agent.model = ScriptedLlm()
-    for sub in agent.sub_agents:
-        _use_scripted_model(sub)
+    for tool in agent.tools:
+        if isinstance(tool, AgentTool):
+            _use_scripted_model(tool.agent)
 
 
 async def _run(confirm: bool, expect_pause: bool = True):
@@ -140,7 +142,7 @@ def test_confirmed_request_continues_to_a_purchase_order():
     events = asyncio.run(_run(confirm=True))
     tools = _tool_names(events)
     assert "approve_budget" in tools
-    assert "create_purchase_order" in tools, f"flow stopped after the approval; calls were {tools}"
+    assert tools.count("procurement_agent") == 2, f"flow stopped after the approval; calls were {tools}"
     assert get_repo().t["purchase_orders"], "the PO must be recorded"
     actions = [a["action"] for a in get_repo().t["audit_log"]]
     assert "approver_notified" in actions and "budget_approved" in actions and "po_created" in actions
@@ -149,7 +151,7 @@ def test_confirmed_request_continues_to_a_purchase_order():
 def test_rejected_request_creates_nothing():
     from campaign_provisioner.repositories import get_repo
     events = asyncio.run(_run(confirm=False))
-    assert "create_purchase_order" not in _tool_names(events)
+    assert _tool_names(events).count("procurement_agent") == 1  # quotes only, never the order
     assert not get_repo().t["purchase_orders"]
     assert "budget_approved" not in [a["action"] for a in get_repo().t["audit_log"]]
 
@@ -184,7 +186,7 @@ def test_email_channel_end_to_end_request_then_click(monkeypatch):
     finally:
         _STATE["email"] = False
     tools = _tool_names(events)
-    assert "approve_budget" in tools and "create_purchase_order" not in tools
+    assert "approve_budget" in tools and tools.count("procurement_agent") == 1
     assert repo.get_approval_for_request(_STATE["request_id"])["status"] == "PENDING"
     assert repo.get_budget("NEXT27-MAIN")["committed"] == 30000.0
     body = next(i["email_body"] for t, i in ex.calls if t == config.NOTIFY_TRIGGER)

@@ -12,7 +12,7 @@ A central **root agent** governs three **sub-agents**: inventory, procurement an
 | **Human in the loop** | Spend above $5,000 needs a person: an **Application Integration approval** (a native approval task) emails the approver Approve / Reject; asking the agent for the status then creates the PO or releases the stock. Parked options: signed links via a Cloud Run service, or Confirm / Reject in the chat | Application Integration trigger `request_approval` |
 | **Service account** | One account (`AGENT_SERVICE_ACCOUNT`) with BigQuery + Application Integration access runs the deployed agent and the link service | `.env` |
 | **Vertex AI Agent Engine** | Where the finished agent runs (hosted, managed sessions) | `scripts/deploy_agent_engine.py` |
-| **Front ends** | `adk web`, the Agent Engine playground, **Gemini Enterprise** (set `SUBAGENT_MODE=tool` there, see `docs/DEMO_RUN.md` 14.9) | `.env` |
+| **Front ends** | `adk web`, the Agent Engine playground, **Gemini Enterprise** (see `docs/DEMO_RUN.md` 14.9) | `.env` |
 | **Code guard** | A purchase order is blocked unless an approved budget covers it | `campaign_provisioner/workflow/guard.py` |
 
 Approval tiers (a BigQuery table, so they can change without code): up to $5,000 auto-approved, $5,000 to $50,000

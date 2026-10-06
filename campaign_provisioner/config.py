@@ -18,10 +18,6 @@ APP_INTEGRATION_LOCATION = os.getenv("APP_INTEGRATION_LOCATION", "us-central1")
 PO_TRIGGER = os.getenv("APP_INTEGRATION_PO_TRIGGER", "api_trigger/create_purchase_order")
 NOTIFY_TRIGGER = os.getenv("APP_INTEGRATION_NOTIFY_TRIGGER", "api_trigger/notify_approver")
 
-# How the root agent reaches the inventory / procurement / budget specialists: "transfer" (hand the chat over) or
-# "tool" (call each as a tool, so the root agent writes every reply; for front ends such as Gemini Enterprise).
-SUBAGENT_MODE = os.getenv("SUBAGENT_MODE", "transfer").lower()
-
 EVENT_NAME = "Google Next 2027"
 
 # Who runs the deployed agent and the approval-link service (a service account with BigQuery + Application
