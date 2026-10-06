@@ -236,12 +236,13 @@ def request_integration_approval(repo, executor, request_id: str, campaign_id: s
     return {"status": "pending_approval", "approval_id": approval["approval_id"], "amount": plan["total"],
             "approver_role": role, "approver_emails": emails, "channel": "application_integration",
             "announce": (f"HUMAN APPROVAL REQUIRED: an approval email with Approve / Reject buttons has been sent to "
-                         f"{', '.join(emails) or 'the ' + role} ({role}) for USD {plan['total']:,.2f}. Procurement "
-                         f"(purchase orders) will be done ONLY once it is approved."),
-            "next_step": "Start your reply with the text in `announce`, in bold, exactly. Do NOT create purchase "
-                         "orders. Tell the user that after the approver clicks Approve they should ask for the "
-                         "approval status (get_approval_status): the purchase orders are then created, or the stock "
-                         "is released if it was rejected."}
+                         f"{', '.join(emails) if emails else 'the approver'} ({role}) for USD {plan['total']:,.2f}. "
+                         f"Procurement (purchase orders) will be done ONLY once it is approved."),
+            "next_step": "Start your reply with the text in `announce`, in bold, exactly. Never write an email address "
+                         "that is not in `approver_emails`; if it is empty, name only the role. Do NOT create purchase "
+                         f"orders. Tell the user that after the approver clicks Approve they should send: "
+                         f"\"What is the approval status of {request_id}?\" and the purchase orders are then created "
+                         "(or the stock is released if it was rejected)."}
 
 
 def sync_integration_decision(repo, executor, approval: dict) -> dict:
