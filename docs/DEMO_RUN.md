@@ -718,6 +718,7 @@ bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_
 | No approval email arrives | Check `verify_setup.py` lists an address for the role, check spam, run `setup_application_integration.py --test --test-email you@example.com`, and look at the audit log for `approver_notified` / `approver_notification_failed` / `approver_email_skipped_no_recipients` |
 | Agent says "I already processed this" | Start a **New session**; the chat history is read by the model |
 | `ModuleNotFoundError: campaign_provisioner` in pytest | Keep `pytest.ini` in the repo root |
+| Works in Agent Engine, but **Gemini Enterprise shows no answer after a hand-off** to a specialist (for example procurement) | The front end probably shows only the root agent's replies, and with the default `SUBAGENT_MODE=transfer` the specialists write some of them. Set `SUBAGENT_MODE=tool` in `.env` and redeploy (`python scripts/deploy_agent_engine.py`): the root agent then calls inventory, procurement and budget as tools and writes every reply. If it still shows nothing, look at the session's Traces tab in Agent Engine for the run time and errors (`python scripts/agent_engine_logs.py --errors-only`). |
 | PO call shows BLOCKED unexpectedly | The integration's input variable names must match `integration/README.md` exactly |
 
 ## 13. What has and hasn't been verified

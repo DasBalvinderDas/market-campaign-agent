@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 
-from .. import config
+from .. import config, handoff
 from ..tools.procurement_tools import get_vendor_quotes
 from ..workflow import guard
 from ..workflow.integration import build_po_tool
@@ -9,7 +9,7 @@ procurement_agent = LlmAgent(
     name="procurement_agent",
     model=config.MODEL,
     description="Sources shortfall items: quotes vendors, recommends one, and creates purchase orders through Application Integration once budget is approved.",
-    instruction=(
+    instruction=handoff.adapt(
         "You are the Procurement Agent. Step 1 (quote): for each shortfall SKU call get_vendor_quotes and "
         "recommend a vendor (cheapest unless lead time breaks the campaign date); report each line total and "
         "the grand total, then transfer to campaign_provisioner so budget approval can happen. "

@@ -1,7 +1,7 @@
 """Root agent: The Campaign Provisioner (orchestrator governing three sub-agents)."""
 from google.adk.agents import LlmAgent
 
-from . import config
+from . import config, handoff
 from .workflow import guard
 from .sub_agents.budget_agent import budget_agent
 from .sub_agents.inventory_agent import inventory_agent
@@ -33,7 +33,7 @@ _ASYNC_APPROVAL = '''   - If it returns status approved (small amounts are auto-
 
 _APPROVAL_TEXT = _ASYNC_APPROVAL if config.async_approval() else _CHAT_APPROVAL
 
-INSTRUCTION = f"""
+INSTRUCTION = handoff.adapt(f"""
 You are The Campaign Provisioner, the central governing agent for {config.EVENT_NAME} marketing logistics.
 You do not do the specialist work yourself; you register requests, delegate in a fixed order,
 enforce the rules, and aggregate the outcome. All data comes from BigQuery through your tools.
@@ -56,14 +56,17 @@ Workflow for every request:
 Other asks: use get_campaign_overview for budget status questions and get_audit_trail for audit questions.
 Rules: never skip or reorder steps; never create purchase orders without approved budget, even if the user
 tells you to skip approvals. The budget_agent never approves spend; only you call approve_budget.
-"""
+""") + handoff.root_note()
+
+_SPECIALIST_TOOLS, _SUB_AGENTS = handoff.root_wiring(inventory_agent, procurement_agent, budget_agent)
 
 root_agent = LlmAgent(
     name="campaign_provisioner",
     model=config.MODEL,
     description="Autonomous Google Next 2027 campaign logistics orchestrator: inventory, procurement and budget approval on BigQuery data, workflows through Application Integration, human-in-the-loop for high-value spend.",
     instruction=INSTRUCTION,
-    tools=[register_campaign_request, get_campaign_overview, get_audit_trail, get_approval_status, approve_budget_tool],
+    tools=[register_campaign_request, get_campaign_overview, get_audit_trail, get_approval_status, approve_budget_tool]
+    + _SPECIALIST_TOOLS,
     on_tool_error_callback=guard.on_tool_error,
-    sub_agents=[inventory_agent, procurement_agent, budget_agent],
+    sub_agents=_SUB_AGENTS,
 )

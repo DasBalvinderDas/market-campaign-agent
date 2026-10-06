@@ -49,7 +49,7 @@ def approve_budget(request_id: str, campaign_id: str, amount: float, justificati
             return gated
     result = _approve(request_id, campaign_id, amount, justification)
     if result.get("status") == "approved":
-        result["next_step"] = "Budget approved. Now transfer to procurement_agent to create the purchase orders."
+        result["next_step"] = "Budget approved. Now have procurement_agent create the purchase orders."
     elif result.get("status") == "rejected":
         result["next_step"] = "Budget not approved. Have inventory_agent release the reserved stock, then explain to the user."
     return result

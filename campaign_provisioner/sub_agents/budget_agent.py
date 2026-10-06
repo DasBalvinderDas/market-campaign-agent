@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 
-from .. import config
+from .. import config, handoff
 from ..tools.budget_tools import check_budget, get_approval_policy
 from ..workflow import guard
 from ..workflow.integration import build_notify_tool
@@ -21,7 +21,7 @@ budget_agent = LlmAgent(
     name="budget_agent",
     model=config.MODEL,
     description="Validates the campaign budget in BigQuery and looks up the approval tier. It does not approve spend: the orchestrator holds the human approval gate.",
-    instruction=(
+    instruction=handoff.adapt(
         "You are the Budget Agent. 1) check_budget for the campaign. 2) get_approval_policy for the total quoted "
         "cost. " + (_NO_NOTIFY_STEP if _EMAIL else _NOTIFY_STEP) +
         "4) Do NOT approve anything yourself. Transfer back to campaign_provisioner right away with: the total, "

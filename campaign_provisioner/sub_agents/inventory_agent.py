@@ -1,6 +1,6 @@
 from google.adk.agents import LlmAgent
 
-from .. import config
+from .. import config, handoff
 from ..workflow import guard
 from ..tools.inventory_tools import check_inventory, find_sku, release_inventory, reserve_inventory
 
@@ -8,7 +8,7 @@ inventory_agent = LlmAgent(
     name="inventory_agent",
     model=config.MODEL,
     description="Checks campaign material stock in BigQuery, reserves in-stock units, reports shortfalls, releases reservations.",
-    instruction=(
+    instruction=handoff.adapt(
         "You are the Inventory Agent. For each requested item: if the user gave a description rather than an "
         "exact SKU, call find_sku first and use only SKUs it returns (never invent a SKU; if there is no match, "
         "tell the root agent so the user can pick from the catalog). Then call check_inventory and "
