@@ -137,9 +137,61 @@ def sheet(wb, title, headers, rows, widths):
     return ws
 
 
+SUMMARY = [
+    ("Root Agent", "Campaign Provisioner Agent (Orchestrator)",
+     "The root agent acts as a front-line coordinator by greeting users, collecting the campaign and the items, and delegating to the "
+     "inventory, procurement and budget agents in a fixed order. It incorporates a critical human-in-the-loop approval gate: for spend "
+     "above $5,000 it starts an Application Integration approval, tells the user that an approval email was sent, and holds all "
+     "procurement until the approver clicks Approve. Once approved it commits the budget and has the purchase orders created; if "
+     "rejected it releases the reserved stock.",
+     "BigQuery, Application Integration", 150),
+    ("Sub Agent", "Inventory Agent",
+     "The inventory agent matches each requested item to the BigQuery catalog, checks free stock and reserves the available units for "
+     "all items in one call. It records the shortfall per item that has to be procured, and releases the reserved stock when a "
+     "request is rejected.",
+     "BigQuery", 95),
+    ("Sub Agent", "Procurement Agent",
+     "The procurement agent quotes every shortfall line from the cheapest active vendor, weighing price and lead time, and reports the "
+     "grand total. After the budget is approved it creates the purchase orders through Application Integration, behind a code guard "
+     "that blocks any order not covered by an approved budget.",
+     "BigQuery, Application Integration", 110),
+    ("Sub Agent", "Budget Agent",
+     "The budget agent checks the campaign's remaining budget and finds the approval tier (auto-approved up to $5,000, Marketing "
+     "Director up to $50,000, VP Marketing and Finance Controller above) and the approver role in one call, then reports back to the "
+     "root agent. It never approves spend or places orders.",
+     "BigQuery", 95),
+]
+
+
+def summary_sheet(wb):
+    """The one-table summary in the same layout as the container agent reference: no header row, application and owner
+    merged over all rows, then agent type, agent name, description, data sources."""
+    ws = wb.create_sheet("Agent Summary", 0)
+    grey = Side(style="thin", color="BFBFBF")
+    box = Border(top=grey, bottom=grey, left=grey, right=grey)
+    for i, (kind, name, desc, src, height) in enumerate(SUMMARY, start=1):
+        for col, val in enumerate(("Campaign Provisioner Agent (Google Next 2027)", OWNER, kind, name, desc, src), start=1):
+            if i == 1 or col > 2:
+                ws.cell(row=i, column=col, value=val)
+        ws.row_dimensions[i].height = height
+    n = len(SUMMARY)
+    ws.merge_cells(start_row=1, start_column=1, end_row=n, end_column=1)
+    ws.merge_cells(start_row=1, start_column=2, end_row=n, end_column=2)
+    for r in range(1, n + 1):
+        for c in range(1, 7):
+            cell = ws.cell(row=r, column=c)
+            cell.border = box
+            cell.font = Font(name="Calibri", size=11)
+            cell.alignment = Alignment(wrap_text=True, vertical="center" if c < 5 else "top",
+                                       horizontal="center" if c in (3,) else "left")
+    for c, w in enumerate([24, 14, 10, 20, 78, 22], start=1):
+        ws.column_dimensions[get_column_letter(c)].width = w
+
+
 def main():
     wb = Workbook()
     wb.remove(wb.active)
+    summary_sheet(wb)
     sheet(wb, "Agents", ["Application", "Owner", "Agent Type", "Agent Name", "Description", "Data sources and integrations"],
           [(APP, OWNER, t, n, d, s) for t, n, d, s in AGENTS], [34, 18, 13, 26, 90, 46])
     sheet(wb, "Tools", ["Agent", "Tool", "Kind", "What it does", "BigQuery reads", "BigQuery writes", "Application Integration", "Guardrail"],
