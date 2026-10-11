@@ -17,7 +17,8 @@ class StubClient:
         self.rows, self.calls = rows or [], []
 
     def query(self, sql, job_config=None):
-        params = {p.name: (p.type_, p.value) for p in (job_config.query_parameters if job_config else [])}
+        params = {p.name: (getattr(p, "type_", None) or f"ARRAY<{p.array_type}>", getattr(p, "value", None) or getattr(p, "values", None))
+                  for p in (job_config.query_parameters if job_config else [])}
         self.calls.append((sql, params))
         return _Job(self.rows)
 
@@ -98,10 +99,12 @@ def test_every_query_is_valid_bigquery_sql():
     r.get_decision("D"); r.get_decision_for_request("R"); r.decide("D", "APPROVED", "x"); r.set_decision_note("D", "FAILED", "n")
     r.create_holds([{"request_id": "R", "scenario_id": "S", "line_id": "L", "depot_id": "D", "sku": "S", "quantity": 1}])
     r.release_holds("R"); r.consume_hold("L")
-    r.record_po({"po_number": "P", "request_id": "R", "line_id": "L", "vendor_id": "V", "sku": "S", "region": "US",
-                 "quantity": 1, "total_amount": 1.0, "status": "CREATED"})
-    r.record_transfer({"transfer_number": "T", "request_id": "R", "line_id": "L", "depot_id": "D", "sku": "S",
-                       "region": "US", "quantity": 1, "status": "CREATED"})
+    r.record_pos([{"po_number": "P", "request_id": "R", "line_id": "L", "vendor_id": "V", "sku": "S", "region": "US",
+                   "quantity": 1, "total_amount": 1.0, "status": "CREATED"}])
+    r.record_transfers([{"transfer_number": "T", "request_id": "R", "line_id": "L", "depot_id": "D", "sku": "S",
+                         "region": "US", "quantity": 1, "status": "CREATED"}])
+    r.mark_lines_executed(["L1", "L2"]); r.consume_holds(["L1"]); r.list_assets(); r.list_vendor_offers_all()
+    r.log_audit_batch("R", [("a", "x", {}), ("a", "y", {})])
     r.list_pos("R"); r.list_transfers("R"); r.list_readiness(None); r.log_audit("R", "a", "b", {}); r.list_audit(None)
     assert len(c.calls) > 40
     for sql, _ in c.calls:
@@ -133,3 +136,34 @@ def test_every_repository_method_is_implemented_by_both_backends():
     for cls in (MemoryRepository, BigQueryRepository):
         missing = [n for n in names if getattr(cls, n) is getattr(Repository, n)]
         assert not missing, (cls.__name__, missing)
+
+
+def test_bulk_writes_are_single_statements_with_array_parameters():
+    r, c = repo()
+    r.mark_lines_executed(["A", "B", "C"])
+    r.consume_holds(["A", "B"])
+    r.mark_lines_executed([])                       # nothing to do: no query
+    r.log_audit_batch("R", [("a", "x", {"k": 1}), ("a", "y", {})])
+    assert len(c.calls) == 3
+    upd, params = c.calls[0]
+    assert "IN UNNEST(@ids)" in upd and params["ids"] == ("ARRAY<STRING>", ["A", "B", "C"])
+    ins, params = c.calls[2]
+    assert ins.count("(@event_id_") == 2 and params["created_at_1"][1] > params["created_at_0"][1]   # kept in order
+
+
+def test_the_planner_reads_catalog_offers_and_stock_in_bulk():
+    r, c = repo([])
+    from datetime import date
+    from launchkit_provisioner import planner
+    ctx_calls = []
+    class Spy(BigQueryRepository):
+        def _run(self, sql, **p):
+            ctx_calls.append(sql)
+            return super()._run(sql, **p)
+    s = Spy("proj", "ds", client=StubClient([]))
+    ctx = planner._Ctx.__new__(planner._Ctx)
+    ctx.repo, ctx._offers, ctx._assets, ctx._depots = s, None, None, None
+    ctx.offers("A"); ctx.offers("B"); ctx.depots("A"); ctx.depots("B")
+    with pytest.raises(planner.PlanError):
+        ctx.asset("A"); ctx.asset("B")
+    assert len(ctx_calls) == 3                       # one query each, not one per SKU

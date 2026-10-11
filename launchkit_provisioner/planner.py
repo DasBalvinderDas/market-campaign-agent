@@ -91,7 +91,7 @@ class _Ctx:
         self.today = today
         self.repo = repo
         self.window_days = (self.launch["in_hand_by"] - today).days
-        self._offers, self._assets, self._depots = {}, {}, {}
+        self._offers = self._assets = self._depots = None
 
     def lane(self, a, b):
         lane = self.lanes.get((a, b))
@@ -99,20 +99,27 @@ class _Ctx:
             raise PlanError(f"No shipping lane from {a} to {b}.")
         return lane
 
+    # One bulk read each (three queries in BigQuery), grouped here, instead of a query per SKU.
     def offers(self, sku):
-        if sku not in self._offers:
-            self._offers[sku] = self.repo.list_vendor_offers(sku)
-        return self._offers[sku]
+        if self._offers is None:
+            self._offers = {}
+            for o in self.repo.list_vendor_offers_all():
+                self._offers.setdefault(o["sku"], []).append(o)
+        return self._offers.get(sku, [])
 
     def asset(self, sku):
+        if self._assets is None:
+            self._assets = {a["sku"]: a for a in self.repo.list_assets()}
         if sku not in self._assets:
-            self._assets[sku] = self.repo.get_asset(sku)
+            raise PlanError(f"'{sku}' is not in the asset catalog.")
         return self._assets[sku]
 
     def depots(self, sku):
-        if sku not in self._depots:
-            self._depots[sku] = self.repo.depot_free(sku)
-        return self._depots[sku]
+        if self._depots is None:
+            self._depots = {}
+            for d in self.repo.list_depot_free():
+                self._depots.setdefault(d["sku"], []).append(d)
+        return self._depots.get(sku, [])
 
 
 def _vendor_line(ctx: _Ctx, line: dict, offer: dict) -> dict:
@@ -238,7 +245,8 @@ def plan_scenarios(repo: Repository, request_id: str, today: date | None = None)
         s["savings_usd"] = round(base - s["total_cost"], 2)
     ok = [s for s in scenarios if s["feasible"] and s["buffer_hours"] >= min_buffer]
     pool = ok or [s for s in scenarios if s["feasible"]] or scenarios
-    best = min(pool, key=lambda s: (s["total_cost"] if ok else -s["buffer_hours"], -s["buffer_hours"]))
+    best = min(pool, key=(lambda s: (s["total_cost"], -s["buffer_hours"])) if ok
+               else (lambda s: (-s["buffer_hours"], s["total_cost"])))   # none has the minimum buffer: most buffer, then cheapest
     best["recommended"] = True
     return scenarios, all_lines
 

@@ -1,6 +1,6 @@
 """BigQuery repository. Reads use tables and views; every write is a parameterised DML statement, so results are
 immediately consistent for the next query (no streaming buffer)."""
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from ..data.schema import TABLES
 from .base import Repository, new_id, now
@@ -19,6 +19,8 @@ class BigQueryRepository(Repository):
         bq = self._bq
         if typ:
             return bq.ScalarQueryParameter(name, typ, value)
+        if isinstance(value, list):
+            return bq.ArrayQueryParameter(name, "STRING", value)
         if isinstance(value, bool):
             return bq.ScalarQueryParameter(name, "BOOL", value)
         if isinstance(value, int):
@@ -100,6 +102,9 @@ class BigQueryRepository(Repository):
         rows = self._run("SELECT sku, name, component_type, ship_factor FROM `{ds}.assets` WHERE sku = @sku", sku=sku)
         return rows[0] if rows else None
 
+    def list_assets(self):
+        return self._run("SELECT sku, name, component_type, ship_factor FROM `{ds}.assets` ORDER BY sku")
+
     def replace_requirement_lines(self, request_id, lines):
         self._dml("DELETE FROM `{ds}.requirement_lines` WHERE request_id = @rid", rid=request_id)
         ts = now()
@@ -127,6 +132,14 @@ class BigQueryRepository(Repository):
             "LEFT JOIN (SELECT vendor_id, SUM(delay_days) AS delay_days FROM `{ds}.vendor_disruptions` "
             "WHERE active GROUP BY vendor_id) d ON d.vendor_id = o.vendor_id "
             "WHERE o.sku = @sku AND v.active", sku=sku)
+
+    def list_vendor_offers_all(self):
+        return self._run(
+            "SELECT o.sku, o.vendor_id, v.vendor_name, v.home_region, o.variant, o.unit_price, o.lead_days, o.carbon_kg, "
+            "IFNULL(d.delay_days, 0) AS delay_days "
+            "FROM `{ds}.vendor_offers` o JOIN `{ds}.vendors` v ON v.vendor_id = o.vendor_id "
+            "LEFT JOIN (SELECT vendor_id, SUM(delay_days) AS delay_days FROM `{ds}.vendor_disruptions` "
+            "WHERE active GROUP BY vendor_id) d ON d.vendor_id = o.vendor_id WHERE v.active")
 
     def depot_free(self, sku):
         return self._run("SELECT depot_id, depot_name, region, free FROM `{ds}.v_depot_available` "
@@ -182,7 +195,12 @@ class BigQueryRepository(Repository):
                          sid=scenario_id)
 
     def mark_line_executed(self, line_id):
-        self._dml("UPDATE `{ds}.scenario_lines` SET execution_status = 'EXECUTED' WHERE line_id = @lid", lid=line_id)
+        self.mark_lines_executed([line_id])
+
+    def mark_lines_executed(self, line_ids):
+        if line_ids:
+            self._dml("UPDATE `{ds}.scenario_lines` SET execution_status = 'EXECUTED' WHERE line_id IN UNNEST(@ids)",
+                      ids=list(line_ids))
 
     # ---- sign-off
     def get_policy(self, amount):
@@ -243,15 +261,21 @@ class BigQueryRepository(Repository):
         return int(rows[0]["n"])
 
     def consume_hold(self, line_id):
-        self._dml("UPDATE `{ds}.depot_holds` SET status = 'CONSUMED' WHERE line_id = @lid AND status = 'ACTIVE'",
-                  lid=line_id)
+        self.consume_holds([line_id])
+
+    def consume_holds(self, line_ids):
+        if line_ids:
+            self._dml("UPDATE `{ds}.depot_holds` SET status = 'CONSUMED' WHERE line_id IN UNNEST(@ids) "
+                      "AND status = 'ACTIVE'", ids=list(line_ids))
 
     # ---- execution records
-    def record_po(self, po):
-        self._insert("purchase_orders", [{**po, "created_at": now()}])
+    def record_pos(self, pos):
+        ts = now()
+        self._insert("purchase_orders", [{**po, "created_at": ts} for po in pos])
 
-    def record_transfer(self, transfer):
-        self._insert("depot_transfers", [{**transfer, "created_at": now()}])
+    def record_transfers(self, transfers):
+        ts = now()
+        self._insert("depot_transfers", [{**t, "created_at": ts} for t in transfers])
 
     def list_pos(self, request_id):
         return self._run("SELECT po_number, line_id, vendor_id, sku, region, quantity, total_amount, status "
@@ -273,6 +297,12 @@ class BigQueryRepository(Repository):
     def log_audit(self, request_id, actor, action, details):
         self._insert("audit_log", [{"event_id": new_id("EVT"), "created_at": now(), "request_id": request_id,
                                     "actor": actor, "action": action, "details": self.dumps(details)}])
+
+    def log_audit_batch(self, request_id, events):
+        ts = now()
+        self._insert("audit_log", [{"event_id": new_id("EVT"), "created_at": ts + timedelta(microseconds=i),
+                                    "request_id": request_id, "actor": a, "action": act, "details": self.dumps(d)}
+                                   for i, (a, act, d) in enumerate(events)])
 
     def list_audit(self, request_id=None):
         return self._run("SELECT FORMAT_TIMESTAMP('%FT%TZ', created_at) AS created_at, request_id, actor, action, "

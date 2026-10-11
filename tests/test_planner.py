@@ -162,3 +162,19 @@ def test_launch_dates_are_relative_to_setup_day(repo):
     launch = repo.get_launch("LAUNCH-AURORA")
     today = date.today()
     assert (launch["in_hand_by"] - today).days == IN_HAND_DAYS and (launch["embargo_date"] - today).days == EMBARGO_DAYS
+
+
+def test_when_the_cheap_display_vendor_is_late_the_planner_switches_and_flags_the_old_plan(repo, aurora):
+    repo.add_disruption("V-DISPLAYCO", 6, "port strike")
+    sc, lines = planner.plan_scenarios(repo, aurora)
+    by = {s["option_code"]: s for s in sc}
+    assert not by["FULL_NEW"]["feasible"] and by["FULL_NEW"]["buffer_hours"] == -144       # cheapest vendor can no longer make it
+    assert by["REBALANCE"]["feasible"] and by["REBALANCE"]["recommended"] and by["REBALANCE"]["buffer_hours"] >= 48
+    reb_displays = {ln["source_id"] for ln in lines if ln["scenario_id"].endswith("-RB") and ln["sku"] == "DISPLAY-COUNTER-AURORA"}
+    assert reb_displays == {"V-RAPIDDISPLAY"}                                               # switched to the fast vendor
+
+
+def test_when_nothing_meets_the_minimum_buffer_the_least_bad_cheapest_option_is_flagged(repo, aurora):
+    repo.add_disruption("V-LUXPACK", 5, "late board")                                       # boxes: no option can make the date
+    sc, _ = planner.plan_scenarios(repo, aurora)
+    assert not any(s["feasible"] for s in sc) and [s["option_code"] for s in sc if s["recommended"]] == ["REBALANCE"]

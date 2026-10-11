@@ -231,7 +231,7 @@ SELECT d.depot_id, d.depot_name, d.region, s.sku, s.on_hand,
        IFNULL(SUM(IF(h.status IN ('ACTIVE', 'CONSUMED'), h.quantity, 0)), 0) AS held,
        s.on_hand - IFNULL(SUM(IF(h.status IN ('ACTIVE', 'CONSUMED'), h.quantity, 0)), 0) AS free
 FROM `{project}.{dataset}.depot_stock` s
-JOIN `{project}.{dataset}.depots` d USING (depot_id)
+JOIN `{project}.{dataset}.depots` d ON d.depot_id = s.depot_id
 LEFT JOIN `{project}.{dataset}.depot_holds` h ON h.depot_id = s.depot_id AND h.sku = s.sku
 GROUP BY d.depot_id, d.depot_name, d.region, s.sku, s.on_hand
 ;
@@ -249,10 +249,10 @@ SELECT r.request_id, l.launch_id, l.launch_name, l.in_hand_by, l.embargo_date,
          WHERE x.scenario_id = dc.scenario_id AND x.execution_status = 'EXECUTED') AS lines_executed,
        (SELECT COUNT(*) FROM `{project}.{dataset}.scenario_lines` x WHERE x.scenario_id = dc.scenario_id) AS lines_total
 FROM `{project}.{dataset}.launch_requests` r
-JOIN `{project}.{dataset}.launches` l USING (launch_id)
+JOIN `{project}.{dataset}.launches` l ON l.launch_id = r.launch_id
 LEFT JOIN (
   SELECT * FROM `{project}.{dataset}.decisions` QUALIFY ROW_NUMBER() OVER (PARTITION BY request_id ORDER BY created_at DESC) = 1
-) dc USING (request_id)
+) dc ON dc.request_id = r.request_id
 LEFT JOIN `{project}.{dataset}.scenarios` sc ON sc.scenario_id = dc.scenario_id
 ;
 

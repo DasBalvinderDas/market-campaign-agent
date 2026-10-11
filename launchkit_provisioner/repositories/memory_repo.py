@@ -49,6 +49,9 @@ class MemoryRepository(Repository):
     def get_asset(self, sku):
         return next((dict(a) for a in self.t["assets"] if a["sku"] == sku), None)
 
+    def list_assets(self):
+        return [dict(a) for a in self.t["assets"]]
+
     def replace_requirement_lines(self, request_id, lines):
         self.t["requirement_lines"] = [x for x in self.t["requirement_lines"] if x["request_id"] != request_id]
         for i, ln in enumerate(lines, start=1):
@@ -76,6 +79,10 @@ class MemoryRepository(Repository):
                  "unit_price": o["unit_price"], "lead_days": o["lead_days"], "carbon_kg": o["carbon_kg"],
                  "delay_days": self._delay(o["vendor_id"])}
                 for o in self.t["vendor_offers"] if o["sku"] == sku and o["vendor_id"] in vendors]
+
+    def list_vendor_offers_all(self):
+        return [{**o, "sku": s} for s in sorted({x["sku"] for x in self.t["vendor_offers"]})
+                for o in self.list_vendor_offers(s)]
 
     def depot_free(self, sku):
         depots = {d["depot_id"]: d for d in self.t["depots"]}
@@ -131,6 +138,10 @@ class MemoryRepository(Repository):
         return sorted((dict(x) for x in self.t["scenario_lines"] if x["scenario_id"] == scenario_id),
                       key=lambda x: x["line_id"])
 
+    def mark_lines_executed(self, line_ids):
+        for lid in line_ids:
+            self.mark_line_executed(lid)
+
     def mark_line_executed(self, line_id):
         for x in self.t["scenario_lines"]:
             if x["line_id"] == line_id:
@@ -185,17 +196,21 @@ class MemoryRepository(Repository):
                 n += h["quantity"]
         return n
 
+    def consume_holds(self, line_ids):
+        for lid in line_ids:
+            self.consume_hold(lid)
+
     def consume_hold(self, line_id):
         for h in self.t["depot_holds"]:
             if h["line_id"] == line_id and h["status"] == "ACTIVE":
                 h["status"] = "CONSUMED"
 
     # ---- execution records
-    def record_po(self, po):
-        self.t["purchase_orders"].append({**po, "created_at": now()})
+    def record_pos(self, pos):
+        self.t["purchase_orders"] += [{**po, "created_at": now()} for po in pos]
 
-    def record_transfer(self, transfer):
-        self.t["depot_transfers"].append({**transfer, "created_at": now()})
+    def record_transfers(self, transfers):
+        self.t["depot_transfers"] += [{**t, "created_at": now()} for t in transfers]
 
     def list_pos(self, request_id):
         return [dict(p) for p in self.t["purchase_orders"] if p["request_id"] == request_id]
@@ -233,6 +248,10 @@ class MemoryRepository(Repository):
     def log_audit(self, request_id, actor, action, details):
         self.t["audit_log"].append({"event_id": new_id("EVT"), "created_at": now(), "request_id": request_id,
                                     "actor": actor, "action": action, "details": self.dumps(details)})
+
+    def log_audit_batch(self, request_id, events):
+        for actor, action, details in events:
+            self.log_audit(request_id, actor, action, details)
 
     def list_audit(self, request_id=None):
         rows = [a for a in self.t["audit_log"] if request_id in (None, a["request_id"])]

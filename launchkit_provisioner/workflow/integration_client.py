@@ -21,14 +21,19 @@ def _typed(value):
 
 
 class IntegrationExecutor:
-    def _session(self):
-        import google.auth
-        from google.auth.transport.requests import AuthorizedSession
+    _sess = None
 
-        if not config.PROJECT:
-            raise IntegrationError("GOOGLE_CLOUD_PROJECT is not set")
-        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
-        return AuthorizedSession(creds)
+    def _session(self):
+        """One authorised session per executor (building credentials for every call would be slow)."""
+        if self._sess is None:
+            import google.auth
+            from google.auth.transport.requests import AuthorizedSession
+
+            if not config.PROJECT:
+                raise IntegrationError("GOOGLE_CLOUD_PROJECT is not set")
+            creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+            self._sess = AuthorizedSession(creds)
+        return self._sess
 
     @staticmethod
     def _base():

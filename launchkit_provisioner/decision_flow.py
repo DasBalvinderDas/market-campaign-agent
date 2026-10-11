@@ -45,8 +45,11 @@ def _check_stock(repo, lines) -> str | None:
     for ln in lines:
         if ln["source_type"] == "DEPOT":
             need[(ln["source_id"], ln["sku"])] = need.get((ln["source_id"], ln["sku"]), 0) + ln["quantity"]
+    if not need:
+        return None
+    stock = {(d["depot_id"], d["sku"]): int(d["free"]) for d in repo.list_depot_free()}
     for (depot, sku), qty in need.items():
-        free = next((int(d["free"]) for d in repo.depot_free(sku) if d["depot_id"] == depot), 0)
+        free = stock.get((depot, sku), 0)
         if free < qty:
             return f"depot {depot} now has only {free} of {sku} free (the plan needs {qty})"
     return None
