@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds docs/Campaign_Provisioner_Agent_Catalog.xlsx: root agent and sub-agents, tools, BigQuery and Application Integration.
+"""Builds docs/LaunchKit_Provisioner_Agent_Catalog.xlsx: root agent and sub-agents, tools, BigQuery and Application Integration.
 
   python docs/build_agent_catalog.py        (needs: pip install openpyxl)
 """
@@ -9,103 +9,108 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-OUT = Path(__file__).resolve().parent / "Campaign_Provisioner_Agent_Catalog.xlsx"
-APP, OWNER = "Campaign Provisioner (Google Next 2027 Marketing Logistics Agent)", "Dasbalvinder Das"
+OUT = Path(__file__).resolve().parent / "LaunchKit_Provisioner_Agent_Catalog.xlsx"
+APP, OWNER = "LaunchKit Provisioner Agent (Product Launch Collateral Planner)", "Dasbalvinder Das"
 
 AGENTS = [
-    ("Root Agent", "Campaign Provisioner (Orchestrator)",
-     "The root agent is the front-line coordinator. It greets users, collects the campaign and the items, registers the request, and "
-     "calls the three specialist agents in a fixed order (inventory, procurement, budget). It holds the human-in-the-loop approval gate: "
-     "only the root can call approve_budget. Amounts up to $5,000 are approved by policy; higher amounts start an Application Integration "
-     "approval and the reply opens with HUMAN APPROVAL REQUIRED (nothing is committed or ordered until the approver says yes). When the user "
-     "asks for the approval status it reads the decision, then commits the budget and creates the purchase orders (Approved) or releases the "
-     "stock (Rejected). It writes every reply the user sees.",
-     "BigQuery (requests, budget ledger, approvals, audit log); Application Integration (request_approval, create_purchase_order); "
-     "Vertex AI Agent Engine; Gemini Enterprise chat"),
-    ("Sub Agent", "Inventory Agent",
-     "The inventory agent matches each requested item (free text or SKU) to the catalog, checks free stock and reserves what is available, "
-     "for all items in one call. It records every line (requested, reserved, shortfall) so the later steps know what has to be bought, and "
-     "it releases the reserved stock when a request is rejected or declined. It never buys anything and never discusses budget.",
-     "BigQuery: inventory_items / v_inventory_available, inventory_reservations, request_lines, audit_log"),
-    ("Sub Agent", "Procurement Agent",
-     "The procurement agent quotes every shortfall line at once from the cheapest active vendor (price and lead time) and reports the line "
-     "totals and the grand total. After the budget is approved it creates one purchase order per line through the Application Integration "
-     "create_purchase_order trigger. A code guard wraps that call: it recomputes the amount from the vendor price list and blocks the order "
-     "unless an approved budget covers it. It never approves budget.",
-     "BigQuery: request_lines, vendor_catalog, vendors, v_request_headroom, purchase_orders, audit_log; "
-     "Application Integration: create_purchase_order"),
-    ("Sub Agent", "Budget Agent",
-     "The budget agent checks the campaign's remaining budget and finds the approval tier for the total (AUTO up to $5,000, MANAGER up to "
-     "$50,000, EXECUTIVE above) and the approver role, in one call, and reports back to the root. It never approves spend and never places "
-     "orders. (With the chat approval channel it also emails the approver through the notify_approver trigger.)",
-     "BigQuery: v_campaign_budget, approval_policy, approvers; Application Integration: notify_approver (chat channel only)"),
+    ("Root Agent", "LaunchKit Provisioner (Orchestrator)",
+     "The root agent is the front-line coordinator. It takes the launch brief, registers the request and calls the three specialist "
+     "agents in a fixed order: Brief Analyst, Sourcing Planner, then (after sign-off) Fulfilment. It shows the manager the decision card "
+     "with three computed options and waits for a choice. It holds the human-in-the-loop sign-off gate: only the root can call "
+     "authorize_launch. Spend within the autopilot limit is approved by policy; above it an Application Integration approval emails the "
+     "VP (or the CMO for the largest tier) and nothing is ordered until they approve. When the user asks for the status it reads the "
+     "decision and has the orders placed (Approved) or releases the held depot stock (Rejected). It writes every reply the user sees.",
+     "BigQuery (requests, decisions, audit log, readiness board); Application Integration (request_approval); Vertex AI Agent Engine; Gemini Enterprise chat"),
+    ("Sub Agent", "Brief Analyst Agent",
+     "The brief analyst turns the free-text brief into requirement lines in one call: creator unboxing kits (hoodie size, power plug and "
+     "engraving from the creator list), showroom counter displays and executive sales folios, spread over the regions. It reports the "
+     "channel totals and the size and plug breakdown. It never invents a bundle type.",
+     "BigQuery: bundle_templates, creators, regional_split, requirement_lines, audit_log"),
+    ("Sub Agent", "Sourcing Planner Agent",
+     "The sourcing planner computes three options for the request from BigQuery data: full brand-new production, smart depot rebalance "
+     "(reuses surplus stock from regional depots, nearest first, and picks vendors that keep the safety buffer) and a certified eco launch. "
+     "Each option has cost, delivery date, buffer hours before the in-hand deadline, savings, carbon and risk. It re-plans when a vendor "
+     "reports a delay. It never changes a number.",
+     "BigQuery: requirement_lines, vendor_offers, vendors, vendor_disruptions, depot_stock / v_depot_available, transit_lanes, planning_rules, scenarios, scenario_lines"),
+    ("Sub Agent", "Fulfilment Agent",
+     "The fulfilment agent places the orders of the APPROVED option in one batch: a purchase order per vendor line and a depot transfer "
+     "per surplus-stock line through Application Integration, in parallel, then the tracking update to the launch team. Code refuses "
+     "to order without an approved sign-off or beyond the authorised amount, and calling it twice never orders twice.",
+     "BigQuery: scenario_lines, decisions, depot_holds, purchase_orders, depot_transfers, audit_log; Application Integration: create_purchase_order, create_depot_transfer, send_launch_update"),
 ]
 
 TOOLS = [
     # agent, tool, kind, what it does, BQ reads, BQ writes, Application Integration, guardrail
-    ("Root Agent", "register_campaign_request", "Python tool", "Validates the campaign and creates the request (request id REQ-xxxx).", "campaigns / v_campaign_budget", "campaign_requests, audit_log", "-", "Unknown campaign is refused"),
-    ("Root Agent", "inventory_agent / procurement_agent / budget_agent", "Agent as tool (ADK AgentTool)", "The root calls each specialist like a tool, passing the request id, items and amounts; the specialist runs with its own prompt and tools and returns its result.", "(via the specialist)", "(via the specialist)", "(via the specialist)", "Fixed order in the root instruction; specialists reply only to the root"),
-    ("Root Agent", "approve_budget", "Python tool (human gate)", "Decides the budget. AUTO tier: commits the budget at once. Human tier: builds the purchase plan, stores a PENDING approval and starts the Application Integration approval; nothing is committed. Over budget: rejected.", "v_campaign_budget, approval_policy, request_lines, vendor_catalog, vendors, approvers, campaign_requests", "budget_ledger (COMMIT, auto tier), approval_requests (PENDING), audit_log", "request_approval (started over REST)", "Only the root has this tool; the amount comes from BigQuery, not from the model; overspend is rejected"),
-    ("Root Agent", "get_approval_status", "Python tool", "Reads the approval. If the approver decided, records it (first decision wins) and carries it out: Approved = commit budget + create the purchase orders; Rejected = release the reserved stock.", "approval_requests, purchase_orders, vendor_catalog, v_request_headroom", "approval_requests (status), budget_ledger (COMMIT), purchase_orders, inventory_reservations (RELEASED), audit_log", "Reads the execution and its approval record (LIFTED = approved, REJECTED = rejected); create_purchase_order per line", "Atomic update: asking twice never orders twice"),
-    ("Root Agent", "get_campaign_overview", "Python tool", "Budget position of every campaign (total, spent, committed, remaining).", "v_campaign_budget", "-", "-", "Read only"),
-    ("Root Agent", "get_audit_trail", "Python tool", "Shows the ordered audit events (all or for one request).", "audit_log", "-", "-", "Read only"),
-    ("Inventory Agent", "reserve_items", "Python tool (batch)", "Matches every item to a catalog SKU, checks free stock, reserves the free units and records each line. Unknown or ambiguous items come back as a question for the user.", "v_inventory_available", "inventory_reservations, request_lines, audit_log", "-", "Never invents a SKU; reserves at most the free stock"),
-    ("Inventory Agent", "find_sku / check_inventory / reserve_inventory", "Python tools (single item)", "One-item versions of the same steps, for a follow-up.", "v_inventory_available", "inventory_reservations, request_lines, audit_log (reserve)", "-", "Unknown SKU returns the valid SKUs"),
-    ("Inventory Agent", "release_inventory", "Python tool", "Releases all stock reserved for a request (rejected or declined budget).", "inventory_reservations", "inventory_reservations (status RELEASED), audit_log", "-", "-"),
-    ("Procurement Agent", "quote_shortfalls", "Python tool (batch)", "Quotes every shortfall line from the cheapest active vendor with price, lead time and line totals, plus the grand total.", "request_lines, vendor_catalog, vendors", "-", "-", "Read only; unfulfillable SKUs are listed"),
-    ("Procurement Agent", "get_vendor_quotes", "Python tool (single item)", "Vendor quotes for one SKU or item description, cheapest first.", "vendor_catalog, vendors", "-", "-", "Resolves a description to a SKU through the catalog"),
-    ("Procurement Agent", "create_purchase_order", "Application Integration tool (ADK ApplicationIntegrationToolset)", "Creates a purchase order: the integration sets the PO number (PO-<request>-<sku>) and returns the execution id.", "Guard reads vendor_catalog and v_request_headroom", "purchase_orders, audit_log (after-tool callback)", "create_purchase_order", "Before-tool guard recomputes the amount and returns BLOCKED unless an approved budget covers it"),
-    ("Budget Agent", "assess_budget", "Python tool (batch)", "Remaining budget, whether the total fits, the approval tier, whether a human is needed and the approver role, in one call.", "v_campaign_budget, approval_policy", "-", "-", "Read only"),
-    ("Budget Agent", "check_budget / get_approval_policy", "Python tools (single)", "The two halves of assess_budget.", "v_campaign_budget / approval_policy", "-", "-", "Read only"),
-    ("Budget Agent", "notify_approver", "Application Integration tool (chat channel only)", "Emails one approver address; the guard fills the recipient, subject and body from BigQuery, one call per address.", "approvers", "audit_log", "notify_approver", "The model never supplies an email address"),
+    ("Root Agent", "register_launch_request", "Python tool", "Validates the launch and creates the request (REQ-xxxx).", "launches", "launch_requests, audit_log", "-", "Unknown launch is refused"),
+    ("Root Agent", "brief_analyst_agent / sourcing_planner_agent / fulfilment_agent", "Agent as tool (ADK AgentTool)", "The root calls each specialist like a tool with the request id and details; the specialist runs with its own prompt and tools and returns its result.", "(via the specialist)", "(via the specialist)", "(via the specialist)", "Fixed order in the root instruction; specialists only reply to the root"),
+    ("Root Agent", "authorize_launch", "Python tool (sign-off gate)", "Authorises ONE computed option. Validates it (meets the deadline, depot stock still free), holds the surplus stock, then approves by policy (autopilot) or starts the executive approval and orders nothing.", "scenarios, scenario_lines, v_depot_available, approval_policy, approvers, launches, planning_rules", "decisions, depot_holds, audit_log", "request_approval (started over REST)", "Only the root has it; the amount comes from the stored scenario, not from the model; infeasible options are refused"),
+    ("Root Agent", "get_launch_status", "Python tool", "Reads the sign-off. If the approver decided in Application Integration it records it (first decision wins): Approved unlocks fulfilment, Rejected releases the held stock.", "decisions, scenario_lines, purchase_orders, depot_transfers", "decisions (status), depot_holds (RELEASED), audit_log", "Reads the execution and its approval record (LIFTED = approved, REJECTED = rejected)", "Atomic update: a decision is recorded once"),
+    ("Root Agent", "get_launch_overview", "Python tool", "Launch readiness board (GREEN / AMBER / RED, buffer, orders placed) and free surplus stock per depot.", "v_launch_readiness, launches, v_depot_available", "-", "-", "Read only"),
+    ("Root Agent", "get_audit_trail", "Python tool", "Ordered audit events for a request.", "audit_log", "-", "-", "Read only"),
+    ("Brief Analyst Agent", "build_requirements", "Python tool (batch)", "Expands every bundle of the brief into requirement lines per SKU and region; creator kits personalised from the creator list.", "bundle_templates, creators, regional_split, launch_requests", "requirement_lines, audit_log", "-", "Unknown bundle type returns the valid types"),
+    ("Sourcing Planner Agent", "build_scenarios", "Python tool (batch)", "Computes and stores the three options with cost, delivery date, buffer, savings, carbon, risk; returns the decision card and whether autopilot applies.", "requirement_lines, vendor_offers, vendors, vendor_disruptions, v_depot_available, transit_lanes, assets, planning_rules, approval_policy", "scenarios, scenario_lines, audit_log", "-", "Refuses to re-plan once a sign-off is pending or approved"),
+    ("Sourcing Planner Agent", "report_vendor_delay", "Python tool", "Records a vendor delay (by id or name). Before a sign-off: re-plan. After: reports the impact on the buffer.", "vendors, decisions, scenario_lines", "vendor_disruptions, audit_log", "-", "Ambiguous vendor names are refused"),
+    ("Fulfilment Agent", "execute_plan", "Python tool (batch)", "Places every line of the approved option: purchase orders, depot transfers (in parallel), then the tracking update; writes the results in bulk.", "decisions, scenario_lines, launches, approvers", "purchase_orders, depot_transfers, scenario_lines (EXECUTED), depot_holds (CONSUMED), audit_log", "create_purchase_order, create_depot_transfer, send_launch_update", "BLOCKED unless APPROVED; never beyond the authorised amount; idempotent"),
 ]
 
 BQ = [
-    ("inventory_items", "Table", "Catalog and stock on hand (sku, name, category, on_hand).", "Inventory agent", "Setup script (seed)"),
-    ("inventory_reservations", "Table", "Stock reserved per request (ACTIVE or RELEASED).", "Inventory agent (view)", "Inventory agent, root (release)"),
-    ("v_inventory_available", "View", "Free stock = on hand minus active reservations.", "Inventory agent", "-"),
-    ("vendors", "Table", "Vendors and whether they are active.", "Procurement agent, guard", "Setup script (seed)"),
-    ("vendor_catalog", "Table", "Vendor price and lead time per SKU.", "Procurement agent, root, guard", "Setup script (seed)"),
-    ("campaigns", "Table", "Campaigns (NEXT27-MAIN, NEXT27-PARTNER, NEXT27-DEVLOUNGE) and their total budget.", "Root, budget agent", "Setup script (seed)"),
-    ("budget_ledger", "Table", "Budget ledger: SPEND (already spent, BASELINE), COMMIT (approved by the agent), RELEASE.", "v_campaign_budget", "Root (approve_budget, get_approval_status)"),
-    ("v_campaign_budget", "View", "Total, spent, committed and remaining per campaign.", "Root, budget agent", "-"),
-    ("v_request_headroom", "View", "Approved amount vs. amount already ordered per request (used by the PO guard).", "Guard, root", "-"),
-    ("approval_policy", "Table", "Approval tiers: amount range, human needed, approver role.", "Budget agent, root", "Setup script (seed); editable by finance"),
-    ("approvers", "Table", "Approver email addresses per role (configurable).", "Root, guard", "Setup script (--approver-email)"),
-    ("request_lines", "Table", "Per request and SKU: requested, reserved, shortfall (the purchase plan source).", "Procurement agent, root", "Inventory agent"),
-    ("approval_requests", "Table", "Human approvals: approver, amount, plan, status (PENDING / APPROVED / REJECTED / FAILED), workflow execution id.", "Root (get_approval_status)", "Root (approve_budget, get_approval_status)"),
-    ("campaign_requests", "Table", "Every request registered by the root agent.", "Root", "Root (register_campaign_request)"),
-    ("purchase_orders", "Table", "Purchase orders with the Application Integration execution id.", "Root, status checks", "Procurement guard (after-tool), root (after approval)"),
-    ("audit_log", "Table", "Every governed action (who, what, when, details).", "Root (get_audit_trail)", "All agents' tools and guards"),
+    ("launches", "Table", "The launch with its in-hand deadline and press embargo (re-based to today by --reset-demo).", "Planner, tools", "Setup script"),
+    ("assets", "Table", "Collateral catalog with ship factor (size / weight).", "Planner", "Setup script"),
+    ("bundle_templates", "Table", "What goes into one creator kit, showroom display or sales folio.", "Brief analyst", "Setup script"),
+    ("creators", "Table", "150 creators: hoodie size, region and power plug (personalisation).", "Brief analyst", "Setup script"),
+    ("regional_split", "Table", "How showroom and sales bundles spread over regions.", "Brief analyst", "Setup script"),
+    ("depots", "Table", "Regional marketing depots (London, Dallas, Singapore).", "v_depot_available", "Setup script"),
+    ("depot_stock", "Table", "Surplus units on hand per depot and SKU.", "v_depot_available", "Setup script"),
+    ("v_depot_available", "View", "Free surplus = on hand minus active and consumed holds.", "Planner, sign-off, overview", "-"),
+    ("transit_lanes", "Table", "Shipping days and cost between regions.", "Planner", "Setup script"),
+    ("vendors", "Table", "Manufacturers and where they ship from.", "Planner", "Setup script"),
+    ("vendor_offers", "Table", "Price, lead time and carbon per vendor, SKU and variant (STANDARD / ECO).", "Planner", "Setup script"),
+    ("planning_rules", "Table", "Minimum and target safety buffer, depot handling days, transfer carbon.", "Planner", "Setup script; editable"),
+    ("approval_policy", "Table", "Tiers: AUTOPILOT up to $5,000, VP sign-off up to $50,000, CMO above.", "Sign-off", "Setup script; editable"),
+    ("approvers", "Table", "Emails per role (VP Product Marketing, CMO, Launch Team).", "Sign-off, fulfilment", "Setup script (--approver-email)"),
+    ("launch_requests", "Table", "Every brief registered by the root agent.", "Root", "Root"),
+    ("requirement_lines", "Table", "The brief broken down per SKU and destination region.", "Planner", "Brief analyst"),
+    ("scenarios", "Table", "The computed options per request (cost, delivery, buffer, carbon, risk, recommended).", "Root, sign-off", "Sourcing planner"),
+    ("scenario_lines", "Table", "What each option does per line: reuse a depot or buy from a vendor; execution status.", "Sign-off, fulfilment", "Sourcing planner, fulfilment"),
+    ("decisions", "Table", "The sign-off on the chosen option: tier, approver, status, workflow execution id.", "Root, fulfilment", "Root (authorize_launch, get_launch_status)"),
+    ("depot_holds", "Table", "Surplus stock held for a pending or approved option (ACTIVE / CONSUMED / RELEASED).", "v_depot_available", "Root, fulfilment"),
+    ("vendor_disruptions", "Table", "Reported vendor delays added to lead times.", "Planner", "Sourcing planner"),
+    ("purchase_orders", "Table", "Purchase orders issued through Application Integration.", "Root, fulfilment", "Fulfilment"),
+    ("depot_transfers", "Table", "Depot-to-region stock transfers.", "Root, fulfilment", "Fulfilment"),
+    ("v_launch_readiness", "View", "Per request: chosen option, sign-off status, buffer, readiness colour, lines executed.", "Overview", "-"),
+    ("audit_log", "Table", "Every governed action: who, what, when.", "Root (get_audit_trail)", "All agents and flows"),
 ]
 
 AI = [
-    ("create_purchase_order", "API trigger", "Create a purchase order.", "request_id, campaign_id, sku, vendor_id, quantity, total_amount", "po_number (PO-<request_id>-<sku>), execution_id", "Data Mapping task: builds the PO number and execution id.", "Procurement agent (ADK Application Integration tool, behind the guard); root after an approval (REST)", "After the budget is approved"),
-    ("request_approval", "API trigger (native approval)", "Human approval: the run pauses until an approver decides.", "request_id, campaign_id, approver_role, amount, approval_message", "decision (APPROVED / REJECTED)", "Approval task (suspension): emails the approver(s) an Approve / Reject request, reminder after 1 day, expires after 3 days; branch isApproved = true -> Data Mapping decision = APPROVED; branch false -> decision = REJECTED. The click is recorded as an approval record (LIFTED = approved, REJECTED = rejected).", "Root (approve_budget starts it over REST; get_approval_status reads the result)", "Amount above $5,000"),
-    ("notify_approver", "API trigger", "Send one plain notification email.", "request_id, campaign_id, approver_role, approver_email, email_subject, email_body, summary, amount", "status (NOTIFIED)", "Send Email task (one address per call), then Data Mapping sets status.", "Budget agent (chat approval channel only); also used by the setup test", "Only when the approval channel is chat"),
+    ("create_purchase_order", "API trigger", "Create a purchase order for a vendor line of the approved option.", "request_id, plan_line_id, vendor_id, sku, quantity, total_amount, destination_region", "po_number (PO-<plan_line_id>), execution_id", "Data Mapping task builds the PO number and execution id.", "Fulfilment (execute_plan), one call per vendor line, in parallel", "After the sign-off is approved"),
+    ("create_depot_transfer", "API trigger", "Create a stock transfer from a depot to a destination region.", "request_id, plan_line_id, depot_id, sku, quantity, destination_region", "transfer_number (TR-<plan_line_id>), execution_id", "Data Mapping task builds the transfer number and execution id.", "Fulfilment (execute_plan), one call per depot line", "After the sign-off is approved"),
+    ("request_approval", "API trigger (native approval)", "Executive sign-off: the run pauses until an approver decides.", "request_id, launch_id, approver_role, amount, approval_message", "decision (APPROVED / REJECTED)", "Approval task (suspension): emails the approver(s) Approve / Reject, reminder after 1 day, expires after 3 days; branch isApproved = true -> decision = APPROVED; false -> REJECTED. The click is recorded as an approval record (LIFTED = approved, REJECTED = rejected).", "Root (authorize_launch starts it over REST; get_launch_status reads the result)", "Chosen option above the autopilot limit"),
+    ("send_launch_update", "API trigger", "Send the tracking update to one launch-team address.", "request_id, launch_id, recipient_email, email_subject, email_body", "status (SENT)", "Send Email task (one address per call), then Data Mapping sets status.", "Fulfilment, once per address of the role 'Launch Team'", "When every line of the plan is placed"),
 ]
 
 FLOW = [
-    (1, "User", "Sends the request in Gemini Enterprise (or the playground).", "-", "-", "NEXT27-MAIN needs 1 booth LED video wall and 8 event banners."),
-    (2, "Root Agent", "register_campaign_request", "Reads campaigns; writes campaign_requests, audit_log", "-", "Request id REQ-xxxx"),
-    (3, "Inventory Agent", "reserve_items (one call)", "Reads v_inventory_available; writes inventory_reservations, request_lines, audit_log", "-", "2 banners reserved, 6 short; LED wall 1 short"),
-    (4, "Procurement Agent", "quote_shortfalls (one call)", "Reads request_lines, vendor_catalog, vendors", "-", "LED wall ExpoVision $18,000, 6 banners PrintCo $510: total $18,510"),
-    (5, "Budget Agent", "assess_budget (one call)", "Reads v_campaign_budget, approval_policy", "-", "Fits the budget; tier MANAGER; approver Marketing Director"),
-    (6, "Root Agent", "approve_budget", "Reads plan, approvers; writes approval_requests (PENDING), audit_log", "Starts request_approval (Approval task pauses; approver emailed)", "Reply opens with HUMAN APPROVAL REQUIRED; nothing committed, no PO"),
-    (7, "Approver", "Opens the Application Integration email and clicks Approve (or Reject)", "-", "Approval record becomes LIFTED (approve) or REJECTED", "Decision recorded in Application Integration"),
-    (8, "User", "Asks: What is the approval status of REQ-xxxx?", "-", "-", "-"),
-    (9, "Root Agent", "get_approval_status", "Reads approval_requests; Approved: writes budget_ledger COMMIT, approval_requests APPROVED, audit_log", "Reads the execution and approval record", "-"),
-    (10, "Procurement Agent / root", "Create the purchase orders (Approved)", "Guard reads vendor_catalog, v_request_headroom; writes purchase_orders, audit_log", "create_purchase_order per line", "PO numbers for the LED wall and the banners; remaining budget $231,490"),
-    (11, "Root Agent", "Rejected path: release the reserved stock", "inventory_reservations RELEASED, audit_log", "-", "No PO, nothing committed"),
-    (12, "Small amounts (up to $5,000)", "approve_budget commits at once (AUTO tier); POs created in the same run", "budget_ledger COMMIT, purchase_orders, audit_log", "create_purchase_order", "No human step"),
+    (1, "PMM", "Sends the brief in Gemini Enterprise: 150 creator kits, 10 showroom displays, 300 sales folios.", "-", "-", "-"),
+    (2, "Root Agent", "register_launch_request", "Reads launches; writes launch_requests, audit_log", "-", "Request id REQ-xxxx"),
+    (3, "Brief Analyst", "build_requirements (one call)", "Reads bundle_templates, creators, regional_split; writes requirement_lines", "-", "31 requirement lines, 1,210 units; hoodie sizes 20/45/60/25; plugs by region"),
+    (4, "Sourcing Planner", "build_scenarios (one call)", "Reads offers, depot stock, lanes, rules; writes scenarios, scenario_lines", "-", "Option 1 $46,075.50 | Option 2 $37,399.50 (saves $8,676, 72 h buffer, recommended) | Option 3 $51,905.50 (eco)"),
+    (5, "Root Agent", "Shows the decision card and asks which option", "-", "-", "Waits for the manager"),
+    (6, "PMM", "Replies: go with option 2", "-", "-", "-"),
+    (7, "Root Agent", "authorize_launch", "Writes decisions (PENDING), depot_holds (ACTIVE), audit_log", "Starts request_approval; VP is emailed", "Reply opens with HUMAN APPROVAL REQUIRED; nothing ordered"),
+    (8, "VP", "Clicks Approve (or Reject) in the Application Integration email", "-", "Approval record becomes LIFTED / REJECTED", "-"),
+    (9, "PMM", "Asks: what is the status of that request?", "-", "-", "-"),
+    (10, "Root Agent", "get_launch_status", "Reads decisions; Approved: decision APPROVED", "Reads the execution and approval record", "Approved: next step is fulfilment"),
+    (11, "Fulfilment", "execute_plan (one call)", "Writes purchase_orders, depot_transfers, scenario_lines EXECUTED, depot_holds CONSUMED, audit_log", "create_purchase_order x27, create_depot_transfer x7, send_launch_update to the team", "34 orders placed, delivery date and buffer reported"),
+    (12, "Rejected path", "get_launch_status releases the held depot stock", "depot_holds RELEASED, decisions REJECTED", "-", "Nothing ordered; the manager can choose another option"),
+    (13, "Small brief", "Recommended option within the autopilot limit: authorize_launch approves by policy and fulfilment runs in the same turn", "decisions APPROVED by autopilot, then as step 11", "No approval workflow", "No human step"),
 ]
 
 GOV = [
-    ("Prompt", "The root instruction fixes the order of the steps; the specialists only return results to the root.", "campaign_provisioner/agent.py, sub_agents/"),
-    ("Policy (data)", "Approval tiers and approver emails are BigQuery tables, changed without a release.", "approval_policy, approvers"),
+    ("Prompt", "The root instruction fixes the order of the steps; the specialists only return results to the root.", "launchkit_provisioner/agent.py, sub_agents/"),
+    ("Data (policy)", "Sign-off tiers, approver emails, planning rules and all option inputs are BigQuery tables, changed without a release.", "approval_policy, approvers, planning_rules"),
+    ("Computed numbers", "Costs, dates, buffers, savings and carbon come from the planner, never from the model; the specialists repeat them verbatim.", "planner.py, scenarios"),
     ("Platform", "The Application Integration approval pauses the flow until a person decides.", "request_approval trigger"),
-    ("Code guard", "A purchase order is blocked unless an approved budget covers it (amount recomputed from the vendor price list).", "workflow/guard.py, v_request_headroom"),
-    ("Code", "approve_budget rejects overspend; only the root can approve; the first approval decision wins (atomic update).", "tools/budget_tools.py, approval_flow.py"),
+    ("Code guard", "Nothing is ordered unless the sign-off is APPROVED, never beyond the authorised amount, and never twice; an option that misses the deadline cannot be authorised.", "execution.py, decision_flow.py"),
+    ("Stock holds", "Surplus stock is held while a sign-off is pending, consumed on transfer, released on rejection or failure.", "depot_holds, v_depot_available"),
     ("Audit", "Every governed action is written to the BigQuery audit log.", "audit_log"),
     ("Output", "No commentary between steps: some chat front ends treat the first text as the end of the answer.", "Root and specialist instructions"),
 ]
@@ -138,28 +143,27 @@ def sheet(wb, title, headers, rows, widths):
 
 
 SUMMARY = [
-    ("Root Agent", "Campaign Provisioner Agent (Orchestrator)",
-     "The root agent acts as a front-line coordinator by greeting users, collecting the campaign and the items, and delegating to the "
-     "inventory, procurement and budget agents in a fixed order. It incorporates a critical human-in-the-loop approval gate: for spend "
-     "above $5,000 it starts an Application Integration approval, tells the user that an approval email was sent, and holds all "
-     "procurement until the approver clicks Approve. Once approved it commits the budget and has the purchase orders created; if "
-     "rejected it releases the reserved stock.",
+    ("Root Agent", "LaunchKit Provisioner Agent (Orchestrator)",
+     "The root agent acts as a front-line coordinator by taking the launch brief, registering the request and delegating to the brief "
+     "analyst, sourcing planner and fulfilment agents in a fixed order. It shows the manager a decision card with three computed "
+     "options and incorporates a critical human-in-the-loop sign-off gate: above the autopilot limit it starts an Application "
+     "Integration approval, tells the user that an approval email was sent, and holds every order until the executive approves. Once "
+     "approved it has the orders placed; if rejected it releases the held depot stock.",
      "BigQuery, Application Integration", 150),
-    ("Sub Agent", "Inventory Agent",
-     "The inventory agent matches each requested item to the BigQuery catalog, checks free stock and reserves the available units for "
-     "all items in one call. It records the shortfall per item that has to be procured, and releases the reserved stock when a "
-     "request is rejected.",
+    ("Sub Agent", "Brief Analyst Agent",
+     "The brief analyst agent turns the free-text brief into requirement lines in one call: creator kits personalised by hoodie size and "
+     "power plug from the BigQuery creator list, showroom displays and sales folios spread over the regions.",
      "BigQuery", 95),
-    ("Sub Agent", "Procurement Agent",
-     "The procurement agent quotes every shortfall line from the cheapest active vendor, weighing price and lead time, and reports the "
-     "grand total. After the budget is approved it creates the purchase orders through Application Integration, behind a code guard "
-     "that blocks any order not covered by an approved budget.",
-     "BigQuery, Application Integration", 110),
-    ("Sub Agent", "Budget Agent",
-     "The budget agent checks the campaign's remaining budget and finds the approval tier (auto-approved up to $5,000, Marketing "
-     "Director up to $50,000, VP Marketing and Finance Controller above) and the approver role in one call, then reports back to the "
-     "root agent. It never approves spend or places orders.",
-     "BigQuery", 95),
+    ("Sub Agent", "Sourcing Planner Agent",
+     "The sourcing planner agent audits regional depot surplus and vendor lead times and computes three options (full new, smart depot "
+     "rebalance, eco launch) with cost, delivery date, safety buffer before the in-hand deadline, savings and carbon. It re-plans when a "
+     "vendor reports a delay.",
+     "BigQuery", 110),
+    ("Sub Agent", "Fulfilment Agent",
+     "The fulfilment agent places the orders of the approved option in one batch through Application Integration: a purchase order per "
+     "vendor line, a depot transfer per surplus line and a tracking update to the launch team. It refuses to order without an approved "
+     "sign-off or beyond the authorised amount.",
+     "BigQuery, Application Integration", 95),
 ]
 
 
@@ -170,7 +174,7 @@ def summary_sheet(wb):
     grey = Side(style="thin", color="BFBFBF")
     box = Border(top=grey, bottom=grey, left=grey, right=grey)
     for i, (kind, name, desc, src, height) in enumerate(SUMMARY, start=1):
-        for col, val in enumerate(("Campaign Provisioner Agent (Google Next 2027)", OWNER, kind, name, desc, src), start=1):
+        for col, val in enumerate(("LaunchKit Provisioner Agent (Product Launch Collateral Planner)", OWNER, kind, name, desc, src), start=1):
             if i == 1 or col > 2:
                 ws.cell(row=i, column=col, value=val)
         ws.row_dimensions[i].height = height

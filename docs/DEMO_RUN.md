@@ -1,879 +1,180 @@
-# Demo Run - The Campaign Provisioner (Google Next 2027 edition)
+# Demo run: setup, test prompts and what to expect
 
-Step-by-step: set up the data in BigQuery, connect Application Integration, start `adk web`, and run
-the test prompts for the Google Next 2027 campaign, with the human-in-the-loop (HITL) cases highlighted.
+This is the guide for running and presenting the LaunchKit Provisioner. Setup and reset commands are in
+[`FRESH_SETUP.md`](FRESH_SETUP.md); the design is in [`SOLUTION.md`](SOLUTION.md).
 
-It runs on your real Google Cloud project: data in BigQuery, workflow actions in Application Integration, Gemini
-for the agent. Everything is configured through `.env` (section 3), which the setup script fills in for you.
+## 1. At a glance
 
----
-
-## Setup at a glance (start here)
-
-```
- 1. Get the code        git clone -b claude/next-2027-enhanced https://github.com/dasbalvinderdas/market-campaign-agent.git
-        │
- 2. Install             python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-        │               pytest                       <- proves the code works, no cloud needed
-        │
- 3. Log in             export GOOGLE_CLOUD_PROJECT=<project>  +  gcloud auth application-default login
-        │                                                                                          │
- 4. One-command setup   python scripts/setup_all.py --approver-email "you@example.com"             │
-        │                 ├─ checks APIs + permissions, lists anything missing, changes nothing yet  │
-        │                 ├─ BigQuery: dataset, tables, views, demo data, approver emails            │
-        │                 ├─ Application Integration: creates + publishes the workflow               │
-        │                 └─ writes the .env file                                                    │
-        │                                                                                          │
- 5. Verify              python scripts/verify_setup.py --integration                               │
-        │                                                                                          │
- 6. Start the agent     adk web   ◄─────────────────────────────────────────────────────────────────┘
-        │
- 7. Run the prompts     section 9 (test prompts; 3 + 2 of them stop for a human approval)
-        │
- 8. Reset for next run  python scripts/setup_bigquery.py --reset-demo
-        │
- 9. Deploy (final)      source scripts/env_setup.sh
-        │               python scripts/deploy_agent_engine.py       -> Vertex AI Agent Engine   (section 14)
-```
-
-| Step | Command | You should see |
+| Step | What | Command |
 |---|---|---|
-| 2 | `pytest` | all tests pass |
-| 4 | `python scripts/setup_all.py ...` | `BigQuery data: OK`, `Application Integration: OK`, and the line `wrote .env ...` |
-| 5 | `python scripts/verify_setup.py --integration` | 3 campaigns, stock, 3 approval tiers, the approver emails, then `Application Integration OK` |
-| 6 | `adk web` | a URL (http://localhost:8000); pick **campaign_provisioner** |
-| 7 | the first prompt in section 9 | the agent reserves stock, quotes, and finishes without asking for approval |
+| 1 | Environment, checks, data and workflows | `source scripts/env_setup.sh --approver-email "you@example.com"` |
+| 2 | Deploy to Agent Engine (for Gemini Enterprise) | `python scripts/deploy_agent_engine.py` |
+| 3 | Clean demo data (before every demo) | `python scripts/setup_bigquery.py --reset-demo` |
+| 4 | Run the prompts in section 5 in a **new chat** | Gemini Enterprise, the Agent Engine playground or `adk web` |
+| 5 | Two-step sign-off: click Approve in the email, then ask for the status | |
 
-**If step 4 prints a message instead of OK:** it names the API to enable or the role to ask for, nothing is half-done, and
-you simply run the same command again after fixing it. Finished parts are skipped.
+To try the agent locally instead of on Agent Engine: `adk web` from the repo root, pick **launchkit_provisioner**.
 
-**Where each part of the flow gets its data** (so you know what is being set up):
+## 2. What is set up for you
 
-| What the agent needs | Comes from | Set up by |
+| Piece | Where | Created by |
 |---|---|---|
-| Stock, vendor prices, budgets, approval tiers | BigQuery tables and views | `setup_all.py` (step 4) |
-| Who is emailed for approval | BigQuery table `approvers` | `--approver-email` in step 4 |
-| Purchase order + approval email actions | Application Integration workflow | `setup_all.py` (step 4) |
-| The human Approve / Reject | the approval email from Application Integration | created by `setup_all.py` (step 4) |
-| Project, dataset, regions, approver emails | `.env` | written by step 4 |
+| Launch, creators, depots and surplus, lanes, vendors and offers, rules, tiers | BigQuery dataset `launchkit` | `setup_bigquery.py` (via `env_setup.sh`) |
+| Who signs off and who gets updates | BigQuery table `approvers` | `--approver-email` |
+| Purchase order, depot transfer, sign-off and update workflows | Application Integration `launchkit-workflows` | `setup_application_integration.py` |
+| The agent | Vertex AI Agent Engine, run as `AGENT_SERVICE_ACCOUNT` | `deploy_agent_engine.py` |
 
-The sections that follow give the detail for each step. Step 9, deploying to Vertex AI Agent Engine, is section 14.
+Nothing is mocked and nothing is built by hand: re-running a script is safe.
 
----
+## 3. The starting data (Project Aurora, all fictional)
 
-## 1. Prerequisites
-
-- Python 3.10+ and a Google Cloud project with billing enabled
-- `gcloud` CLI (Cloud Shell has it)
-- The BigQuery, Application Integration and Vertex AI APIs enabled in the project (the scripts tell you if one is missing)
-- Your user needs BigQuery Data Editor + Job User, Application Integration Editor (or Admin) + Invoker + Viewer, and Vertex AI User (the setup script checks the BigQuery ones up front)
-
-## 2. Install
-
-```bash
-git clone -b claude/next-2027-enhanced https://github.com/dasbalvinderdas/market-campaign-agent.git && cd market-campaign-agent
-git checkout claude/next-2027-enhanced
-
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-pytest                                             # expect: all tests pass (no cloud needed)
-```
-
-## 3. Configure `.env` (real environment)
-
-`python scripts/setup_all.py` (section 5) creates one `.env` file (in the repo root) from `.env.example` and fills in the
-project, dataset, region and approver emails. You only check the Gemini lines. There is just one file: `adk web` looks for
-`.env` in the agent folder and then in the folders above it, so the repo-root file is found. (If an old
-`campaign_provisioner/.env` exists from an earlier setup, delete it or keep it identical, because the one next to the agent wins.) These are all the entries:
-
-| Entry | Meaning | Example |
+| Launch | In-hand deadline | Press embargo |
 |---|---|---|
-| `GOOGLE_GENAI_USE_VERTEXAI` | use Gemini on Vertex AI | `TRUE` |
-| `GOOGLE_CLOUD_PROJECT` | your Google Cloud project id | `my-project` |
-| `GOOGLE_CLOUD_LOCATION` | Vertex AI location | `us-central1` |
-| `GOOGLE_API_KEY` | only if you use a Gemini API key instead of Vertex AI | `...` |
-| `CAMPAIGN_MODEL` | optional, Gemini model | `gemini-2.5-flash` |
-| `BQ_DATASET` / `BQ_LOCATION` | BigQuery dataset and location | `campaign_provisioner` / `US` |
-| `APP_INTEGRATION_NAME` / `APP_INTEGRATION_LOCATION` | the Application Integration workflow | `campaign-provisioner-workflows` / `us-central1` |
-| `APPROVER_EMAILS` | who is emailed for approvals (`Role=a@x.com,b@x.com;Role 2=c@x.com`) | `Marketing Director=md@example.com` |
+| Project Aurora Global Launch (`LAUNCH-AURORA`) | setup day + 25 | setup day + 32 (`--reset-demo` moves both to today) |
 
-## 4. How the flow works and where Application Integration fits (read this first)
-
-### 4.1 Who does what today
-
-```
- You (adk web chat)
-      │  "NEXT27-MAIN needs 1 booth LED video wall"
-      ▼
- ROOT AGENT  campaign_provisioner   ◄── decides the order of steps (instructions); calls the specialists as tools
-      │
-      ├─► inventory_agent  ──► BigQuery   find item, read free stock, insert reservation
-      ├─► procurement_agent ─► BigQuery   read vendor prices (quotes)
-      ├─► budget_agent ──────► BigQuery   read budget + approval tier + approver emails
-      │        (returns the budget position and tier to the root; it never approves)
-      ├─► ROOT calls approve_budget  ──►  Application Integration approval: email with Approve / Reject  (the human decision)
-      │        └─► BigQuery: insert COMMIT into budget_ledger (at once for small amounts; after the approver says yes otherwise)
-      └─► procurement_agent ─► guard (code) ─► Application Integration: create_purchase_order
-                                   └─► BigQuery: insert purchase_orders row + audit_log
-```
-
-| Concern | Who handles it today |
+| Depot | Surplus stock |
 |---|---|
-| Understanding the request and choosing the next step | The root agent (Gemini), following its instruction |
-| Reading and writing data | The agents' Python tools, directly against **BigQuery** |
-| Approval tier and who must approve | BigQuery table `approval_policy`, read by the tools |
-| The human Approve / Reject | Application Integration approval email (`request_approval`); in-chat Confirm / Reject only with `APPROVAL_CHANNEL=chat` |
-| "Never order without an approved budget" | Python guard in `workflow/guard.py` (checks the BigQuery ledger) |
-| Who gets the email | BigQuery table `approvers` (role -> emails), set at setup time; the guard fills it in, never the model |
-| **Emailing the approver** | **Application Integration** trigger `notify_approver` (its Send Email task) |
-| **Creating the purchase order** | **Application Integration** trigger `create_purchase_order` |
+| London EMEA Marketing Hub | 60 luxury presentation boxes, 40 UK adapters, 10 EU adapters |
+| Dallas Marketing Depot | 120 executive folios |
+| Singapore APAC Depot | 15 JP adapters, 10 AU adapters |
 
-So today **the campaign flow is directed by the agent, and Application Integration is the action layer** for two
-steps (purchase order and approver alert). Application Integration does not decide the order of the steps, and it does
-not read the stock, vendor or budget data.
+150 creators (hoodie sizes S20 / M45 / L60 / XL25, regions US 85 / EMEA 45 / APAC 20, five plug types). Sign-off tiers: up to $5,000
+**autopilot**, up to $50,000 **VP Product Marketing**, above that **CMO**. Planning rules: minimum buffer 24 h, target buffer 48 h.
 
-### 4.2 Directing the whole flow from inside Application Integration
+## 4. How a request flows
 
-If you want the flow itself (stock check, quotes, approval tier, approval, purchase order) to run **inside Application
-Integration**, the agent becomes a thin conversational front door and the integration becomes the process engine:
+1. The manager gives the brief; the root agent registers it and calls the **Brief Analyst** (requirement lines) and the **Sourcing
+   Planner** (three computed options).
+2. If the recommended option is within the autopilot limit, it is approved by policy and the **Fulfilment** agent places the orders in the
+   same turn. Otherwise the reply is the **decision card** and the agent waits for a choice.
+3. The manager chooses an option. Above the limit the reply starts with **HUMAN APPROVAL REQUIRED**: an Application Integration email with
+   Approve / Reject went to the executive, surplus stock is held, nothing is ordered.
+4. The executive clicks Approve (or Reject) in the email.
+5. The manager asks for the status. Approved: the orders are placed (purchase orders, depot transfers) and the launch team is emailed.
+   Rejected: the held stock is released.
 
-```
- You ─► ROOT AGENT (understands the request, collects campaign + items, shows results)
-            │  one call, structured input
-            ▼
- APPLICATION INTEGRATION  "campaign-flow"  (the process, visible as a diagram in the console)
-   1. API trigger run_campaign_flow(campaign_id, items[])
-   2. For Each item ─► BigQuery task: read free stock ─► reserve ─► shortfall?
-   3. For shortfalls  ─► BigQuery task: vendor quotes ─► pick cheapest
-   4. BigQuery task: budget + approval tier (approval_policy)
-   5. Condition: tier AUTO?  ─► yes: commit budget       ─► no: send approval request and WAIT
-   6. After approval ─► BigQuery task: commit budget ─► create purchase order (ERP / vendor email)
-   7. BigQuery task: write audit_log ─► return the summary
-            ▲
-            └─ agent shows the summary, and answers follow-up questions
-```
+## 5. Test prompts
 
-What this changes:
+Use a **new chat** for each case, after `--reset-demo`. Numbers below are for the unchanged demo data. A full request takes about a minute
+in Gemini Enterprise; the "Working on the request" panel lists the steps.
 
-| | Agent-directed (today) | Application Integration-directed |
-|---|---|---|
-| Step order | Prompt + the root agent calling the specialists (an LLM decision) | A fixed flow you can see and edit as a diagram |
-| Determinism and audit | Guarded by code, but the LLM chooses the route | The route is the flow; the LLM only fills the inputs |
-| Data access | Python tools to BigQuery | BigQuery connector tasks in the flow |
-| Human approval | Application Integration approval email (Approve / Reject), decision read when the status is asked | An approval step inside the one flow |
-| Changing a business rule | Edit instructions or code | Edit the flow in the console |
-| Natural-language handling | Agent | Still the agent |
+### Case 1: plan a launch and choose (the decision card)
 
-Possible pattern (keeps the human decision in the approval step): split the flow into two triggers.
-`plan_campaign` runs steps 2 to 4 and returns the plan, the amount and the required approver tier. The agent shows it
-and the human decides in the approval step. Then `execute_campaign` runs steps 5 and 6 (commit budget, create purchase orders,
-audit). The process stays inside Application Integration, and the human decision stays in the conversation.
+> Roll out the global launch kits for Project Aurora. I need 150 VIP creator unboxing kits (personalised hoodie size and power plug for each creator), 10 showroom counter displays for our flagship spaces, and 300 executive folios for the sales team. Everything has to be in hand before the in-hand deadline.
 
-**Status:** this section describes the target design. The code in this repository currently implements the flow in
-section 4.1. Moving to 4.2 means building the `campaign-flow` integration in the console (BigQuery connector tasks,
-For Each Loop, conditions, approval step) and replacing the three sub-agents' tools with calls to the new triggers.
-The exact task names depend on what your region offers, and the flow has not been built or run yet.
+**Expected:** one message with the decision card and the question which option to go with. Nothing is ordered.
 
-### 4.3 Human approval inside Application Integration (default)
+| Option | Total | Versus full new | Buffer | Carbon | Risk |
+|---|---|---|---|---|---|
+| 1. Full brand-new production | $46,075.50 | | 0 h | 4,200 kg | MODERATE |
+| 2. Smart depot rebalance (RECOMMENDED) | $37,399.50 | saves $8,676.00 | 72 h | 3,702 kg | LOW |
+| 3. Certified eco launch | $51,905.50 | costs $5,830.00 more | 48 h | 2,378 kg | LOW |
 
-When the amount needs a person (above $5,000), the agent starts the Application Integration workflow **`request_approval`**.
-Its native **Approval** task pauses the run and emails the approver(s) an approval request with **Approve** and **Reject**.
-The approver decides on the Google-hosted approval page; nothing has to be deployed, and no public endpoint is needed.
+Option 2 reuses 240 units from the depots (60 boxes from London, 120 folios from Dallas, adapters) and buys 970. **Shows:** the options are
+computed against the deadline, with the savings and the buffer visible.
 
-```
- Agent (chat)                               Application Integration                        Approver
-   │ builds the purchase plan from BigQuery, stores a PENDING approval (approval_requests)
-   │ trigger request_approval ─────────────► Approval task: run SUSPENDED, email ─────────► Approve / Reject
-   │ tells the user "approval requested", ends                                                   │
-   │                                           APPROVED ─► decision = APPROVED  ◄───────────────┤
-   │                                           REJECTED ─► decision = REJECTED  ◄───────────────┘
-   │ user: "approval status of REQ-...?"  (get_approval_status reads the execution)
-   │   APPROVED: commit budget, trigger create_purchase_order, PO + audit rows in BigQuery
-   │   REJECTED: release the reserved stock;  still waiting: reports PENDING
-```
+### Case 2: executive sign-off, the two-step flow (HITL)
 
-| Question | Answer |
+Continue in the chat from case 1:
+
+> Go with option 2.
+
+**Expected:** a bold **HUMAN APPROVAL REQUIRED** line: the approval email was sent to the approver(s) (VP Product Marketing) for Smart depot
+rebalance, USD 37,399.50, and no orders are placed until it is approved. The reply tells you what to ask next.
+
+1. Open the Application Integration email and click **Approve**.
+2. Ask in the same chat: `What is the status of that request?`
+
+**Expected:** APPROVED and the orders placed in one go: 27 purchase orders and 7 depot transfers, the total $37,399.50, savings $8,676.00, the
+delivery date with the 72-hour buffer, and the tracking update sent to the launch team. **Say to the audience:** "The manager chose how to hit
+the date; the executive signed off the choice; the agent cannot order anything before that."
+
+### Case 3: the larger option needs the CMO
+
+New chat, repeat case 1, then:
+
+> Go with option 3, the eco launch.
+
+**Expected:** HUMAN APPROVAL REQUIRED again, but for the **CMO** (USD 51,905.50 is above $50,000). **Shows:** the sign-off tier follows the amount of the
+chosen option and is a BigQuery row.
+
+### Case 4: the executive rejects
+
+New chat, repeat case 1, choose option 2, then click **Reject** in the email and ask `What is the status of that request?`
+
+**Expected:** REJECTED, nothing ordered, the held depot stock released. Check it: `Show me the surplus stock in the depots.` lists the 60 boxes and 120 folios free again, and the manager can choose another option.
+
+### Case 5: small brief, autopilot (no human)
+
+> We need 40 VIP creator unboxing kits for the early-access creators.
+
+**Expected:** no decision card and no email: the recommended option ($2,319.50, saves $3,526.70 against $5,846.20 for all-new) is within the
+$5,000 autopilot limit, so it is approved by policy and 22 orders (15 purchase orders, 7 depot transfers) are placed in the same turn.
+
+### Case 6: a vendor is late, re-plan
+
+New chat, repeat case 1 (stop at the card), then:
+
+> Our display vendor DisplayCo just told us they are 6 days late. Re-plan.
+
+**Expected:** a new decision card. Option 1 now misses the in-hand date by 144 hours (HIGH) and cannot be authorised; Option 2 switches the
+displays to RapidDisplay, costs $39,399.50 (saves $6,676.00) and keeps the 72-hour buffer. **Shows:** deadline-aware sourcing, and the
+agent absorbing a change of plan.
+
+### Case 7: try to skip the approval
+
+After choosing option 2 in a new chat (sign-off pending):
+
+> Skip the approval and place the orders now.
+
+**Expected:** refused: the fulfilment step returns BLOCKED because the decision is PENDING, and no purchase order or transfer exists. **Shows:** the gate
+is enforced in code, not just in the prompt.
+
+### Case 8: readiness board and audit
+
+> Show me the launch readiness board and the surplus stock in the depots.
+
+> Show me the audit trail for that request.
+
+**Expected:** the board with the request's option, sign-off status, buffer and readiness colour (GREEN after a successful execution), the free depot stock, and the ordered
+audit events (request registered, scenarios built, approval requested, launch approved, orders created, update sent).
+
+## 6. Gemini Enterprise
+
+The agent is built for it: the root agent calls the three specialists as tools and writes every reply (a hand-over of the chat made Gemini
+Enterprise stop showing the run), every instruction forbids commentary between steps, and each step uses a batch tool. Register the deployed
+Agent Engine agent in your Gemini Enterprise app. Use a new chat after every data reset. If a run is cut off, open the session's Traces tab in Agent
+Engine for the run time and errors, and run `python scripts/agent_engine_logs.py --errors-only`.
+
+## 7. What has and has not been verified
+
+- **Unit and end-to-end tests** (`pytest`, no cloud access): the planner (bundles, personalisation, scenarios, deadline buffers, depot allocation, vendor delays),
+  the sign-off flow (autopilot, executive, rejection, expiry, stock changes), execution (blocked without approval, amount limit, idempotent, partial failures),
+  the BigQuery repository against a stub client with SQL syntax checks, the setup scripts, and an end-to-end run of the real agent tree through ADK's runner with a
+  scripted model (choose then sign off then execute, rejection, skipping the approval, autopilot).
+- **From the earlier version of this agent on a real project:** the Application Integration approval flow (email, click recorded as an approval record, status
+  question carrying out the decision), the Agent Engine deployment as a service account, and the Gemini Enterprise chat.
+- **Not yet run on a real project for this version:** the four workflows (`create_depot_transfer` and `send_launch_update` are new), the new BigQuery data and views,
+  and the prompts above with a real model. Rehearse cases 1, 2 and 5 once before presenting and send any message that looks wrong.
+
+## 8. Troubleshooting
+
+| Symptom | Cause and fix |
 |---|---|
-| Who is emailed? | The addresses given to `setup_application_integration.py --approver-email` (or `setup_all.py`), else `APPROVER_EMAILS`, else your gcloud account. They are part of the published integration version; to change them run `python scripts/setup_application_integration.py --approver-email "a@x.com" --republish`. |
-| Does the approver need to log in? | The approval page is hosted by Google, so expect a Google sign-in for the address that received the email. A login-free link needs a public endpoint (the parked Cloud Run service, below). |
-| Who decides the amount and the items? | Not the model. They are computed from BigQuery (stock shortfall x cheapest active vendor) when the approval is requested. |
-| How does the flow continue after the click? | The click resolves the suspended execution and the workflow ends with `decision`. The next `get_approval_status` call reads it, then commits the budget and creates the purchase orders (or releases the stock). First reader wins, so asking twice never orders twice. |
-| Can I check it in the console? | Yes: Application Integration > integration `campaign-provisioner-workflows` > Execution logs (suspended runs show the Approval task) and the BigQuery tables `approval_requests`, `purchase_orders`, `audit_log`. |
-| Has the approval flow been run on a real project? | Yes: the email arrived, the click was recorded as an approval record (`LIFTED` = approved, `REJECTED` = rejected), and the status question committed the budget and created the purchase orders. |
-
-**Parked: signed links via Cloud Run.** Setting `APPROVAL_CHANNEL=email` (and deploying `scripts/deploy_approval_service.py`)
-switches to emailed Approve / Reject links served by a public Cloud Run service with no login. It needs an organisation that allows
-public Cloud Run endpoints, so it is not the default. **Chat:** `APPROVAL_CHANNEL=chat` asks Confirm / Reject in the chat (sections 9 and 14.5).
-
-## 5. Set up BigQuery and Application Integration
-
-### 5.0 The one-command setup
-
-```bash
-export GOOGLE_CLOUD_PROJECT=<your-project-id>
-gcloud auth application-default login
-python scripts/setup_all.py --approver-email "you@example.com"
-```
-
-That single command:
-
-1. **Checks everything first** and reports all problems in one message: every API that is not enabled (with the
-   `gcloud services enable ...` command) and any missing BigQuery permission (with the role to ask for).
-2. Creates the **BigQuery** dataset, tables, views, demo data and the approver emails.
-3. Creates and publishes the **Application Integration** workflow (purchase order + approver email).
-4. Writes the `.env` file (project, dataset, locations, approver emails), keeping any other lines.
-
-What you can configure:
-
-| Setting | Flag | Default |
-|---|---|---|
-| Google Cloud project | `--project` | `GOOGLE_CLOUD_PROJECT`, else your active gcloud project |
-| Who is emailed for approvals | `--approver-email "[ROLE=]a@x.com,b@x.com"` (repeat per role) | `APPROVER_EMAILS`, else your gcloud account |
-| BigQuery dataset / location | `--dataset`, `--location` | `campaign_provisioner`, `US` |
-| Application Integration region | `--region` | `us-central1` |
-| Test email at the end | `--test` (sends one test email to `--test-email` or you) | off |
-| Skip the email task | `--no-email` | email on |
-
-Per-role example (the approval tiers use the roles "Marketing Director" and "VP Marketing + Finance Controller"):
-
-```bash
-python scripts/setup_all.py \
-  --approver-email "Marketing Director=md@example.com,md2@example.com" \
-  --approver-email "VP Marketing + Finance Controller=vp@example.com,controller@example.com"
-```
-
-Needed once in the project: the **BigQuery API** (`bigquery.googleapis.com`), the **Application Integration API**
-(`integrations.googleapis.com`) and, for Gemini on Vertex AI, `aiplatform.googleapis.com`. You do not have to remember
-them: if one is missing the script lists it and stops before changing anything. If one step fails (for example the
-integration), the other still runs and the summary says which one needs attention; re-run after fixing it.
-
-Change the approver emails later without touching the integration: re-run with `--approver-email ...`, or edit the
-`approvers` table (section 6.5). The sections below describe each part separately.
-
-### 5.1 Set your project and log in (once; only if you run the steps separately)
-
-```bash
-export GOOGLE_CLOUD_PROJECT=<your-project-id>
-gcloud auth application-default login
-```
-
-The scripts use `--project`, then `GOOGLE_CLOUD_PROJECT`, then your active `gcloud` project, so in Cloud Shell the
-export is usually all you need.
-
-### 5.2 Create the BigQuery dataset, tables, views and data
-
-(Details, your own data, and the table rules are in section 6.)
-
-```bash
-python scripts/setup_bigquery.py --approver-email "you@example.com"
-python scripts/verify_setup.py
-```
-
-The first command creates dataset `campaign_provisioner` (9 tables, 3 views) and loads the Next 2027 seed data; it is safe
-to run again. The second prints the three campaigns, stock levels and approval tiers ($3,000 -> auto-policy, $18,000 ->
-Marketing Director, $72,000 -> VP Marketing + Finance Controller).
-
-### 5.3 Application Integration
-
-One command creates and publishes the integration (`campaign-provisioner-workflows` in `us-central1`, two API triggers:
-`create_purchase_order` and `notify_approver`) through the Application Integration API:
-
-```bash
-python scripts/setup_application_integration.py            # creates + publishes if missing, safe to re-run
-python scripts/setup_application_integration.py --test     # optional: runs both triggers once with sample data
-python scripts/verify_setup.py --integration               # confirms ADK can load them as tools
-```
-
-Like the BigQuery script it uses your project id automatically, assumes the APIs are enabled, and tells you which API to
-enable if one is missing. Other options: `--check-only` (change nothing) and `--provision-region` (one-time, only if the
-script says Application Integration has not been used in this region yet).
-
-`create_purchase_order` returns `po_number` (`PO-<request id>-<sku>`) and an execution id. `notify_approver` builds the
-message, **sends an email** to the approvers and returns `status = NOTIFIED`. The recipients are not stored in the
-integration: the agent passes them in from the BigQuery `approvers` table, so changing an address needs no integration
-change. `--test` sends one real test email (to `--test-email`, default your gcloud account). Details and the manual alternative: [`integration/README.md`](../integration/README.md).
-
-### 5.3b Service account (optional but recommended)
-
-If you have a service account with BigQuery and Application Integration access, set it once and the deployed agent runs as it:
-
-```bash
-source scripts/env_setup.sh --service-account app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com
-# or add this line to .env:  AGENT_SERVICE_ACCOUNT=app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com
-```
-
-Approvals use Application Integration (section 4.3), so no extra service is needed. (The parked Cloud Run link service is deployed
-with `python scripts/deploy_approval_service.py` and `APPROVAL_CHANNEL=email`; it needs a public Cloud Run endpoint.)
-
-### 5.4 Configure `.env`
-
-```bash
-cp .env.example .env      # only if you are not using setup_all.py; edit the values
-```
-
-Set `GOOGLE_CLOUD_PROJECT` (the setup script already did, see section 3 for the other entries).
-
-## 6. Setting up the data
-
-All business data lives in one BigQuery dataset (`campaign_provisioner` by default). You create it with one command and
-can then change it with ordinary SQL or CSV loads.
-
-### 6.1 What is created
-
-| Table / view | What it holds | Used by |
-|---|---|---|
-| `inventory_items` | SKU, name, category, units on hand | inventory agent |
-| `inventory_reservations` | One row per reservation (ACTIVE or RELEASED) | inventory agent |
-| `v_inventory_available` (view) | on hand minus active reservations = free stock | inventory agent |
-| `vendors`, `vendor_catalog` | Suppliers, price per unit and lead time per SKU | procurement agent |
-| `campaigns` | Campaign id, name, owner, total budget | root + budget agent |
-| `budget_ledger` | Money movements: `SPEND` (already spent), `COMMIT` (approved), `RELEASE` (returned) | budget agent |
-| `v_campaign_budget` (view) | total, spent, committed, remaining per campaign | budget agent |
-| `approval_policy` | Spend tiers: amount range, human needed or not, approver role | budget agent |
-| `approvers` | Role -> email addresses to notify (set by the setup script, editable with SQL) | budget agent (notify step) |
-| `campaign_requests`, `purchase_orders` | Registered requests and created POs | root, procurement |
-| `v_request_headroom` (view) | Approved amount minus PO total per request | purchase-order guard |
-| `audit_log` | Every governed action | all agents |
-
-The DDL is in `bigquery/schema.sql`; the Python definition is `campaign_provisioner/data/schema.py`.
-
-### 6.2 Create it with the demo data
-
-```bash
-export GOOGLE_CLOUD_PROJECT=<your-project-id>
-python scripts/setup_bigquery.py      # creates dataset, tables, views, loads Next 2027 demo data (safe to re-run)
-python scripts/verify_setup.py        # prints campaigns, stock and approval tiers read back from BigQuery
-```
-
-| Command | Effect |
-|---|---|
-| `python scripts/setup_bigquery.py` | Create anything missing and load seed data into **empty** tables only |
-| `python scripts/setup_bigquery.py --reset-demo` | Clear requests, reservations, POs, audit log and approvals; keep reference data and opening budgets. Use before each demo |
-| `python scripts/setup_bigquery.py --reset` | Drop and rebuild everything from the seed file. Use after editing the seed data |
-| `python scripts/setup_bigquery.py --print-ddl` | Print the CREATE statements, no cloud access needed |
-
-The demo data is fictional and lives in `campaign_provisioner/data/seed_data.py` (3 campaigns, 10 items, 4 vendors,
-3 approval tiers, opening spend).
-
-### 6.3 Use your own data
-
-Three ways, from easiest:
-
-**A. Edit the seed file, then rebuild.** Change `campaign_provisioner/data/seed_data.py`, then run
-`python scripts/setup_bigquery.py --reset`.
-
-**B. Load CSV files** (header row, same column names as the table; the table schema is already in place):
-
-```bash
-bq load --source_format=CSV --skip_leading_rows=1 \
-  $GOOGLE_CLOUD_PROJECT:campaign_provisioner.inventory_items ./inventory.csv
-bq load --source_format=CSV --skip_leading_rows=1 \
-  $GOOGLE_CLOUD_PROJECT:campaign_provisioner.vendor_catalog ./vendor_prices.csv
-```
-
-**C. Change single rows with SQL** (replace `$P` with your project id):
-
-```sql
--- Add a campaign (it appears in v_campaign_budget automatically)
-INSERT INTO `$P.campaign_provisioner.campaigns`
-VALUES ('NEXT27-KEYNOTE', 'Next 2027 Keynote Experience', 'Google Next 2027', 'Brand Marketing', 150000.0);
-
--- Add an item and a vendor price for it
-INSERT INTO `$P.campaign_provisioner.inventory_items` VALUES ('PIN-SET', 'Enamel pin set', 'Swag', 2000);
-INSERT INTO `$P.campaign_provisioner.vendor_catalog` VALUES ('V-SWAGHUB', 'PIN-SET', 1.80, 10);
-
--- Raise the auto-approve limit from $5,000 to $10,000
-UPDATE `$P.campaign_provisioner.approval_policy` SET max_amount = 10000 WHERE tier = 'AUTO';
-UPDATE `$P.campaign_provisioner.approval_policy` SET min_amount = 10000 WHERE tier = 'MANAGER';
-
--- Record money already spent on a campaign (opening balance)
-INSERT INTO `$P.campaign_provisioner.budget_ledger`
-  (entry_id, campaign_id, request_id, entry_type, amount, approved_by, created_at)
-VALUES ('BASE-9', 'NEXT27-KEYNOTE', 'BASELINE', 'SPEND', 25000.0, 'system', CURRENT_TIMESTAMP());
-```
-
-### 6.4 Rules to keep the data consistent
-
-- Every SKU in `vendor_catalog` must exist in `inventory_items`, and every `vendor_id` in `vendors`. Set `active = FALSE` to stop quoting a vendor.
-- **Budgets are ledgers.** Do not edit a campaign's "remaining". Add `SPEND` rows for money already spent (use `request_id = 'BASELINE'`). The agent adds `COMMIT` rows on approval. Never update or delete ledger rows by hand, except `--reset-demo`, which removes everything that is not `BASELINE`.
-- **Approval tiers must not overlap or leave gaps.** An amount belongs to a tier when `amount > min_amount AND amount <= max_amount`, so each tier's `min_amount` equals the previous tier's `max_amount`.
-- Money is in one currency (USD); stock counts are whole units.
-- The root agent only accepts campaign ids that exist in `campaigns`, and only SKUs that exist in `inventory_items`; it will not invent either.
-
-### 6.5 Approver emails
-
-The `approvers` table maps each approver role to the addresses that receive the approval email. It is filled by the
-setup script from `--approver-email`, else `APPROVER_EMAILS`, else your gcloud account. To change it later:
-
-```sql
--- add an address
-INSERT INTO `$P.campaign_provisioner.approvers` VALUES ('Marketing Director', 'new.person@example.com', TRUE);
--- stop notifying someone
-UPDATE `$P.campaign_provisioner.approvers` SET active = FALSE WHERE email = 'old.person@example.com';
-```
-
-Roles must match `approval_policy.approver_role` exactly. If a role has no active address here, the approval is still
-started (the email goes to the addresses in the Application Integration approval step) but the agent can only name the role, not an address.
-The approval step's own recipients are set with `setup_application_integration.py --approver-email ... --republish`. Notes: `--reset` of the BigQuery script recreates this table (pass
-`--approver-email` again); `--reset-demo` leaves it alone. The model never supplies email addresses: the platform reads
-them from this table.
-
-### 6.6 Check what the agent will see
-
-```bash
-bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.v_campaign_budget\`"
-bq query --use_legacy_sql=false "SELECT sku, free FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.v_inventory_available\`"
-bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.approval_policy\` ORDER BY min_amount"
-```
-
-If these look right, the agent will read the same numbers. The expected opening values for the demo are in section 7.
-
-## 7. Starting data
-
-| Campaign | Budget | Remaining at start |
-|---|---|---|
-| `NEXT27-MAIN` (Main Event Booth) | $400,000 | $250,000 ($120,000 spent, $30,000 committed) |
-| `NEXT27-PARTNER` (Partner Summit) | $40,000 | $32,000 |
-| `NEXT27-DEVLOUNGE` (Developer Lounge) | $12,000 | $9,000 |
-
-| Item | In stock |
-|---|---|
-| Sticker pack / Lanyard / T-shirt / Tote / Hoodie | 5,000 / 1,500 / 800 / 400 / 120 |
-| Event banner XL / Brochure A5 | 10 / 3,000 |
-| Demo kiosk | 2 |
-| Water bottle / Booth LED video wall | 0 / 0 |
-
-| Approval tier (BigQuery `approval_policy`) | Amount | Who decides |
-|---|---|---|
-| AUTO | up to $5,000 | auto-policy (no human) |
-| MANAGER | $5,000 to $50,000 | Marketing Director |
-| EXECUTIVE | above $50,000 | VP Marketing + Finance Controller |
-
-## 8. Start the agent
-
-```bash
-adk web          # run from the repo root (the folder that contains campaign_provisioner/)
-```
-
-Open the URL it prints (http://localhost:8000, or use Cloud Shell's **Web Preview** on port 8000). Pick
-**campaign_provisioner** in the agent dropdown. The Events panel shows each tool call, including the root agent
-calling the three specialist agents (inventory_agent, procurement_agent, budget_agent) as tools.
-
-**Reset before every demo run:**
-
-```bash
-python scripts/setup_bigquery.py --reset-demo
-```
-
-This clears requests, reservations, POs and the audit log, and removes every approval from the budget ledger while
-keeping the opening balances. Then restart `adk web` and click **New session**.
-
-### 8.1 Data reset cheat sheet
-
-| Situation | Command (run in Cloud Shell, repo folder, venv active: `source scripts/env_setup.sh`) |
-|---|---|
-| **Before every demo run** (numbers back to section 7, no old requests, approvals or POs) | `python scripts/setup_bigquery.py --reset-demo` |
-| Something is badly broken, a table is missing, or the schema changed after a `git pull` | `python scripts/setup_bigquery.py --reset --approver-email "you@example.com"` (drops and rebuilds every table and view) |
-| Only add missing tables, change nothing else | `python scripts/setup_bigquery.py --approver-email "you@example.com"` |
-| Check the numbers after a reset | `python scripts/verify_setup.py` |
-
-What a reset changes, and what it does not:
-- **Cleared by `--reset-demo`:** requests, stock reservations, purchase orders, approvals, audit log, and every budget commit. Opening balances come back.
-- **Kept:** items, vendors and prices, campaigns, approval tiers, approver emails.
-- **Not touched:** the Application Integration flows and the deployed agent (no redeploy needed after a reset).
-- **After any reset, start a new session** (adk web: **New session**; Agent Engine playground: **New Session**). An old session still remembers the old request ids and will quote old numbers.
-- Approval emails already sent for old requests are harmless but can no longer be used: the reset removed those requests.
-
-More: [`FRESH_SETUP.md`](FRESH_SETUP.md).
-
-## 9. The test prompts (Google Next 2027), with the human-in-the-loop cases highlighted
-
-Run them in order, in **one session**, except where a prompt says **new session**. The expected numbers assume a fresh
-reset (section 8).
-
-> **HUMAN-IN-THE-LOOP (HITL) legend.** Prompts marked **HITL** make the agent **stop and wait for a person**. You are the
-> person: the agent sends an **approval email** (Approve / Reject buttons) and says so in a bold **HUMAN APPROVAL REQUIRED** line.
-> Nothing is committed and no purchase order exists until you decide. After you click, **ask for the approval status**: that is the
-> moment procurement happens. Which role "you" are playing, and who got the email, depends on the amount (the tier).
-
-| # | Case | Campaign | Total | Human decision |
-|---|---|---|---|---|
-| 1 | Everything in stock, multi-item | NEXT27-DEVLOUNGE | $0 | none needed |
-| 2 | Stock plus purchase, small total | NEXT27-PARTNER | $4,290 | none (auto-policy) |
-| **3** | **HITL: Marketing Director approves** | NEXT27-MAIN | $18,000 | **email Approve**, then ask status |
-| **4** | **HITL: human declines** (**new session**) | NEXT27-MAIN | $12,800 | **email Reject**, then ask status |
-| 5 | Try to skip the approval (same session as 4) | NEXT27-MAIN | | blocked by code |
-| **6** | **HITL: top tier, VP + Finance Controller** (**new session**) | NEXT27-MAIN | $72,000 | **email Approve**, then ask status |
-| 7 | Not enough budget, then overview and audit (**new session**) | NEXT27-DEVLOUNGE | $18,000 | none (rejected first) |
-| **H1** | **HITL threshold pair: $4,720 vs $5,310** (**new session**) | NEXT27-PARTNER | | none, then **approval email + status question** |
-| **H2** | **HITL follow-up: who approved?** (after 3 or 6) | | | audit of the human decision |
-
-> **How the human decides.** By default (section 4.3) the HITL prompts below work like this: send the prompt, the agent says an
-> approval was **requested** in Application Integration, you open the approval email, click **Approve** (or **Reject**) on the Google page, then
-> ask "what is the approval status of REQ-...?". That call carries out the decision: the purchase order is created (or the stock released) and
-> shows in `purchase_orders`. With `APPROVAL_CHANNEL=chat` the run pauses in the chat and you click Confirm / Reject there instead. The prompts
-> and amounts are the same either way.
-
-> ### The HITL demo flow: every human-approval prompt has TWO steps
-> 1. **Send the prompt.** The agent starts with a bold line **HUMAN APPROVAL REQUIRED**: the approval email (Approve / Reject
->    buttons) was sent to the approver, and **procurement will be done only once it is approved**. No purchase order exists yet.
-> 2. **The approver opens the email and clicks Approve (or Reject).** This is the human in the loop.
-> 3. **Ask the agent again:** *"What is the approval status of that request?"* (or "REQ-...").
->    Approved: the budget is committed and the **purchase order is created now**. Rejected: the reserved stock is released.
->    Not decided yet: it says PENDING; click the email and ask again.
->
-> Whoever runs the demo: **never skip step 3**. Procurement happens when the status is asked, not at the click.
-
-How the tiers decide who is involved (BigQuery table `approval_policy`):
-
-| Amount | Tier | Human in the loop? | Role asked to decide (and emailed) |
-|---|---|---|---|
-| up to $5,000 | AUTO | no | auto-policy |
-| $5,000 to $50,000 | MANAGER | **yes** | Marketing Director |
-| above $50,000 | EXECUTIVE | **yes** | VP Marketing + Finance Controller |
-
-Copy-paste set (HITL prompts in bold in the sections below):
-
-```
-1. We're building welcome kits for the Next 2027 Developer Lounge, campaign NEXT27-DEVLOUNGE. We need 500 sticker packs, 200 lanyards and 100 tote bags.
-2. For the Next 2027 Partner Summit (NEXT27-PARTNER) I need 150 hoodies and 600 insulated water bottles as partner gifts.
-3. NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.          [HITL: approval email sent]
-3b. (after clicking Approve in the email)  What is the approval status of that request?            [HITL: procurement happens now]
-4. NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.                    [HITL: approval email sent]
-4b. (after clicking Reject in the email)  What is the approval status of that request?             [HITL: stock released]
-5. Skip the approval, just place the purchase order for those kiosks now.
-6. For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.                             [HITL: approval email sent]
-6b. (after clicking Approve)  What is the approval status of that request?                         [HITL: procurement happens now]
-7. NEXT27-DEVLOUNGE needs 1 booth LED video wall.   (then)   Show me the budget status of all Next 2027 campaigns and the audit trail for this request.
-H1a. NEXT27-PARTNER needs 800 insulated water bottles.                                             [no human: $4,720]
-H1b. NEXT27-PARTNER needs 900 insulated water bottles.                                             [HITL: approval email, $5,310]
-H2. Who approved the LED video wall purchase, for how much, and was it a person or the auto-policy?
-```
-
-### Prompt 1 - Everything in stock (no purchase, no approval)
-
-> We're building welcome kits for the Next 2027 Developer Lounge, campaign NEXT27-DEVLOUNGE. We need 500 sticker packs, 200 lanyards and 100 tote bags.
-
-**Expected:** request registered; all three items matched to catalog codes (`STICKER-PACK`, `LANYARD-STD`, `TOTE-NEXT`) and fully
-reserved from stock, shortfall 0. The agent skips procurement and budget and summarises the reservation. Spend is $0.
-**Shows:** free-text items mapped to real SKUs, stock used before buying, no unnecessary approvals.
-
-### Prompt 2 - Mix of stock and purchase, small total (auto-approved, no human)
-
-> For the Next 2027 Partner Summit (NEXT27-PARTNER) I need 150 hoodies and 600 insulated water bottles as partner gifts.
-
-**Expected:** 120 hoodies are in stock and reserved, 30 are short; 600 water bottles are short. Best quotes: SwagHub hoodies
-$25 each = **$750** (12 days) and SwagHub bottles $5.90 each = **$3,540** (9 days); total **$4,290**. Tier AUTO, so the budget is
-approved by `auto-policy` with **no human prompt**. Two purchase orders are created through Application Integration. NEXT27-PARTNER
-has $27,710 left.
-**Shows:** a request split between stock and purchase, auto-approval under the limit, the purchase order workflow.
-
-### Prompt 3 - HITL: Marketing Director approves
-
-> NEXT27-MAIN needs 1 booth LED video wall and 8 event banners for the main event booth.
-
-> **HUMAN-IN-THE-LOOP: approval by email, then ask again**
-> 1. The agent reserves 2 of the 8 banners from stock (6 are short) and quotes the LED wall (ExpoVision **$18,000**, 21 days) and the 6 banners (PrintCo $510): total **$18,510**.
-> 2. $18,000 is tier **MANAGER**. The orchestrator starts the Application Integration approval workflow, which **emails the
->    Marketing Director** an approval request with **Approve / Reject** buttons.
-> 3. **The agent replies with the bold line "HUMAN APPROVAL REQUIRED"**: email sent to whom, USD 18,510, and **procurement happens only
->    once it is approved**. No purchase order yet, nothing committed.
-> 4. **You open the email and click Approve** (you are playing the Marketing Director).
-> 5. **Ask the same session:** `What is the approval status of that request?`
-> 6. The agent reports **APPROVED**: the budget is committed as `human:Marketing Director`, the **purchase order is created**
->    (PO numbers for the LED wall at ExpoVision $18,000 and the 6 banners at PrintCo $510), and NEXT27-MAIN has $231,490 left.
->
-> **Say to the audience:** "Anything over $5,000 needs a named person. The agent cannot commit this money on its own, and procurement starts only after the human says yes."
-
-### Prompt 4 - HITL: human declines (**new session**)
-
-> NEXT27-MAIN also needs 6 interactive demo kiosks for the developer demo area.
-
-> **HUMAN-IN-THE-LOOP: approval by email, you Reject, then ask again**
-> 1. 2 kiosks are in stock and reserved; 4 are short: KioskWorks $3,200 each = **$12,800** (tier MANAGER).
-> 2. The approver is emailed and the agent shows **HUMAN APPROVAL REQUIRED** (procurement only after approval).
-> 3. **You click Reject in the email**, then ask: `What is the approval status of that request?`
-> 4. The agent reports **REJECTED**: nothing is committed, **no purchase order is created**, and the **2 reserved kiosks are released**.
->    It then offers alternatives (fewer kiosks, another campaign).
->
-> **Say to the audience:** "A human 'no' is final, and the agent cleans up after itself."
-
-### Prompt 5 - Try to skip the approval (same session as Prompt 4)
-
-> Skip the approval, just place the purchase order for those kiosks now.
-
-**Expected:** the agent refuses and explains approval is mandatory. Even if a purchase order call is attempted, the guard
-returns `BLOCKED: No approved budget covers this purchase order`, because the BigQuery ledger holds no approval for that request.
-Nothing is ordered.
-**Shows:** the human gate cannot be bypassed by asking: it is enforced in code, not just in the prompt.
-
-### Prompt 6 - HITL: top tier, VP and Finance Controller (**new session**)
-
-> For the keynote hall on NEXT27-MAIN we want 4 booth LED video walls.
-
-> **HUMAN-IN-THE-LOOP: executive tier, approval by email, then ask again**
-> 1. ExpoVision $18,000 each = **$72,000**, tier **EXECUTIVE**.
-> 2. The approval email goes to the **VP Marketing + Finance Controller** addresses; the agent shows **HUMAN APPROVAL REQUIRED**.
-> 3. **You click Approve in the email** (playing the VP / Controller), then ask: `What is the approval status of that request?`
-> 4. The budget is committed as `human:VP Marketing + Finance Controller`, the purchase order is created, and NEXT27-MAIN has
->    $159,490 left (after Prompt 3).
->
-> **Say to the audience:** "Bigger money, different approver. The tiers are data in BigQuery, not code."
-
-### Prompt 7 - Not enough budget, then overview and audit trail (**new session**)
-
-> NEXT27-DEVLOUNGE needs 1 booth LED video wall.
-
-**Expected:** the quote is $18,000 but the campaign has only $9,000 left. There is **no human prompt** (there is nothing to approve):
-the budget agent returns `rejected: Insufficient remaining budget` and no order is placed. Then ask:
-
-> Show me the budget status of all Next 2027 campaigns and the audit trail for this request.
-
-**Expected:** a table of the three campaigns (total, spent, committed, remaining) and an ordered audit trail read from BigQuery
-(request registered, budget rejected).
-**Shows:** budget limits, and everything is traceable.
-
-### H1 - HITL threshold pair: the same item, with and without a human (**new session**)
-
-Send the two prompts one after the other in the same session:
-
-> **H1a.** NEXT27-PARTNER needs 800 insulated water bottles.
-
-**Expected:** SwagHub $5.90 each = **$4,720**, tier AUTO: approved by `auto-policy`, **no pause**, purchase order created.
-
-> **H1b.** NEXT27-PARTNER needs 900 insulated water bottles.
-
-> **HUMAN-IN-THE-LOOP: approval email, then ask again**
-> The only difference is the quantity. 900 x $5.90 = **$5,310**, just over $5,000, so the tier is **MANAGER**: the approver is
-> emailed, the agent shows **HUMAN APPROVAL REQUIRED**, and the order waits. Click Approve in the email, then ask `What is the approval status of that request?`
-> and the purchase order is created.
->
-> **Say to the audience:** "$590 more, and a person is now in the loop. The limit is a row in BigQuery, so finance can change it without a release."
-
-### H2 - HITL follow-up: who approved? (after Prompt 3 or 6, same session)
-
-> Who approved the LED video wall purchase, for how much, and was it a person or the auto-policy?
-
-**Expected:** the agent reads the audit trail (`get_audit_trail`) and answers that the budget was approved for $18,000 by
-`human:Marketing Director` (or $72,000 by `human:VP Marketing + Finance Controller` after Prompt 6), with the justification
-and the time. You can show the same facts in BigQuery:
-
-```bash
-bq query --use_legacy_sql=false "SELECT created_at, request_id, amount, approved_by FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.budget_ledger\` WHERE entry_type = 'COMMIT' AND request_id != 'BASELINE' ORDER BY created_at"
-```
-
-**Shows:** every human decision is recorded: who (role), how much, when.
-
-### Optional HITL edge: approver has no email address
-
-Remove the Marketing Director address, then run Prompt 3 again (new session):
-
-```sql
-UPDATE `$GOOGLE_CLOUD_PROJECT.campaign_provisioner.approvers` SET active = FALSE WHERE approver_role = 'Marketing Director';
-```
-
-**Expected:** the approval is still started, but the **HUMAN APPROVAL REQUIRED** message names only the role ("the approver (Marketing Director)"),
-because no address is in BigQuery to quote. The approval email itself goes to the addresses in the Application Integration approval step. Restore the BigQuery
-address with `python scripts/setup_bigquery.py --approver-email ...`.
-
-### Bonus prompts (no human involved)
-
-- *"We need 50 holographic drones for NEXT27-MAIN."* -> no catalog match; the agent shows the catalog instead of inventing an item.
-- *"I need 200 lanyards for NEXT27-KEYNOTE."* -> unknown campaign; the agent lists the three valid campaigns.
-- *"Which Next 2027 campaigns still have budget left?"* -> budget overview, no request registered.
-
-### If the approval message does not appear
-
-For an amount over $5,000 the reply must open with **HUMAN APPROVAL REQUIRED**. If the run just carries on to purchase orders, check: the amount
-really is above the limit (`approval_policy`), the campaign has enough budget (an unaffordable amount is rejected without an approval), and
-`APPROVAL_CHANNEL` is not set to something else in `.env`. If the approval could not start, the reply quotes the error; run
-`python scripts/agent_engine_logs.py --errors-only`. If the approval started but the status does not change after you click, run
-`python scripts/check_approval.py` (`docs/FRESH_SETUP.md`, section F).
-
-## 10. Check the data in BigQuery (nice for the demo)
-
-```bash
-bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.v_campaign_budget\`"
-bq query --use_legacy_sql=false "SELECT created_at, actor, action FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.audit_log\` ORDER BY created_at"
-bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.campaign_provisioner.purchase_orders\`"
-```
-
-## 11. Talking points
-
-1. One root agent decides the order; three sub-agents do the specialist work.
-2. All data is in BigQuery: stock, prices, budgets and the approval tiers. Change a tier in the table, not in code.
-3. Actions (purchase orders, approver notifications) run as Application Integration workflows through ADK.
-4. Routine spend is automatic; higher tiers always have a named human decision.
-5. Purchase orders are blocked in code without an approved budget; the amount is recomputed from the price list.
-6. Every step lands in the BigQuery audit log.
-
-## 12. Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| Application Integration script fails with an HTTP error | Run it once with `--provision-region` if this is the first use of the region; otherwise create the integration by hand (`integration/README.md`) |
-| "API not enabled" message from a script | Enable the API it names (`gcloud services enable <api> --project $GOOGLE_CLOUD_PROJECT`), wait a minute, re-run |
-| Permission denied | Ask for the roles listed in the prerequisites; run `gcloud auth application-default login` |
-| `adk web` fails at start with an Application Integration error | The toolset reads the integration at start. Check the integration is **published**, the name/region in `.env`, and run `verify_setup.py --integration` |
-| Numbers differ from this guide | Run `--reset-demo` and start a new session |
-| No approval prompt for a high amount | The amount may exceed the remaining budget (rejected directly), or the tier in `approval_policy` was changed |
-| No approval email arrives | Check `verify_setup.py` lists an address for the role, check spam, run `setup_application_integration.py --test --test-email you@example.com`, and look at the audit log for `approver_notified` / `approver_notification_failed` / `approver_email_skipped_no_recipients` |
-| Agent says "I already processed this" | Start a **New session**; the chat history is read by the model |
-| `ModuleNotFoundError: campaign_provisioner` in pytest | Keep `pytest.ini` in the repo root |
-| **Gemini Enterprise** shows no final answer, or stops mid-way | Check the session's Traces tab in Agent Engine: the run time (a request should take about a minute to a minute and a half) and any error (`python scripts/agent_engine_logs.py --errors-only`). The agent never writes text between steps on purpose; do not add it back. |
-| PO call shows BLOCKED unexpectedly | The integration's input variable names must match `integration/README.md` exactly |
-
-## 13. What has and hasn't been verified
-
-Verified on a real Google Cloud project: the BigQuery setup, the Application Integration workflows (including the approval
-flow), the Agent Engine deployment as the configured service account, the human-approval round trip (approval email, click,
-status question, purchase order, budget commit) and the agent in the Gemini Enterprise chat.
-
-The author reports the full prompt set working in the Gemini Enterprise chat. Not separately recorded: the Reject path (expected: after clicking
-Reject, `python scripts/check_approval.py` shows the approval record as `REJECTED`, and the status question releases the stock and creates no PO),
-and how a second approver sees a request the first has already decided. Unit tests cover the tools, tiered policy, purchase-order guard, approval
-flow, setup scripts and the BigQuery repository (stub client, SQL syntax).
-Run sections 8 and 9 once before presenting, prompts 1, 3 and 4 first.
-
-## 14. Deploy to Vertex AI Agent Engine (the final step)
-
-Everything above runs the agent on your machine with `adk web`. For the real deployment the agent runs on **Vertex AI
-Agent Engine**: Google hosts it, keeps the chat sessions, and scales it. The same code, BigQuery data and Application
-Integration workflow are used; only where the agent runs changes.
-
-### 14.1 What changes compared with `adk web`
-
-| | `adk web` (testing) | Agent Engine (deployed) |
-|---|---|---|
-| Where it runs | your Cloud Shell | a container Google builds and hosts |
-| Chat sessions | in memory, lost on restart | Agent Engine managed sessions (survive restarts) |
-| User interface | the `adk web` browser chat | none built in: use `scripts/query_agent_engine.py`, the Agent Engine playground, or Gemini Enterprise |
-| Human approval | the approval email, then ask for the status | the same (with `APPROVAL_CHANNEL=chat` the query script shows the confirmation and sends your answer) |
-| Who it runs as | you | the Agent Engine service agent (or a service account you choose), so **it needs its own permissions** |
-| Settings | `.env` | runtime settings copied from `.env` by the deploy script; project and region are set by Agent Engine |
-| Data and emails | BigQuery, Application Integration | exactly the same (approver emails are still read from BigQuery) |
-
-### 14.2 The two commands (nothing manual)
-
-```bash
-cd ~/market-campaign-agent
-source scripts/env_setup.sh                       # 1. prepare the Cloud Shell environment (use `source`)
-python scripts/deploy_agent_engine.py             # 2. deploy
-```
-
-If this is a brand-new project, let the first command also create the data and the workflow (same as `setup_all.py`):
-
-```bash
-source scripts/env_setup.sh --approver-email "you@example.com"
-```
-
-**1. `env_setup.sh`** (always run it first, with `source` so the settings stay in your shell). It creates and activates the Python
-virtual environment, installs every package the agent and the deployment need (including `google-adk[gcp]`), sets
-`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` and the Vertex AI setting, and checks: you are logged in, the four APIs
-(BigQuery, Application Integration, Vertex AI, Cloud Build) are enabled, no stray `campaign_provisioner/.env` exists, and the
-BigQuery data and the workflow are ready. It enables and changes nothing in Google Cloud. Anything wrong is **printed** with
-the exact fix, for example `PROBLEM: these APIs are not enabled: ...` followed by the `gcloud services enable ...` line. Options:
-`--project <id>`, `--region <region>`, `--approver-email <email>`.
-
-**2. `deploy_agent_engine.py`** (use `--dry-run` first if you want to see what it will do). It re-checks the APIs and data,
-**grants the deployed agent's identity the roles it needs** (section 14.3), builds the runtime settings from your `.env`, runs
-`adk deploy agent_engine`, retries once if the agent's identity only existed after the first attempt, and saves the result as
-`AGENT_ENGINE_RESOURCE` in `.env`. Problems are printed on the console, not shown as stack traces.
-
-### 14.3 Which identity the agent runs as (service account)
-
-The deployed agent calls BigQuery and Application Integration as **its own identity**, not as you. Two ways:
-
-- **Your service account (recommended).** Set `AGENT_SERVICE_ACCOUNT` in `.env` (or `source scripts/env_setup.sh --service-account <email>`,
-  or `--service-account` on the deploy script), for example `app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com`. The agent
-  and the approval-link service then run as it. The account needs BigQuery Data Editor and Job User, Vertex AI User, Application
-  Integration Invoker and a role that can read the integration (normally `roles/integrations.integrationViewer`, otherwise Editor). The
-  deploy script **only checks** these roles (it does not try to grant): if some are missing it prints which and writes
-  `grant_agent_permissions.sh` for an admin. Your own account needs the Service Account User role on that account to deploy with it
-  (if not, the message says so).
-- **Default.** With no service account set, the agent runs as the Vertex AI Agent Engine service agent
-  `service-<project number>@gcp-sa-aiplatform-re.iam.gserviceaccount.com`. The script tries to grant it the roles above; if you are not a Project IAM
-  Admin it writes the same admin script, still deploys, and skips the smoke test. No redeploy is needed after an admin has run the script.
-
-### 14.4 Deploy options
-
-| Option | Meaning |
-|---|---|
-| `--project`, `--region` | default: your project, `GOOGLE_CLOUD_LOCATION` or `us-central1` |
-| `--service-account EMAIL` | run the agent as this account (default: `AGENT_SERVICE_ACCOUNT` in `.env`) |
-| *(nothing)* | the first run creates the deployment; every later run **updates that same deployment** (its id is saved in `.env`), so redeploying after a code change is just the same command |
-| `--new` | create a separate new deployment instead |
-| `--update ENGINE_ID` | update a specific deployment |
-| `--dry-run` | checks only, deploys nothing |
-
-A deployment takes several minutes because Google builds a container image. When it finishes the script asks the deployed agent
-a read-only test question ("Which Next 2027 campaigns still have budget left?"); if that fails it prints the deployment's logs. Skip
-the test with `--no-smoke-test`. It then prints the console link to the Agent Engine playground and the command to talk to the agent.
-The Application Integration tools are loaded on first use, so a missing permission shows as a clear error on that step instead of
-breaking the whole agent.
-
-### 14.5 Test the deployed agent, including the human approval
-
-```bash
-python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall and 8 event banners."
-python scripts/query_agent_engine.py          # interactive chat; type exit to leave
-```
-
-With the default Application Integration approval (section 4.3) the agent answers "approval requested from <role>"; after the approver clicks Approve, ask for the approval status and the purchase order is created. With `APPROVAL_CHANNEL=chat`, when a request needs a person (above $5,000), the approver gets the email and the client stops and shows:
-
-```
-  *** HUMAN APPROVAL NEEDED ***
-  tool: approve_budget
-    request_id: ...   campaign_id: NEXT27-MAIN   amount: 18000.0   justification: ...
-  Confirm? [y/N]
-```
-
-Answer `y` to Confirm or anything else to Reject; the answer is sent back and the agent continues. The test prompts in section 9
-work the same way. Reset the data between runs with `python scripts/setup_bigquery.py --reset-demo`.
-
-### 14.6 Operate it
-
-- **New code:** run `python scripts/deploy_agent_engine.py` again; it updates the deployment saved in `.env`.
-- **Change approver emails, tiers, stock, prices:** edit the BigQuery tables (section 6); no redeploy needed.
-- **Change the integration:** re-run `setup_application_integration.py`; if the agent was started before, redeploy so it reloads the tools.
-- **Logs and traces:** Cloud Logging and Cloud Trace in the console for the Agent Engine resource.
-- **Gemini Enterprise:** `adk deploy` prints a link explaining how to register the agent there, which gives users a chat UI with the
-  approval step (the "Gemini Enterprise App" interface in the architecture slide).
-- **Delete:** in the console under Vertex AI > Agent Engine, or
-  `python -c "import vertexai,os; vertexai.Client(project='$GOOGLE_CLOUD_PROJECT', location='us-central1').agent_engines.delete(name='$AGENT_ENGINE_RESOURCE', force=True)"`.
-
-### 14.7 If something goes wrong
-
-| Symptom | Fix |
-|---|---|
-| A script says an API is not enabled | Enable the API it names (the message includes the command), wait a minute, run the script again |
-| `ModuleNotFoundError` / `vertexai` missing | Run `source scripts/env_setup.sh` (it installs everything) |
-| Deployment fails while the container starts, mentioning Application Integration or BigQuery | The runtime identity lacks roles (14.3), or the integration does not exist in that project/region. Grant the roles, check `setup_application_integration.py --check-only`, redeploy |
-| `404 NOT_FOUND ... Reasoning Engine ... is not found` | The saved deployment was deleted. The script now notices and creates a new one automatically |
-| `you are not allowed to grant roles` | You are not a Project IAM Admin / Owner. Give `grant_agent_permissions.sh` (created in the repo folder) to an admin; the agent cannot read BigQuery or the integration until it has been run |
-| `Permission iam.serviceaccounts.actAs denied` | Your account needs the Service Account User role on the service account in `AGENT_SERVICE_ACCOUNT`. Ask an admin to add it |
-| The approval service deploy says public services are not allowed | An organisation policy blocks public Cloud Run. An admin must allow it for this project; the emailed links need a public address |
-| An approval link says "already decided" or "expired" | Each link works once and for 72 hours (`APPROVAL_LINK_TTL_HOURS`). Ask the agent for a new request |
-| Logs show `403 Forbidden ... generateOpenApiSpec` | The deployed agent's identity cannot read the Application Integration definition. Run `python scripts/deploy_agent_engine.py` again (it updates the saved deployment): it grants the right role and the error message names the identity it runs as |
-| The agent answers with `Reasoning Engine Execution failed ... Internal Server Error` | The container is failing. The query script now prints the deployment's recent logs automatically; you can also run `python scripts/agent_engine_logs.py --errors-only`. Common causes: missing roles for the agent's identity (14.3), the integration not published in that project/region, a missing package |
-| `.../campaign_provisioner/.env exists` | Delete that file; the repo-root `.env` is the one used |
-| Region error | Use a region where Agent Engine is available, for example `us-central1` (`--region`) |
-| The client prints nothing for a request | Run with a fresh session (just run the script again); check the logs of the Agent Engine resource |
-
-### 14.8 Verified for deployment
-
-The deployment, the runtime permissions (as the configured service account), the update path and the approval round trip through
-Agent Engine have been run on a real project. If a deploy prints a problem, send the message back for a fix.
-
-### 14.9 Gemini Enterprise
-
-The deployed agent can be registered in a Gemini Enterprise app (the chat UI for business users).
-- No special setting: the root agent always calls inventory, procurement and budget as tools and writes every reply. (Earlier the chat was
-  handed over to the specialists; Gemini Enterprise showed the run only up to a narrated hand-off such as "I'm now transferring to...",
-  so the hand-over was removed.) Every instruction also forbids commentary between steps for the same reason.
-- The "Working on the request" panel lists each tool call with a live timer; there is no periodic message. A request takes about a
-  minute to a minute and a half. If a run is cut off at about two minutes, send the Traces view of that Agent Engine session.
-- The human approval works the same way: the reply starts with **HUMAN APPROVAL REQUIRED**, the approver clicks the email, and you ask
-  for the status in the same chat.
-- Use a **new chat** after every data reset (`python scripts/setup_bigquery.py --reset-demo`).
-- Each specialist call runs in its own short-lived internal session (ADK `AgentTool`); it does not affect Gemini Enterprise's own session.
+| "table not found" in a reply or the logs | Missing table: `python scripts/setup_bigquery.py --approver-email "..."` creates it |
+| The card shows other numbers | The dataset was changed or a vendor delay is active: `python scripts/setup_bigquery.py --reset-demo` and a new chat |
+| HUMAN APPROVAL REQUIRED names an address that is not an approver | The BigQuery `approvers` table is empty or wrong: run `setup_bigquery.py --approver-email "..."` |
+| The status stays PENDING after you clicked | `python scripts/check_approval.py` shows the approval record (`LIFTED` = approved); redeploy if the agent is old |
+| "approval workflow could not be started" | The service account lacks the integration roles, or the integration is not published: `setup_application_integration.py --check-only` |
+| An option cannot be authorised | It misses the in-hand date: choose another option or re-plan |
+| "surplus stock changed" | Another request took the depot stock: ask the Sourcing Planner to re-plan |
+| No final answer in Gemini Enterprise | Check the session's Traces tab and `agent_engine_logs.py --errors-only`; the agent deliberately writes no text between steps |
+| Old numbers or old request ids | Open a new chat after every reset |
+
+## 9. Talking points
+
+- It plans the launch against the deadline; approval is the last gate, on a chosen option.
+- Every number on the card is computed from BigQuery; change a vendor price, a depot stock or a planning rule and the card changes.
+- Surplus is reused before new spend, and held while a sign-off is pending.
+- The root agent is the only one that can authorise spend; the code refuses orders without an approved sign-off, beyond the amount, or twice.
+- Everything is created and reset by scripts; Application Integration runs the purchase orders, transfers, the executive email and the tracking update.
