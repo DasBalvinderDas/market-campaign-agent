@@ -83,7 +83,7 @@ def test_setup_all_runs_both_steps_and_writes_env(tmp_path, monkeypatch):
     import setup_all, setup_application_integration as ai, setup_bigquery as bq
     calls = []
     monkeypatch.setattr(setup_all, "ROOT", tmp_path)
-    (tmp_path / "campaign_provisioner").mkdir()
+    (tmp_path / "launchkit_provisioner").mkdir()
     monkeypatch.setattr(setup_all, "preflight", lambda *a, **k: calls.append("preflight"))
     monkeypatch.setattr(bq, "run", lambda args, project="": calls.append(("bq", project, args.approver_email)))
     monkeypatch.setattr(ai, "run", lambda args, project="": calls.append(("ai", project, args.no_email)))
@@ -112,13 +112,13 @@ def test_setup_all_continues_after_a_failed_step_and_reports(tmp_path, monkeypat
 
 
 def test_importing_the_package_does_not_build_agents_or_touch_the_cloud():
-    """Regression: setup scripts import campaign_provisioner.* before the integration exists."""
+    """Regression: setup scripts import launchkit_provisioner.* before the integration exists."""
     import os, subprocess
-    env = {**os.environ, "WORKFLOW_BACKEND": "app_integration", "DATA_BACKEND": "bigquery"}
+    env = {**os.environ, "DATA_BACKEND": "bigquery"}
     env.pop("GOOGLE_CLOUD_PROJECT", None)
-    code = ("import campaign_provisioner.approvers, campaign_provisioner.data.schema, "
-            "campaign_provisioner.data.seed_data; import sys; "
-            "assert 'campaign_provisioner.agent' not in sys.modules")
+    code = ("import launchkit_provisioner.approvers, launchkit_provisioner.data.schema, "
+            "launchkit_provisioner.data.seed_data; import sys; "
+            "assert 'launchkit_provisioner.agent' not in sys.modules")
     r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True,
                        cwd=str(Path(__file__).resolve().parent.parent))
     assert r.returncode == 0, r.stderr

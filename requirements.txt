@@ -1,2 +1,2 @@
--r campaign_provisioner/requirements.txt
+-r launchkit_provisioner/requirements.txt
 pytest>=8.0

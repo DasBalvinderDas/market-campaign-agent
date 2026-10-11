@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
-"""Create, publish and test the Application Integration workflow used by the agent.
+"""Create, publish and test the Application Integration workflows used by the agent.
 
   python scripts/setup_application_integration.py            # create + publish if missing (idempotent)
-  python scripts/setup_application_integration.py --test     # ...then run both triggers once with sample data
+  python scripts/setup_application_integration.py --test     # ...then run the order triggers once with sample data
   python scripts/setup_application_integration.py --check-only   # only check, change nothing
 
-It builds integration "campaign-provisioner-workflows" with three API triggers through the Application
-Integration REST API:
-  create_purchase_order  in: request_id, campaign_id, sku, vendor_id, quantity, total_amount
-                         out: po_number (PO-<request_id>-<sku>), execution_id
-  notify_approver        in: request_id, campaign_id, approver_role, summary, amount,
-                            approver_email, email_subject, email_body
-                         out: status
-create_purchase_order runs a Data Mapping task. notify_approver SENDS AN EMAIL (Send Email task) to ONE address,
-approver_email, using email_subject and email_body, then sets status. The agent reads the addresses from the
-BigQuery table `approvers` and calls the trigger once per address, so recipients are configured in data, not in
-the integration. Use --no-email to skip the email task. --print-definition shows the JSON that is sent.
+It builds integration "launchkit-workflows" with four API triggers through the Application Integration REST API:
+  create_purchase_order   in: request_id, plan_line_id, vendor_id, sku, quantity, total_amount, destination_region
+                          out: po_number (PO-<plan_line_id>), execution_id
+  create_depot_transfer   in: request_id, plan_line_id, depot_id, sku, quantity, destination_region
+                          out: transfer_number (TR-<plan_line_id>), execution_id
+  request_approval        in: request_id, launch_id, approver_role, amount, approval_message
+                          out: decision (APPROVED / REJECTED). A native Approval (suspension) task: the run pauses, the
+                          approver(s) get an Application Integration email with Approve / Reject, and the run continues
+                          with the answer.
+  send_launch_update      in: request_id, launch_id, recipient_email, email_subject, email_body
+                          out: status. SENDS AN EMAIL (Send Email task) to ONE address; the agent calls it once per
+                          address of the BigQuery role "Launch Team", so recipients are data, not part of the workflow.
+The two order triggers run a Data Mapping task. Use --no-email to skip the email task. --print-definition shows the
+JSON that is sent.
 
 Assumes the Application Integration API is already enabled. Project id: --project, else
 GOOGLE_CLOUD_PROJECT, else your active gcloud project. If an API is not enabled the script tells you which one.
@@ -32,38 +35,43 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import default_account_email, explain, guarded, preflight, resolve_project  # noqa: E402
 
-NAME = os.getenv("APP_INTEGRATION_NAME", "campaign-provisioner-workflows")
+NAME = os.getenv("APP_INTEGRATION_NAME", "launchkit-workflows")
 LOCATION = os.getenv("APP_INTEGRATION_LOCATION", "us-central1")
 PO_TRIGGER = os.getenv("APP_INTEGRATION_PO_TRIGGER", "api_trigger/create_purchase_order")
-NOTIFY_TRIGGER = os.getenv("APP_INTEGRATION_NOTIFY_TRIGGER", "api_trigger/notify_approver")
+TRANSFER_TRIGGER = os.getenv("APP_INTEGRATION_TRANSFER_TRIGGER", "api_trigger/create_depot_transfer")
+UPDATE_TRIGGER = os.getenv("APP_INTEGRATION_UPDATE_TRIGGER", "api_trigger/send_launch_update")
 APPROVAL_TRIGGER = os.getenv("APP_INTEGRATION_APPROVAL_TRIGGER", "api_trigger/request_approval")
 API = "https://integrations.googleapis.com/v1"
 
 S, I, D = "STRING_VALUE", "INT_VALUE", "DOUBLE_VALUE"
 
-# Variable names are a contract with the agent (campaign_provisioner/workflow/guard.py).
-PO_IN = {"request_id": S, "campaign_id": S, "sku": S, "vendor_id": S, "quantity": I, "total_amount": D}
+# Variable names are a contract with the agent (launchkit_provisioner/execution.py, decision_flow.py).
+PO_IN = {"request_id": S, "plan_line_id": S, "vendor_id": S, "sku": S, "quantity": I, "total_amount": D,
+         "destination_region": S}
 PO_OUT = {"po_number": S, "execution_id": S}
-NOTIFY_IN = {"request_id": S, "campaign_id": S, "approver_role": S, "approver_email": S, "email_subject": S,
-             "email_body": S, "summary": S, "amount": D}
-NOTIFY_OUT = {"status": S}
-APPROVAL_IN = {"request_id": S, "campaign_id": S, "approver_role": S, "amount": D, "approval_message": S}
+TRANSFER_IN = {"request_id": S, "plan_line_id": S, "depot_id": S, "sku": S, "quantity": I, "destination_region": S}
+TRANSFER_OUT = {"transfer_number": S, "execution_id": S}
+APPROVAL_IN = {"request_id": S, "launch_id": S, "approver_role": S, "amount": D, "approval_message": S}
 APPROVAL_OUT = {"decision": S}
+UPDATE_IN = {"request_id": S, "launch_id": S, "recipient_email": S, "email_subject": S, "email_body": S}
+UPDATE_OUT = {"status": S}
 
 SAMPLE = {
-    PO_TRIGGER: {"request_id": {"stringValue": "SETUP-TEST"}, "campaign_id": {"stringValue": "NEXT27-MAIN"},
-                 "sku": {"stringValue": "BOOTH-LEDWALL"}, "quantity": {"intValue": "1"},
-                 "vendor_id": {"stringValue": "V-EXPOVISION"}, "total_amount": {"doubleValue": 18000}},
+    PO_TRIGGER: {"request_id": {"stringValue": "SETUP-TEST"}, "plan_line_id": {"stringValue": "SETUP-TEST-L01"},
+                 "vendor_id": {"stringValue": "V-DISPLAYCO"}, "sku": {"stringValue": "DISPLAY-COUNTER-AURORA"},
+                 "quantity": {"intValue": "1"}, "total_amount": {"doubleValue": 1400},
+                 "destination_region": {"stringValue": "US"}},
+    TRANSFER_TRIGGER: {"request_id": {"stringValue": "SETUP-TEST"}, "plan_line_id": {"stringValue": "SETUP-TEST-L02"},
+                       "depot_id": {"stringValue": "DEPOT-LON-01"}, "sku": {"stringValue": "PKG-LUX-BOX-BLACK"},
+                       "quantity": {"intValue": "1"}, "destination_region": {"stringValue": "EMEA"}},
 }
 
 
-def notify_sample(email):
-    return {"request_id": {"stringValue": "SETUP-TEST"}, "campaign_id": {"stringValue": "NEXT27-MAIN"},
-            "approver_role": {"stringValue": "Marketing Director"}, "approver_email": {"stringValue": email},
-            "email_subject": {"stringValue": "Campaign Provisioner setup test (please ignore)"},
-            "email_body": {"stringValue": "This is a test of the approver notification email. No action needed."},
-            "summary": {"stringValue": "Setup test, please ignore: 1 booth LED video wall, USD 18,000"},
-            "amount": {"doubleValue": 18000}}
+def update_sample(email):
+    return {"request_id": {"stringValue": "SETUP-TEST"}, "launch_id": {"stringValue": "LAUNCH-AURORA"},
+            "recipient_email": {"stringValue": email},
+            "email_subject": {"stringValue": "LaunchKit Provisioner setup test (please ignore)"},
+            "email_body": {"stringValue": "This is a test of the launch tracking update email. No action needed."}}
 
 
 # ---------------------------------------------------------------- integration definition
@@ -103,10 +111,10 @@ def _trigger(number, trigger_id, start_task, inputs, outputs):
 def _email_task(task_id, next_id):
     """Send Email task. Parameter keys follow Google's published foreach-loop-send-email sample."""
     empty = {"stringArray": {}}
-    return {"task": "EmailTask", "taskId": task_id, "displayName": "Email the approver",
+    return {"task": "EmailTask", "taskId": task_id, "displayName": "Email the launch team",
             "nextTasks": [{"taskId": next_id}], "taskExecutionStrategy": "WHEN_ALL_SUCCEED",
             "parameters": {
-                "To": {"key": "To", "value": {"stringArray": {"stringValues": ["$approver_email$"]}}},
+                "To": {"key": "To", "value": {"stringArray": {"stringValues": ["$recipient_email$"]}}},
                 "Cc": {"key": "Cc", "value": empty}, "Bcc": {"key": "Bcc", "value": empty},
                 "AttachmentPath": {"key": "AttachmentPath", "value": empty},
                 "Subject": {"key": "Subject", "value": {"stringValue": "$email_subject$"}},
@@ -143,38 +151,45 @@ def _decision_task(task_id, decision):
     return _mapping_task(task_id, f"Decision: {decision}", [field])
 
 
-def build_version(email: bool = True, approver_emails=None) -> dict:
-    """The IntegrationVersion body: three API triggers (purchase order, notify approver, request approval)."""
-    po_number = {"inputField": {"fieldType": S, "transformExpression": {
-        "initialValue": {"literalValue": {"stringValue": "PO-"}},
-        "transformationFunctions": [_concat(_ref("request_id")), _concat(_lit("-")), _concat(_ref("sku"))]}},
-        "outputField": _out_field("po_number")}
-    execution_id = {"inputField": {"fieldType": S, "transformExpression": {"initialValue": {"baseFunction": {
+def _prefixed(prefix, ref_name, out_name):
+    """Data Mapping field: <out_name> = "<prefix>" + $ref_name$."""
+    return {"inputField": {"fieldType": S, "transformExpression": {
+        "initialValue": {"literalValue": {"stringValue": prefix}}, "transformationFunctions": [_concat(_ref(ref_name))]}},
+        "outputField": _out_field(out_name)}
+
+
+def _execution_id():
+    return {"inputField": {"fieldType": S, "transformExpression": {"initialValue": {"baseFunction": {
         "functionType": {"baseFunction": {"functionName": "GET_EXECUTION_ID"}}}}}},
         "outputField": _out_field("execution_id")}
-    status = {"inputField": {"fieldType": S, "transformExpression": _lit("NOTIFIED")},
-              "outputField": _out_field("status")}
 
+
+def build_version(email: bool = True, approver_emails=None) -> dict:
+    """The IntegrationVersion body: four API triggers (purchase order, depot transfer, approval, launch update)."""
+    status = {"inputField": {"fieldType": S, "transformExpression": _lit("SENT")}, "outputField": _out_field("status")}
     params = {}
-    for group, kind in ((PO_IN, "IN"), (NOTIFY_IN, "IN"), (APPROVAL_IN, "IN"), (PO_OUT, "OUT"), (NOTIFY_OUT, "OUT"),
-                        (APPROVAL_OUT, "OUT")):
+    for group, kind in ((PO_IN, "IN"), (TRANSFER_IN, "IN"), (APPROVAL_IN, "IN"), (UPDATE_IN, "IN"), (PO_OUT, "OUT"),
+                        (TRANSFER_OUT, "OUT"), (APPROVAL_OUT, "OUT"), (UPDATE_OUT, "OUT")):
         for key, typ in group.items():
             params.setdefault(key, {"key": key, "displayName": key, "dataType": typ, "inputOutputType": kind})
-    tasks = [_mapping_task("1", "Build PO number", [po_number, execution_id])]
+    tasks = [_mapping_task("1", "Build PO number", [_prefixed("PO-", "plan_line_id", "po_number"), _execution_id()]),
+             _mapping_task("4", "Build transfer number",
+                           [_prefixed("TR-", "plan_line_id", "transfer_number"), _execution_id()])]
     if email:
         # 2: send email (only trigger inputs are referenced, like Google's foreach-loop-send-email sample)
         # 3: set status
-        tasks += [_email_task("2", "3"), _mapping_task("3", "Mark approver notified", [status])]
+        tasks += [_email_task("2", "3"), _mapping_task("3", "Mark update sent", [status])]
     else:
-        tasks.append(_mapping_task("2", "Mark approver notified", [status]))
+        tasks.append(_mapping_task("2", "Mark update sent", [status]))
     tasks += [_approval_task("10", approver_emails or ["approver@example.com"], "11", "12"),
               _decision_task("11", "APPROVED"), _decision_task("12", "REJECTED")]
     return {
-        "description": "Campaign Provisioner workflows: create purchase order, notify approver, human approval.",
+        "description": "LaunchKit Provisioner workflows: purchase order, depot transfer, executive sign-off, launch update.",
         "integrationParameters": list(params.values()),
         "triggerConfigs": [_trigger(1, PO_TRIGGER, "1", PO_IN, PO_OUT),
-                           _trigger(2, NOTIFY_TRIGGER, "2", NOTIFY_IN, NOTIFY_OUT),
-                           _trigger(3, APPROVAL_TRIGGER, "10", APPROVAL_IN, APPROVAL_OUT)],
+                           _trigger(2, TRANSFER_TRIGGER, "4", TRANSFER_IN, TRANSFER_OUT),
+                           _trigger(3, APPROVAL_TRIGGER, "10", APPROVAL_IN, APPROVAL_OUT),
+                           _trigger(4, UPDATE_TRIGGER, "2", UPDATE_IN, UPDATE_OUT)],
         "taskConfigs": tasks,
     }
 
@@ -233,7 +248,7 @@ def run(args, project=""):
 def run_with(http, args, project):
     parent = f"{API}/projects/{project}/locations/{LOCATION}"
     base = f"{parent}/integrations/{NAME}"
-    wanted = {PO_TRIGGER, NOTIFY_TRIGGER, APPROVAL_TRIGGER}
+    wanted = {PO_TRIGGER, TRANSFER_TRIGGER, APPROVAL_TRIGGER, UPDATE_TRIGGER}
     print(f"Project: {project}   Integration: {NAME}   Region: {LOCATION}")
 
     if args.provision_region:
@@ -270,12 +285,12 @@ def run_with(http, args, project):
         test_email = args.test_email or default_account_email()
         samples = dict(SAMPLE)
         if test_email and not args.no_email:
-            samples[NOTIFY_TRIGGER] = notify_sample(test_email)
-            print(f"\nRunning each trigger once; the approver email goes to {test_email} ...")
+            samples[UPDATE_TRIGGER] = update_sample(test_email)
+            print(f"\nRunning each order trigger once; the update email goes to {test_email} ...")
         elif not args.no_email:
-            print("\nSkipping the notify_approver test: no email known. Pass --test-email you@example.com.")
+            print("\nSkipping the send_launch_update test: no email known. Pass --test-email you@example.com.")
         else:
-            samples[NOTIFY_TRIGGER] = notify_sample("none@example.com")
+            samples[UPDATE_TRIGGER] = update_sample("none@example.com")
             print("\nRunning each trigger once ...")
         for trigger, params in samples.items():
             r = http.post(f"{base}:execute", json={"triggerId": trigger, "inputParameters": params})
@@ -289,12 +304,12 @@ def run_with(http, args, project):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default=None)
-    ap.add_argument("--test", action="store_true", help="execute both triggers once with sample data")
-    ap.add_argument("--test-email", default=None, help="recipient for the --test approval email (default: your gcloud account)")
+    ap.add_argument("--test", action="store_true", help="execute the order triggers once with sample data")
+    ap.add_argument("--test-email", default=None, help="recipient for the --test update email (default: your gcloud account)")
     ap.add_argument("--approver-email", action="append", default=[], metavar="[ROLE=]EMAIL[,EMAIL]",
-                    help="who gets the native approval email (Approve / Reject); default: APPROVER_EMAILS, else your gcloud account")
+                    help="who gets the sign-off email (Approve / Reject); default: APPROVER_EMAILS, else your gcloud account")
     ap.add_argument("--republish", action="store_true", help="publish a new version even if the triggers exist (e.g. new approver emails)")
-    ap.add_argument("--no-email", action="store_true", help="do not add the Send Email task to notify_approver")
+    ap.add_argument("--no-email", action="store_true", help="do not add the Send Email task to send_launch_update")
     ap.add_argument("--check-only", action="store_true", help="check only; do not create anything")
     ap.add_argument("--provision-region", action="store_true",
                     help="one-time: enable Application Integration in this region (first use only)")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Talk to the deployed agent on Vertex AI Agent Engine, including the human Confirm / Reject.
 
-  python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall."
+  python scripts/query_agent_engine.py "Show me the launch readiness board."
   python scripts/query_agent_engine.py            # interactive chat
 
 When the agent needs a human decision it returns an `adk_request_confirmation` call. This client shows the

@@ -2,12 +2,11 @@
 """Check that the BigQuery data is in place (and optionally the ADK connection to Application Integration).
 
   python scripts/verify_setup.py                  # BigQuery only
-  python scripts/verify_setup.py --integration    # also lists the tools ADK generates from the integration
+  python scripts/verify_setup.py --integration    # also checks that the four Application Integration workflows are published
 
 Assumes the APIs are enabled; if one is not, the script tells you which to enable.
 """
 import argparse
-import asyncio
 import os
 import sys
 from pathlib import Path
@@ -21,42 +20,58 @@ from _common import guarded, resolve_project  # noqa: E402
 @guarded
 def run(args, project=""):
     os.environ["GOOGLE_CLOUD_PROJECT"] = project
-    from campaign_provisioner import config
-    from campaign_provisioner.repositories import get_repo
+    from launchkit_provisioner import config
+    from launchkit_provisioner.data.schema import TABLES
+    from launchkit_provisioner.repositories import get_repo
 
     repo = get_repo()
     print(f"Project: {project}\nBigQuery dataset: {repo.ds}")
-    from campaign_provisioner.data.schema import TABLES
     have = {t.table_id for t in repo.client.list_tables(repo.ds)}
     missing = [t for t in TABLES if t not in have]
     if missing:
         sys.exit(f"BigQuery tables missing: {', '.join(missing)}. Run:  python scripts/setup_bigquery.py")
-    budgets = repo.list_budgets()
-    if not budgets:
-        sys.exit("No campaigns found. Run:  python scripts/setup_bigquery.py")
-    print("\nCampaign budgets")
-    for b in budgets:
-        print(f"  {b['campaign_id']:<18} total {b['total_budget']:>10,.0f}  remaining {b['remaining']:>10,.0f}")
-    print("\nSample stock")
-    for sku in ("DEMO-KIOSK", "BOOTH-LEDWALL", "STICKER-PACK"):
-        print(f"  {sku:<14} free {repo.get_availability(sku)['free']}")
-    print("\nApproval tiers")
-    for amount in (3000, 18000, 72000):
-        p = repo.get_policy(amount)
-        print(f"  ${amount:>6,}: {p['tier']:<10} -> {p['approver_role']}")
-    print("\nApprover emails (who is notified)")
-    for role in sorted({repo.get_policy(a)["approver_role"] for a in (18000, 72000)}):
+    launches = repo.list_launches()
+    if not launches:
+        sys.exit("No launches found. Run:  python scripts/setup_bigquery.py")
+    print("\nLaunches")
+    for x in launches:
+        print(f"  {x['launch_id']:<16} {x['launch_name']}: in hand by {x['in_hand_by']}, embargo {x['embargo_date']}")
+    print("\nSurplus stock in regional depots (free units)")
+    for d in repo.list_depot_free():
+        print(f"  {d['depot_name']:<28} {d['sku']:<20} {d['free']:>4}")
+    print("\nCreators on the seeding list:", sum(m["n"] for m in repo.creator_mix(launches[0]["launch_id"])))
+    print("Planning rules:", ", ".join(f"{k}={v:g}" for k, v in sorted(repo.get_planning_rules().items())))
+    print("\nSign-off tiers")
+    for p in repo.list_policies():
+        top = "and above" if p["max_amount"] > 1e11 else f"to ${p['max_amount']:,.0f}"
+        print(f"  {p['tier']:<12} from ${p['min_amount']:>8,.0f} {top:<14} -> {p['approver_role']}")
+    print("\nApprover emails (sign-off and tracking updates)")
+    for role in sorted({p["approver_role"] for p in repo.list_policies() if p["requires_human"]} | {"Launch Team"}):
         emails = repo.get_approver_emails(role)
-        print(f"  {role:<36} {', '.join(emails) if emails else '(none: no email will be sent; run setup_bigquery.py --approver-email)'}")
+        print(f"  {role:<24} {', '.join(emails) if emails else '(none: run setup_bigquery.py --approver-email)'}")
     print("\nBigQuery OK")
 
     if args.integration:
-        from google.adk.tools.application_integration_tool import ApplicationIntegrationToolset
-        for trig in (config.PO_TRIGGER, config.NOTIFY_TRIGGER, config.APPROVAL_TRIGGER):
-            ts = ApplicationIntegrationToolset(project=project, location=config.APP_INTEGRATION_LOCATION,
-                                               integration=config.APP_INTEGRATION_NAME, triggers=[trig])
-            print(f"Integration trigger {trig}: tools = {[t.name for t in asyncio.run(ts.get_tools())]}")
-        print("\nApplication Integration OK (the guard matches tool names containing 'purchase_order' / 'notify')")
+        import setup_application_integration as ai
+        ai.run_with(_Http(), argparse.Namespace(test=False, check_only=True, provision_region=False, no_email=False,
+                                                test_email=None, approver_email=[], republish=False), project)
+        print("\nApplication Integration OK (all four workflows are published)")
+
+
+class _Http:
+    """Authorised session for the integration check."""
+
+    def __init__(self):
+        import google.auth
+        from google.auth.transport.requests import AuthorizedSession
+        creds, _ = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        self._s = AuthorizedSession(creds)
+
+    def get(self, url, **kw):
+        return self._s.get(url, **kw)
+
+    def post(self, url, **kw):
+        return self._s.post(url, **kw)
 
 
 def main():

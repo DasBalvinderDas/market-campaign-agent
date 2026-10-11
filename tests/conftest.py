@@ -1,13 +1,12 @@
 import os
 
-# Unit tests run without any cloud access: use the in-memory repository and local workflow test doubles.
+# Unit tests run without any cloud access: use the in-memory repository.
 os.environ["DATA_BACKEND"] = "memory"
-os.environ["WORKFLOW_BACKEND"] = "mock"
 
 import pytest
 
-from campaign_provisioner.repositories import set_repo
-from campaign_provisioner.repositories.memory_repo import MemoryRepository
+from launchkit_provisioner.repositories import set_repo
+from launchkit_provisioner.repositories.memory_repo import MemoryRepository
 
 
 @pytest.fixture(autouse=True)
@@ -16,3 +15,52 @@ def repo():
     set_repo(r)
     yield r
     set_repo(None)
+
+
+BRIEF = [{"bundle_type": "CREATOR_KIT", "quantity": 150}, {"bundle_type": "SHOWROOM_DISPLAY", "quantity": 10},
+         {"bundle_type": "SALES_FOLIO", "quantity": 300}]
+
+
+@pytest.fixture
+def aurora(repo):
+    """A request for the full Project Aurora brief with its scenarios computed."""
+    from launchkit_provisioner import planner
+    rid = repo.create_request("LAUNCH-AURORA", "Project Aurora kits")
+    repo.replace_requirement_lines(rid, planner.expand_bundles(repo, "LAUNCH-AURORA", BRIEF))
+    scenarios, lines = planner.plan_scenarios(repo, rid)
+    repo.replace_scenarios(rid, scenarios, lines)
+    return rid
+
+
+class FakeExecutor:
+    """Stands in for Application Integration: records calls, answers like the real workflows."""
+
+    def __init__(self, fail_on=None):
+        self.calls, self.fail_on = [], fail_on
+        self.execution = {"executionDetails": {"state": "SUSPENDED"}}
+        self.suspensions = []
+
+    def _out(self, trigger_id, inputs):
+        from launchkit_provisioner import config
+        if trigger_id == config.PO_TRIGGER:
+            return {"po_number": f"PO-{inputs['plan_line_id']}", "execution_id": "exec-po"}
+        if trigger_id == config.TRANSFER_TRIGGER:
+            return {"transfer_number": f"TR-{inputs['plan_line_id']}", "execution_id": "exec-tr"}
+        return {"status": "SENT"}
+
+    def execute(self, trigger_id, inputs):
+        self.calls.append((trigger_id, inputs))
+        if self.fail_on and self.fail_on(trigger_id, inputs):
+            raise RuntimeError("workflow down")
+        return self._out(trigger_id, inputs)
+
+    def start(self, trigger_id, inputs):
+        self.calls.append((trigger_id, inputs))
+        return {"executionId": "exec-9", "executionFailed": False}
+
+    def get_execution(self, execution_id):
+        assert execution_id == "exec-9"
+        return self.execution
+
+    def list_suspensions(self, execution_id):
+        return self.suspensions

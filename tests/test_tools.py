@@ -1,248 +1,115 @@
 import pytest
-import types
 
-from campaign_provisioner.tools import budget_tools, inventory_tools, orchestration_tools, procurement_tools
-from campaign_provisioner.workflow import guard
-from campaign_provisioner.workflow.integration import create_purchase_order, notify_approver
-
-
-def run_before(tool, args, ctx):
-    import asyncio
-    return asyncio.run(guard.before_tool(tool, args, ctx))
-
-
-def new_request(campaign="NEXT27-MAIN"):
-    return orchestration_tools.register_campaign_request(campaign, "test")["request_id"]
-
-
-# ---- inventory
-def test_find_sku_and_unknown_sku_hint():
-    assert inventory_tools.find_sku("hoodies")["matches"][0]["sku"] == "HOODIE-NEXT"
-    assert inventory_tools.find_sku("zeppelin")["status"] == "no_match"
-    r = inventory_tools.check_inventory("LED-WALL", 1)
-    assert r["status"] == "error" and r["valid_skus"][0]["sku"] == "BOOTH-LEDWALL"
-
-
-def test_reserve_shortfall_and_release():
-    rid = new_request()
-    r = inventory_tools.reserve_inventory(rid, "DEMO-KIOSK", 6)
-    assert r["reserved"] == 2 and r["shortfall_to_procure"] == 4
-    assert inventory_tools.check_inventory("DEMO-KIOSK", 1)["free_stock"] == 0
-    assert inventory_tools.release_inventory(rid)["units_released"] == 2
-    assert inventory_tools.check_inventory("DEMO-KIOSK", 1)["free_stock"] == 2
-
-
-def test_quotes_cheapest_first():
-    q = procurement_tools.get_vendor_quotes("WATER-BOTTLE", 600)["quotes"]
-    assert q[0]["vendor"] == "SwagHub" and q[0]["total"] == 3540.0
-
-
-# ---- budget / policy
-def test_policy_tiers():
-    assert budget_tools.get_approval_policy(3540)["requires_human"] is False
-    assert budget_tools.get_approval_policy(18000)["approver_role"] == "Marketing Director"
-    assert budget_tools.get_approval_policy(72000)["tier"] == "EXECUTIVE"
-
-
-def test_small_spend_auto_approved():
-    rid = new_request("NEXT27-PARTNER")
-    a = budget_tools.approve_budget(rid, "NEXT27-PARTNER", 3540.0, "bottles")
-    assert a["approved_by"] == "auto-policy"
-    assert budget_tools.check_budget("NEXT27-PARTNER")["committed"] == 3540.0
-
-
-def test_high_value_requires_human_unless_unfundable():
-    assert budget_tools.requires_human(18000, "NEXT27-MAIN") is True
-    assert budget_tools.requires_human(3540, "NEXT27-MAIN") is False
-    assert budget_tools.requires_human(18000, "NEXT27-DEVLOUNGE") is False  # exceeds $9,000 remaining
-
-
-def test_insufficient_budget_rejected():
-    rid = new_request("NEXT27-DEVLOUNGE")
-    r = budget_tools.approve_budget(rid, "NEXT27-DEVLOUNGE", 18000.0, "led")
-    assert r["status"] == "rejected" and r["remaining"] == 9000.0
-
-
-def test_human_tier_recorded_with_role():
-    rid = new_request()
-    a = budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000.0, "led wall")
-    assert a["approved_by"] == "human:Marketing Director"
-
-
-# ---- guard
-TOOL = types.SimpleNamespace(name="create_purchase_order")
-
-
-def po_args(rid, qty=1, sku="BOOTH-LEDWALL", vendor="V-EXPOVISION"):
-    return {"request_id": rid, "sku": sku, "quantity": qty, "vendor_id": vendor, "total_amount": 1.0}
-
-
-def test_po_blocked_without_approval():
-    rid = new_request()
-    assert run_before(TOOL, po_args(rid), None)["status"] == "BLOCKED"
-
-
-def test_po_allowed_with_approval_amount_overridden_and_recorded(repo):
-    rid = new_request()
-    budget_tools.approve_budget(rid, "NEXT27-MAIN", 18000.0, "led wall")
-    args = po_args(rid)
-    assert run_before(TOOL, args, None) is None
-    assert args["total_amount"] == 18000.0 and args["campaign_id"] == "NEXT27-MAIN"  # model value ignored
-    resp = guard.after_tool(TOOL, args, None, create_purchase_order(**args))
-    assert resp["recorded"] and repo.t["purchase_orders"][0]["total_amount"] == 18000.0
-    # a second PO now exceeds the approval
-    assert run_before(TOOL, po_args(rid), None)["status"] == "BLOCKED"
-
-
-def test_po_cannot_exceed_approval():
-    rid = new_request()
-    budget_tools.approve_budget(rid, "NEXT27-MAIN", 4000.0, "x")
-    assert run_before(TOOL, po_args(rid), None)["status"] == "BLOCKED"
-
-
-def test_after_tool_notify_is_audited(repo):
-    guard.after_tool(types.SimpleNamespace(name="notify_approver"),
-                     {"request_id": "R", "approver_role": "Marketing Director", "amount": 1.0}, None,
-                     notify_approver("R", "C", 1.0, "Marketing Director", "s"))
-    assert repo.t["audit_log"][-1]["action"] == "approver_notified"
-
-
-def test_audit_trail_filter():
-    rid = new_request()
-    inventory_tools.reserve_inventory(rid, "STICKER-PACK", 10)
-    events = orchestration_tools.get_audit_trail(rid)["events"]
-    assert [e["action"] for e in events] == ["request_registered", "stock_reserved"]
-
-
-def test_unknown_campaign_lists_known():
-    r = orchestration_tools.register_campaign_request("NOPE", "x")
-    assert r["status"] == "error" and len(r["known_campaigns"]) == 3
-
-
-def test_agent_wiring():
-    """The root agent governs the three specialists by calling them as tools (the same on every platform)."""
-    from google.adk.tools.agent_tool import AgentTool
-    from campaign_provisioner.agent import root_agent
-    assert root_agent.sub_agents == []
-    names = [t.agent.name for t in root_agent.tools if isinstance(t, AgentTool)]
-    assert names == ["inventory_agent", "procurement_agent", "budget_agent"]
-    assert root_agent.tools[4].name == "approve_budget"  # only the root can approve
-    for tool in root_agent.tools:
-        if isinstance(tool, AgentTool):
-            assert "ransfer" not in tool.agent.instruction  # no hand-off wording: the specialists reply to the root
-    assert "ransfer" not in root_agent.instruction
-
-
-def test_adk_confirmation_predicate_receives_args():
-    import asyncio
-    tool = budget_tools.approve_budget_tool
-    ask = lambda amt, cid: asyncio.run(tool.check_require_confirmation(
-        {"request_id": "R", "campaign_id": cid, "amount": amt, "justification": "j"}, types.SimpleNamespace()))
-    assert ask(18000.0, "NEXT27-MAIN") is True
-    assert ask(3540.0, "NEXT27-MAIN") is False
-    assert ask(18000.0, "NEXT27-DEVLOUNGE") is False
-
-
-# ---- approver notification
-class FakeNotifyTool:
-    name = "notify_approver"
-
-    def __init__(self):
-        self.calls = []
-
-    async def run_async(self, *, args, tool_context):
-        self.calls.append(dict(args))
-        return {"status": "SUCCEEDED"}
-
-
-def test_notify_recipients_come_from_data_not_model(repo):
-    repo.t["approvers"] = [{"approver_role": "Marketing Director", "email": "md@example.com", "active": True},
-                           {"approver_role": "Marketing Director", "email": "md2@example.com", "active": True},
-                           {"approver_role": "Marketing Director", "email": "old@example.com", "active": False}]
-    tool = FakeNotifyTool()
-    args = {"request_id": "R", "campaign_id": "C", "summary": "1 wall, $18,000", "approver_role": "Marketing Director",
-            "approver_email": "attacker@evil.com", "email_subject": "model subject"}
-    assert run_before(tool, args, None) is None
-    # first address goes through the normal call, every extra address gets its own call
-    assert args["approver_email"] == "md@example.com"
-    assert [c["approver_email"] for c in tool.calls] == ["md2@example.com"]
-    assert args["email_subject"] == "Approval needed: R - C (Marketing Director)" and "1 wall" in args["email_body"]
-    assert "attacker" not in str(args) + str(tool.calls)
-
-
-def test_notify_without_recipients_is_reported_not_blocking(repo):
-    repo.t["approvers"] = []
-    tool = FakeNotifyTool()
-    out = run_before(tool, {"request_id": "R", "approver_role": "VP Marketing + Finance Controller"}, None)
-    assert out["status"] == "NO_APPROVERS" and "no email was sent" in out["reason"]
-    assert repo.t["audit_log"][-1]["action"] == "approver_email_skipped_no_recipients"
-
-
-def test_notification_failure_is_audited(repo):
-    tool = types.SimpleNamespace(name="notify_approver")
-    guard.after_tool(tool, {"request_id": "R", "approver_email": "a@x.com"}, None, {"executionFailed": True})
-    assert repo.t["audit_log"][-1]["action"] == "approver_notification_failed"
-
-
-def test_approver_config_parsing():
-    from campaign_provisioner import approvers as a
-    cfg = a.parse("Marketing Director=a@x.com,b@x.com;VP Marketing + Finance Controller=c@x.com;z@x.com")
-    rows = a.expand(cfg, ["Marketing Director", "VP Marketing + Finance Controller"])
-    assert [r["email"] for r in rows if r["approver_role"] == "Marketing Director"] == ["a@x.com", "b@x.com", "z@x.com"]
-    assert a.parse("me@x.com") == {"*": ["me@x.com"]}
-    with pytest.raises(ValueError):
-        a.parse("Marketing Director=not-an-email")
-
-
-def test_budget_agent_registers_the_guard_before_tool():
-    from campaign_provisioner.sub_agents.budget_agent import budget_agent
-    from campaign_provisioner.sub_agents.procurement_agent import procurement_agent
-    assert guard.before_tool in (budget_agent.before_tool_callback
-                                 if isinstance(budget_agent.before_tool_callback, list)
-                                 else [budget_agent.before_tool_callback])
-    assert procurement_agent.before_tool_callback is not None
-
-
-def test_the_orchestrator_holds_the_approval_gate_not_the_budget_agent():
-    from campaign_provisioner.agent import root_agent
-    from campaign_provisioner.sub_agents.budget_agent import budget_agent
-    root_tools = [getattr(t, "name", getattr(t, "__name__", "")) for t in root_agent.tools]
-    budget_tools_names = [getattr(t, "name", getattr(t, "__name__", "")) for t in budget_agent.tools]
-    assert "approve_budget" in root_tools and "approve_budget" not in budget_tools_names
-
-
-def test_vendor_quotes_accept_an_item_description():
-    from campaign_provisioner.tools.procurement_tools import get_vendor_quotes
-    out = get_vendor_quotes("hoodies", 30)
-    assert out["status"] == "ok" and out["sku"] == "HOODIE-NEXT" and out["quotes"]
-    assert get_vendor_quotes("unicorn", 1)["status"] == "error"
-
-
-def test_batch_reserve_quote_and_assess_in_three_calls():
-    from campaign_provisioner.tools import budget_tools, inventory_tools, orchestration_tools, procurement_tools
-    rid = orchestration_tools.register_campaign_request("NEXT27-PARTNER", "gifts")["request_id"]
-    out = inventory_tools.reserve_items(rid, [inventory_tools.ItemRequest(item="hoodies", quantity=150),
-                                              inventory_tools.ItemRequest(item="insulated water bottles", quantity=600)])
-    assert out["status"] == "ok"
-    by = {i["sku"]: i for i in out["items"]}
-    assert by["HOODIE-NEXT"]["reserved"] == 120 and by["HOODIE-NEXT"]["shortfall_to_procure"] == 30
-    assert by["WATER-BOTTLE"]["reserved"] == 0 and by["WATER-BOTTLE"]["shortfall_to_procure"] == 600
-    quote = procurement_tools.quote_shortfalls(rid)
-    assert quote["status"] == "ok" and len(quote["lines"]) == 2 and quote["grand_total"] > 0
-    a = budget_tools.assess_budget("NEXT27-PARTNER", quote["grand_total"])
-    assert a["status"] == "ok" and a["fits_budget"] and a["tier"] == "AUTO" and not a["requires_human"]
-
-
-def test_batch_reserve_asks_when_an_item_is_unknown_or_ambiguous():
-    from campaign_provisioner.tools import inventory_tools, orchestration_tools
-    rid = orchestration_tools.register_campaign_request("NEXT27-PARTNER", "x")["request_id"]
-    out = inventory_tools.reserve_items(rid, [inventory_tools.ItemRequest(item="unicorn", quantity=1)])
-    assert out["status"] == "needs_clarification" and out["unresolved"][0]["item"] == "unicorn"
-
-
-def test_approved_budget_tells_the_root_to_order_with_the_plan():
-    from campaign_provisioner.tools import budget_tools, inventory_tools, orchestration_tools
-    rid = orchestration_tools.register_campaign_request("NEXT27-PARTNER", "x")["request_id"]
-    inventory_tools.reserve_items(rid, [inventory_tools.ItemRequest(item="insulated water bottles", quantity=100)])
-    out = budget_tools.approve_budget(rid, "NEXT27-PARTNER", 590, "bottles")
-    assert out["status"] == "approved" and "Budget approved for" in out["next_step"] and out["purchase_plan"]
+from launchkit_provisioner import config
+from launchkit_provisioner.tools import (brief_tools, decision_tools, fulfilment_tools, orchestration_tools,
+                                         sourcing_tools)
+from launchkit_provisioner.tools.brief_tools import BundleRequest
+
+from conftest import FakeExecutor
+
+
+def bundles(*pairs):
+    return [BundleRequest(bundle_type=b, quantity=q, region=r) for b, q, r in pairs]
+
+
+def test_register_validates_the_launch(repo):
+    out = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")
+    assert out["status"] == "ok" and out["request_id"].startswith("REQ-") and out["launch_name"].startswith("Project Aurora")
+    bad = brief_tools.register_launch_request("LAUNCH-NOPE", "x")
+    assert bad["status"] == "error" and "LAUNCH-AURORA" in bad["message"]
+
+
+def test_build_requirements_in_one_call_with_a_creator_breakdown(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    out = brief_tools.build_requirements(rid, bundles(("CREATOR_KIT", 150, ""), ("SHOWROOM_DISPLAY", 10, ""), ("SALES_FOLIO", 300, "")))
+    assert out["status"] == "ok" and set(out["channels"]) == {"CREATOR", "SHOWROOM", "SALES"}
+    assert out["channels"]["SHOWROOM"]["units"] == 10 and out["creator_hoodie_sizes"] == {"S": 20, "M": 45, "L": 60, "XL": 25}
+    assert out["creator_power_plugs"]["US-A"] == 85 and out["requirement_lines"] == len(repo.get_requirement_lines(rid))
+    again = brief_tools.build_requirements(rid, bundles(("SALES_FOLIO", 20, "EMEA")))     # a new brief replaces the old lines
+    assert again["total_units"] == 40 and len(repo.get_requirement_lines(rid)) == 2
+
+
+def test_build_requirements_errors_are_explained(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    assert "Valid types" in brief_tools.build_requirements(rid, bundles(("TENT", 3, "")))["message"]
+    assert brief_tools.build_requirements("REQ-NOPE", bundles(("SALES_FOLIO", 1, "")))["status"] == "error"
+
+
+def test_build_scenarios_returns_the_card_and_the_decision_mode(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    assert sourcing_tools.build_scenarios(rid)["status"] == "error"          # no requirements yet
+    brief_tools.build_requirements(rid, bundles(("CREATOR_KIT", 150, ""), ("SHOWROOM_DISPLAY", 10, ""), ("SALES_FOLIO", 300, "")))
+    out = sourcing_tools.build_scenarios(rid)
+    assert out["status"] == "ok" and out["decision_mode"] == "CHOOSE" and out["autopilot_limit_usd"] == 5000.0
+    assert [o["option"] for o in out["options"]] == [1, 2, 3] and out["recommended_option"] == "Smart depot rebalance"
+    assert out["decision_card"].count("**Option") == 3
+    assert len(repo.get_scenarios(rid)) == 3 and "scenarios_built" in [a["action"] for a in repo.list_audit(rid)]
+
+
+def test_a_small_brief_is_autopilot(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "20 folios")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("SALES_FOLIO", 20, "EMEA")))
+    assert sourcing_tools.build_scenarios(rid)["decision_mode"] == "AUTOPILOT"
+
+
+def test_vendor_delay_before_a_decision_asks_for_a_re_plan(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("SHOWROOM_DISPLAY", 10, "")))
+    before = sourcing_tools.build_scenarios(rid)
+    out = sourcing_tools.report_vendor_delay(rid, "rapiddisplay", 8, "late")
+    assert out["status"] == "ok" and out["vendor"] == "RapidDisplay" and out["delay_days"] == 8 and "build_scenarios" in out["next_step"]
+    after = sourcing_tools.build_scenarios(rid)
+    assert after["active_vendor_delays"][0]["vendor_id"] == "V-RAPIDDISPLAY"
+    assert [o["buffer_hours"] for o in after["options"]] != [o["buffer_hours"] for o in before["options"]]
+
+
+def test_vendor_delay_errors(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    assert "vendors" in sourcing_tools.report_vendor_delay(rid, "nobody", 3)
+    assert sourcing_tools.report_vendor_delay(rid, "PrintCo", 0)["status"] == "error"
+
+
+def test_delay_after_sign_off_reports_the_impact_and_does_not_replan(repo, monkeypatch):
+    monkeypatch.setattr(decision_tools, "IntegrationExecutor", lambda: FakeExecutor())
+    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("CREATOR_KIT", 150, ""), ("SHOWROOM_DISPLAY", 10, ""), ("SALES_FOLIO", 300, "")))
+    sourcing_tools.build_scenarios(rid)
+    assert decision_tools.authorize_launch(rid, "2", "go")["status"] == "pending_approval"
+    out = sourcing_tools.report_vendor_delay(rid, "RapidDisplay", 12)
+    assert out["impact"]["affected_lines"] >= 1 and out["impact"]["still_on_time"] is False
+    assert "not re-planned" in out["next_step"]
+    assert sourcing_tools.build_scenarios(rid)["status"] == "error"          # the plan is frozen once signed off or pending
+
+
+def test_the_gate_and_the_status_tools_go_through_the_flow(repo, monkeypatch):
+    ex = FakeExecutor()
+    monkeypatch.setattr(decision_tools, "IntegrationExecutor", lambda: ex)
+    monkeypatch.setattr(fulfilment_tools, "IntegrationExecutor", lambda: ex)
+    import launchkit_provisioner.decision_flow as flow
+    monkeypatch.setattr(flow, "_default_executor", lambda: ex)
+    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("CREATOR_KIT", 150, ""), ("SHOWROOM_DISPLAY", 10, ""), ("SALES_FOLIO", 300, "")))
+    sourcing_tools.build_scenarios(rid)
+    assert fulfilment_tools.execute_plan(rid)["status"] == "error"                 # nothing signed off yet
+    assert decision_tools.authorize_launch(rid, "Option 2", "saves 19%")["status"] == "pending_approval"
+    assert fulfilment_tools.execute_plan(rid)["status"] == "BLOCKED"
+    assert decision_tools.get_launch_status(rid)["status"] == "PENDING"
+    ex.execution = {"eventExecutionDetails": {"eventExecutionState": "SUCCEEDED"}}
+    ex.suspensions = [{"state": "LIFTED"}]
+    st = decision_tools.get_launch_status(rid)
+    assert st["status"] == "APPROVED" and st["request_id"] == rid
+    done = fulfilment_tools.execute_plan(rid)
+    assert done["status"] == "executed" and done["purchase_orders"] and done["depot_transfers"]
+    board = orchestration_tools.get_launch_overview()
+    assert board["requests"][0]["readiness"] == "GREEN" and board["requests"][0]["lines_executed"] == board["requests"][0]["lines_total"]
+    assert not any(d["sku"] == "PKG-LUX-BOX-BLACK" and d["free"] for d in board["depot_surplus"])     # all 60 boxes used up
+    trail = [e["action"] for e in orchestration_tools.get_audit_trail(rid)["events"]]
+    for expected in ("request_registered", "scenarios_built", "approval_requested", "launch_approved", "po_created",
+                     "transfer_created"):
+        assert expected in trail
+
+
+def test_overview_lists_launches_and_surplus(repo):
+    out = orchestration_tools.get_launch_overview()
+    assert out["launches"][0]["launch_id"] == "LAUNCH-AURORA" and out["requests"] == []
+    assert {"London EMEA Marketing Hub", "Dallas Marketing Depot"} <= {d["depot"] for d in out["depot_surplus"]}

@@ -1,0 +1,297 @@
+"""The planning engine: turns a brief into requirement lines and computes the sourcing scenarios.
+
+Everything here is deterministic and works only from data in the repository (BigQuery in real use), so the numbers a
+decision maker sees are computed, never typed in by the model.
+
+Scenarios (option codes)
+  FULL_NEW   everything bought new from the cheapest standard offer (ignores surplus stock and the deadline)
+  REBALANCE  surplus depot stock first (nearest depot first), the rest from the cheapest standard offer that keeps the
+             target safety buffer before the in-hand date (else the fastest offer)
+  ECO        eco offers, with the same deadline-aware choice (falls back to a standard offer where no eco offer
+             can make the date); no depot reuse
+Every scenario reports cost, delivery date, safety buffer in hours, savings versus FULL_NEW, carbon and risk. The
+recommendation is the cheapest scenario that keeps at least the minimum buffer.
+"""
+import math
+from datetime import date, timedelta
+
+from .repositories.base import Repository
+
+OPTIONS = [("FULL_NEW", "FN", "Full brand-new production"),
+           ("REBALANCE", "RB", "Smart depot rebalance"),
+           ("ECO", "EC", "Certified eco launch")]
+CHANNEL = {"CREATOR_KIT": "CREATOR", "SHOWROOM_DISPLAY": "SHOWROOM", "SALES_FOLIO": "SALES"}
+
+
+class PlanError(ValueError):
+    """A problem the model should explain to the user (unknown bundle, missing launch, ...)."""
+
+
+# ---------------------------------------------------------------------------- brief -> requirement lines
+def _scale(counts: dict, total: int) -> dict:
+    """Spread ``total`` over keys in proportion to ``counts`` (largest remainder, so the sum is exact)."""
+    base = sum(counts.values())
+    if base == 0:
+        raise PlanError("There is no distribution data to split the quantity.")
+    exact = {k: total * v / base for k, v in counts.items()}
+    out = {k: int(math.floor(x)) for k, x in exact.items()}
+    for k in sorted(exact, key=lambda k: (exact[k] - out[k], k), reverse=True)[: total - sum(out.values())]:
+        out[k] += 1
+    return {k: v for k, v in out.items() if v}
+
+
+def expand_bundles(repo: Repository, launch_id: str, bundles: list[dict]) -> list[dict]:
+    """bundles: [{bundle_type, quantity, region (optional)}] -> merged lines {bundle_type, channel, sku, region, quantity}."""
+    merged: dict = {}
+    valid = repo.list_bundle_types()
+    for b in bundles:
+        btype, qty, only_region = b["bundle_type"].strip().upper(), int(b["quantity"]), (b.get("region") or "").upper()
+        if btype not in valid:
+            raise PlanError(f"Unknown bundle type '{b['bundle_type']}'. Valid types: {valid}")
+        if qty <= 0:
+            raise PlanError(f"The quantity for {btype} must be positive.")
+        templates = repo.get_bundle_templates(btype)
+        if btype == "CREATOR_KIT":
+            mix = [m for m in repo.creator_mix(launch_id) if not only_region or m["region"] == only_region]
+            if not mix:
+                raise PlanError(f"No creators on the list for launch {launch_id}" + (f" in {only_region}." if only_region else "."))
+            kits = _scale({(m["size"], m["region"], m["plug_type"]): m["n"] for m in mix}, qty)
+            for (size, region, plug), n in kits.items():
+                for t in templates:
+                    key = (btype, t["sku_pattern"].format(size=size, plug=plug), region)
+                    merged[key] = merged.get(key, 0) + n * int(t["qty_per_bundle"])
+        else:
+            if only_region:
+                per_region = {only_region: qty}
+            else:
+                per_region = _scale({s["region"]: float(s["share_pct"]) for s in repo.get_regional_split(btype)}, qty)
+            if not per_region:
+                raise PlanError(f"No regional split is defined for {btype}; give a region.")
+            for region, n in per_region.items():
+                for t in templates:
+                    key = (btype, t["sku_pattern"], region)
+                    merged[key] = merged.get(key, 0) + n * int(t["qty_per_bundle"])
+    lines = [{"bundle_type": k[0], "channel": CHANNEL.get(k[0], k[0]), "sku": k[1], "region": k[2], "quantity": q}
+             for k, q in merged.items()]
+    return sorted(lines, key=lambda x: (x["channel"], x["sku"], x["region"]))
+
+
+# ---------------------------------------------------------------------------- scenarios
+class _Ctx:
+    def __init__(self, repo: Repository, request_id: str, today: date):
+        req = repo.get_request(request_id)
+        if not req:
+            raise PlanError(f"Unknown request '{request_id}'.")
+        self.launch = repo.get_launch(req["launch_id"])
+        self.lines = repo.get_requirement_lines(request_id)
+        if not self.lines:
+            raise PlanError("This request has no requirement lines yet: run the brief analysis first.")
+        self.rules = repo.get_planning_rules()
+        self.lanes = repo.get_lanes()
+        self.today = today
+        self.repo = repo
+        self.window_days = (self.launch["in_hand_by"] - today).days
+        self._offers, self._assets, self._depots = {}, {}, {}
+
+    def lane(self, a, b):
+        lane = self.lanes.get((a, b))
+        if not lane:
+            raise PlanError(f"No shipping lane from {a} to {b}.")
+        return lane
+
+    def offers(self, sku):
+        if sku not in self._offers:
+            self._offers[sku] = self.repo.list_vendor_offers(sku)
+        return self._offers[sku]
+
+    def asset(self, sku):
+        if sku not in self._assets:
+            self._assets[sku] = self.repo.get_asset(sku)
+        return self._assets[sku]
+
+    def depots(self, sku):
+        if sku not in self._depots:
+            self._depots[sku] = self.repo.depot_free(sku)
+        return self._depots[sku]
+
+
+def _vendor_line(ctx: _Ctx, line: dict, offer: dict) -> dict:
+    lane = ctx.lane(offer["home_region"], line["region"])
+    factor = float(ctx.asset(line["sku"])["ship_factor"])
+    qty = line["quantity"]
+    shipping = round(qty * factor * lane["cost_per_unit"], 2)
+    days = int(offer["lead_days"]) + int(offer["delay_days"]) + lane["days"]
+    return {"source_type": "VENDOR", "source_id": offer["vendor_id"], "variant": offer["variant"],
+            "unit_price": float(offer["unit_price"]), "shipping_cost": shipping,
+            "line_total": round(qty * float(offer["unit_price"]) + shipping, 2), "days_to_deliver": days,
+            "carbon_kg": round(qty * float(offer["carbon_kg"]), 2)}
+
+
+def _depot_line(ctx: _Ctx, line: dict, depot: dict, qty: int) -> dict:
+    lane = ctx.lane(depot["region"], line["region"])
+    factor = float(ctx.asset(line["sku"])["ship_factor"])
+    shipping = round(qty * factor * lane["cost_per_unit"], 2)
+    carbon = round(qty * factor * ctx.rules.get("TRANSFER_CARBON_KG_PER_FACTOR", 0.4), 2)
+    return {"source_type": "DEPOT", "source_id": depot["depot_id"], "variant": None, "unit_price": 0.0,
+            "shipping_cost": shipping, "line_total": shipping,
+            "days_to_deliver": int(ctx.rules.get("DEPOT_HANDLING_DAYS", 1)) + lane["days"], "carbon_kg": carbon}
+
+
+def _choose_offer(ctx: _Ctx, line: dict, variants: list[str], deadline_aware: bool):
+    """Pick a vendor offer. Without deadline awareness: the cheapest. With it: the cheapest that keeps the target
+    buffer (preferring the requested variants), else the fastest."""
+    offers = [o for o in ctx.offers(line["sku"])]
+    if not offers:
+        return None
+    built = [(o, _vendor_line(ctx, line, o)) for o in offers]
+    if not deadline_aware:
+        pool = [p for p in built if p[0]["variant"] in variants]
+        return min(pool, key=lambda p: (p[1]["line_total"], p[1]["days_to_deliver"])) if pool else None
+    target_days = ctx.window_days - math.ceil(ctx.rules.get("TARGET_BUFFER_HOURS", 48) / 24)
+    for variant_group in (variants, ["STANDARD", "ECO"]):
+        pool = [p for p in built if p[0]["variant"] in variant_group and p[1]["days_to_deliver"] <= target_days]
+        if pool:
+            return min(pool, key=lambda p: (p[1]["line_total"], p[1]["days_to_deliver"]))
+    return min(built, key=lambda p: (p[1]["days_to_deliver"], p[1]["line_total"]))
+
+
+def _allocate_depots(ctx: _Ctx) -> dict:
+    """Greedy reuse of surplus stock: per SKU, nearest (fewest days) depot-to-destination pairs first.
+    Returns {line_index: [(depot, qty), ...]}."""
+    plan: dict = {}
+    by_sku: dict = {}
+    for i, ln in enumerate(ctx.lines):
+        by_sku.setdefault(ln["sku"], []).append(i)
+    for sku, idxs in by_sku.items():
+        free = {d["depot_id"]: int(d["free"]) for d in ctx.depots(sku)}
+        meta = {d["depot_id"]: d for d in ctx.depots(sku)}
+        need = {i: ctx.lines[i]["quantity"] for i in idxs}
+        pairs = sorted(((ctx.lane(meta[d]["region"], ctx.lines[i]["region"])["days"], d, i) for d in free for i in idxs))
+        for _days, d, i in pairs:
+            take = min(free[d], need[i])
+            if take > 0:
+                plan.setdefault(i, []).append((meta[d], take))
+                free[d] -= take
+                need[i] -= take
+    return plan
+
+
+def _build_lines(ctx: _Ctx, code: str) -> tuple[list[dict], list[str]]:
+    out, unsourced = [], []
+    depot_plan = _allocate_depots(ctx) if code == "REBALANCE" else {}
+    for i, ln in enumerate(ctx.lines):
+        remaining = ln["quantity"]
+        base = {"channel": ln["channel"], "sku": ln["sku"], "region": ln["region"]}
+        for depot, qty in depot_plan.get(i, []):
+            out.append({**base, "quantity": qty, **_depot_line(ctx, {**ln, "quantity": qty}, depot, qty)})
+            remaining -= qty
+        if remaining > 0:
+            part = {**ln, "quantity": remaining}
+            if code == "FULL_NEW":
+                pick = _choose_offer(ctx, part, ["STANDARD"], deadline_aware=False)
+            elif code == "REBALANCE":
+                pick = _choose_offer(ctx, part, ["STANDARD"], deadline_aware=True)
+            else:
+                pick = _choose_offer(ctx, part, ["ECO"], deadline_aware=True)
+            if pick is None:
+                unsourced.append(ln["sku"])
+                continue
+            out.append({**base, "quantity": remaining, **pick[1]})
+    return out, unsourced
+
+
+def _risk(buffer_hours: int, min_buffer: float, unsourced: list) -> str:
+    if unsourced:
+        return f"HIGH: no vendor can supply {', '.join(sorted(set(unsourced)))}"
+    if buffer_hours < 0:
+        return f"HIGH: misses the in-hand date by {-buffer_hours} hours"
+    if buffer_hours < min_buffer:
+        return f"MODERATE: only {buffer_hours} hours of safety buffer"
+    return f"LOW: {buffer_hours} hours of safety buffer"
+
+
+def plan_scenarios(repo: Repository, request_id: str, today: date | None = None) -> tuple[list[dict], list[dict]]:
+    """Compute the three scenarios for a request. Returns (scenarios, scenario_lines), ready to store."""
+    ctx = _Ctx(repo, request_id, today or date.today())
+    min_buffer = ctx.rules.get("MIN_BUFFER_HOURS", 24)
+    scenarios, all_lines = [], []
+    for code, short, name in OPTIONS:
+        sid = f"{request_id}-{short}"
+        lines, unsourced = _build_lines(ctx, code)
+        for n, ln in enumerate(lines, start=1):
+            ln.update(line_id=f"{sid}-L{n:02d}", scenario_id=sid, request_id=request_id, execution_status="PLANNED")
+        longest = max((ln["days_to_deliver"] for ln in lines), default=0)
+        delivery = ctx.today + timedelta(days=longest)
+        buffer_hours = (ctx.launch["in_hand_by"] - delivery).days * 24
+        total = round(sum(ln["line_total"] for ln in lines), 2)
+        scenarios.append({
+            "scenario_id": sid, "request_id": request_id, "option_code": code, "option_name": name,
+            "total_cost": total, "shipping_cost": round(sum(ln["shipping_cost"] for ln in lines), 2),
+            "savings_usd": 0.0, "delivery_date": delivery, "buffer_hours": int(buffer_hours),
+            "carbon_kg": round(sum(ln["carbon_kg"] for ln in lines), 1),
+            "risk": _risk(int(buffer_hours), min_buffer, unsourced),
+            "feasible": buffer_hours >= 0 and not unsourced, "recommended": False,
+            "summary": _summary(code, lines)})
+        all_lines += lines
+    base = next((s["total_cost"] for s in scenarios if s["option_code"] == "FULL_NEW"), 0.0)
+    for s in scenarios:
+        s["savings_usd"] = round(base - s["total_cost"], 2)
+    ok = [s for s in scenarios if s["feasible"] and s["buffer_hours"] >= min_buffer]
+    pool = ok or [s for s in scenarios if s["feasible"]] or scenarios
+    best = min(pool, key=lambda s: (s["total_cost"] if ok else -s["buffer_hours"], -s["buffer_hours"]))
+    best["recommended"] = True
+    return scenarios, all_lines
+
+
+def _summary(code: str, lines: list[dict]) -> str:
+    depot_units = sum(ln["quantity"] for ln in lines if ln["source_type"] == "DEPOT")
+    vendor_units = sum(ln["quantity"] for ln in lines if ln["source_type"] == "VENDOR")
+    eco_units = sum(ln["quantity"] for ln in lines if ln.get("variant") == "ECO")
+    if code == "FULL_NEW":
+        return f"{vendor_units} units manufactured new from the cheapest vendors."
+    if code == "REBALANCE":
+        return f"{depot_units} units reused from regional depots, {vendor_units} units bought (deadline-aware vendor choice)."
+    return f"{eco_units} units on certified eco material, {vendor_units - eco_units} on standard where eco cannot make the date."
+
+
+# ---------------------------------------------------------------------------- presentation
+def decision_card(request_id: str, launch: dict, scenarios: list[dict], limit: float) -> str:
+    """The text a decision maker reads: one block per option, computed from the stored scenarios."""
+    rows = [f"**Launch decision for {launch['launch_name']}** (request {request_id}): in-hand by {launch['in_hand_by']}, "
+            f"press embargo {launch['embargo_date']}.", ""]
+    for i, s in enumerate(scenarios, start=1):
+        tag = " (RECOMMENDED)" if s["recommended"] else ""
+        save = f", saves ${s['savings_usd']:,.2f}" if s["savings_usd"] > 0 else (
+            f", costs ${-s['savings_usd']:,.2f} more" if s["savings_usd"] < 0 else "")
+        rows.append(f"**Option {i}: {s['option_name']}{tag}**: ${s['total_cost']:,.2f}{save}")
+        rows.append(f"- Arrives {s['delivery_date']} | buffer {s['buffer_hours']} h | carbon {s['carbon_kg']:,.0f} kg | {s['risk']}")
+        rows.append(f"- {s['summary']}")
+        rows.append("")
+    rows.append(f"Spend up to ${limit:,.0f} runs on autopilot; above that a named executive signs off by email.")
+    return "\n".join(rows)
+
+
+# ---------------------------------------------------------------------------- vendor delays
+def resolve_vendor(repo: Repository, text: str) -> dict | None:
+    """A vendor by id or by (part of) its name."""
+    t = (text or "").strip().lower()
+    vendors = repo.list_vendors()
+    for v in vendors:
+        if t in (v["vendor_id"].lower(), v["vendor_name"].lower()):
+            return v
+    hits = [v for v in vendors if t and (t in v["vendor_name"].lower() or t in v["vendor_id"].lower())]
+    return hits[0] if len(hits) == 1 else None
+
+
+def delay_impact(repo: Repository, scenario: dict, delay_days: int, vendor_id: str) -> dict:
+    """What a vendor delay does to an already chosen scenario: the lines it touches and the new buffer."""
+    lines = repo.get_scenario_lines(scenario["scenario_id"])
+    longest = max((ln["days_to_deliver"] for ln in lines), default=0)
+    start = scenario["delivery_date"] - timedelta(days=longest)
+    affected = [ln for ln in lines if ln["source_type"] == "VENDOR" and ln["source_id"] == vendor_id]
+    new_longest = max((ln["days_to_deliver"] + (delay_days if ln in affected else 0) for ln in lines), default=0)
+    new_delivery = start + timedelta(days=new_longest)
+    launch = repo.get_launch(repo.get_request(scenario["request_id"])["launch_id"])
+    buffer_hours = (launch["in_hand_by"] - new_delivery).days * 24
+    return {"affected_lines": len(affected), "new_delivery_date": new_delivery, "new_buffer_hours": int(buffer_hours),
+            "still_on_time": buffer_hours >= 0}

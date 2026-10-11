@@ -13,21 +13,27 @@ def test_version_definition_is_consistent():
     v = sai.build_version()
     task_ids = {t["taskId"] for t in v["taskConfigs"]}
     declared = {p["key"] for p in v["integrationParameters"]}
-    assert [t["triggerId"] for t in v["triggerConfigs"]] == [sai.PO_TRIGGER, sai.NOTIFY_TRIGGER, sai.APPROVAL_TRIGGER]
+    assert [t["triggerId"] for t in v["triggerConfigs"]] == [sai.PO_TRIGGER, sai.TRANSFER_TRIGGER, sai.APPROVAL_TRIGGER, sai.UPDATE_TRIGGER]
     for t in v["triggerConfigs"]:
         assert {s["taskId"] for s in t["startTasks"]} <= task_ids
         assert set(t["inputVariables"]["names"]) | set(t["outputVariables"]["names"]) <= declared
         assert t["properties"]["Trigger name"] == t["triggerId"].split("/", 1)[1]
-    # the contract the agent's guard relies on
-    assert {"request_id", "sku", "quantity", "vendor_id", "total_amount", "campaign_id"} <= declared
-    assert {"po_number", "execution_id", "status", "decision", "approval_message"} <= declared
+    # the contract the agent's code relies on (execution.py, decision_flow.py)
+    assert {"request_id", "plan_line_id", "sku", "quantity", "vendor_id", "total_amount", "destination_region",
+            "depot_id", "launch_id", "recipient_email", "email_subject", "email_body"} <= declared
+    assert {"po_number", "transfer_number", "execution_id", "status", "decision", "approval_message"} <= declared
 
 
-def test_mapping_config_is_valid_json_and_sets_outputs():
+def test_mapping_configs_are_valid_json_and_set_the_outputs():
     v = sai.build_version()
-    cfg = json.loads(v["taskConfigs"][0]["parameters"]["FieldMappingConfigTaskParameterKey"]["value"]["jsonValue"])
-    assert cfg["@type"].endswith("FieldMappingConfig")
-    assert [m["outputField"]["referenceKey"] for m in cfg["mappedFields"]] == ["$po_number$", "$execution_id$"]
+    tasks = {t["taskId"]: t for t in v["taskConfigs"]}
+    for tid, outputs, prefix in (("1", ["$po_number$", "$execution_id$"], "PO-"), ("4", ["$transfer_number$", "$execution_id$"], "TR-")):
+        cfg = json.loads(tasks[tid]["parameters"]["FieldMappingConfigTaskParameterKey"]["value"]["jsonValue"])
+        assert cfg["@type"].endswith("FieldMappingConfig")
+        assert [m["outputField"]["referenceKey"] for m in cfg["mappedFields"]] == outputs
+        first = cfg["mappedFields"][0]["inputField"]["transformExpression"]
+        assert first["initialValue"]["literalValue"]["stringValue"] == prefix
+        assert first["transformationFunctions"][0]["parameters"][0]["initialValue"]["referenceValue"] == "$plan_line_id$"
 
 
 class Resp:
@@ -44,7 +50,7 @@ class FakeHttp:
         self.calls.append(("GET", url, None))
         if not self.existing:
             return Resp(404)
-        trig = [{"triggerId": sai.PO_TRIGGER}, {"triggerId": sai.NOTIFY_TRIGGER}, {"triggerId": sai.APPROVAL_TRIGGER}] if self.published else []
+        trig = [{"triggerId": t} for t in (sai.PO_TRIGGER, sai.TRANSFER_TRIGGER, sai.APPROVAL_TRIGGER, sai.UPDATE_TRIGGER)] if self.published else []
         return Resp(200, {"integrationVersions": [{"state": "ACTIVE" if self.published else "DRAFT", "triggerConfigs": trig}]})
 
     def post(self, url, json=None, params=None):
@@ -93,27 +99,27 @@ def test_api_disabled_names_the_api():
     assert "gcloud services enable integrations.googleapis.com" in str(e.value)
 
 
-def test_test_flag_executes_both_triggers():
+def test_test_flag_executes_the_order_triggers_and_the_update():
     h = FakeHttp(existing=True)
     sai.run_with(h, args(test=True), "p")
-    assert len([c for c in h.calls if c[1].endswith(":execute")]) == 2
+    assert len([c for c in h.calls if c[1].endswith(":execute")]) == 3          # PO, transfer, update email
 
 
-def test_notify_trigger_sends_one_email_using_only_trigger_inputs():
+def test_update_trigger_sends_one_email_using_only_trigger_inputs():
     v = sai.build_version()
     tasks = {t["taskId"]: t for t in v["taskConfigs"]}
     email = tasks["2"]
     assert email["task"] == "EmailTask"
     p = email["parameters"]
-    assert p["To"]["value"]["stringArray"]["stringValues"] == ["$approver_email$"]
+    assert p["To"]["value"]["stringArray"]["stringValues"] == ["$recipient_email$"]
     assert p["Subject"]["value"]["stringValue"] == "$email_subject$" and p["TextBody"]["value"]["stringValue"] == "$email_body$"
     # only trigger INPUT variables are referenced (the pattern in Google's published email sample)
     declared = {x["key"]: x for x in v["integrationParameters"]}
-    for ref in ("approver_email", "email_subject", "email_body"):
+    for ref in ("recipient_email", "email_subject", "email_body"):
         assert declared[ref]["inputOutputType"] == "IN" and declared[ref]["dataType"] == "STRING_VALUE"
     assert [n["taskId"] for n in email["nextTasks"]] == ["3"]
-    assert [t["startTasks"][0]["taskId"] for t in v["triggerConfigs"]] == ["1", "2", "10"]
-    assert not any(k in declared for k in ("recipient_list", "approver_emails"))
+    assert [t["startTasks"][0]["taskId"] for t in v["triggerConfigs"]] == ["1", "4", "10", "2"]
+    assert not any(k in declared for k in ("recipient_list", "approver_emails", "approver_email"))
 
 
 def test_no_email_variant_has_no_email_task():
@@ -138,5 +144,5 @@ def test_native_approval_task_branches_on_the_decision():
 
 
 def test_approver_addresses_are_taken_from_role_specs():
-    got = sai.approver_addresses(["Marketing Director=md@x.com,md2@x.com", "VP=vp@x.com;md@x.com"])
+    got = sai.approver_addresses(["VP Product Marketing=md@x.com,md2@x.com", "CMO=vp@x.com;md@x.com"])
     assert got == ["md@x.com", "md2@x.com", "vp@x.com"]

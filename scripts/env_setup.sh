@@ -106,10 +106,10 @@ elif [ -z "$_ES_SA" ] && [ -f .env ]; then
 fi
 
 echo "== Config file"
-if [ -f campaign_provisioner/.env ]; then
-  _es_problem "campaign_provisioner/.env exists and would override the repo-root .env. Delete it:  rm campaign_provisioner/.env"
+if [ -f launchkit_provisioner/.env ]; then
+  _es_problem "launchkit_provisioner/.env exists and would override the repo-root .env. Delete it:  rm launchkit_provisioner/.env"
 else
-  _es_ok "no stray campaign_provisioner/.env"
+  _es_ok "no stray launchkit_provisioner/.env"
 fi
 
 if [ -n "$_ES_EMAIL" ] && [ -n "$GOOGLE_CLOUD_PROJECT" ] && [ "$_ES_PROBLEMS" -eq 0 ]; then

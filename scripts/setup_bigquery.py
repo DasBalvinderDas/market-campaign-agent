@@ -1,33 +1,35 @@
 #!/usr/bin/env python3
-"""Create the BigQuery dataset, tables, views and demo data for The Campaign Provisioner.
+"""Create the BigQuery dataset, tables, views and demo data for The LaunchKit Provisioner.
 
 Assumes the BigQuery API is already enabled. The project id comes from --project, then
 GOOGLE_CLOUD_PROJECT, then your active gcloud project. If an API is not enabled the script
 tells you which one to enable.
 
-Approver emails (who is notified when a human must approve) are stored in the BigQuery table `approvers`:
-  --approver-email "Marketing Director=a@x.com,b@x.com"   (repeatable; a bare address applies to every role)
+Approver emails (who signs off above the autopilot limit, and who gets the tracking updates) are stored in the
+BigQuery table `approvers`:
+  --approver-email "VP Product Marketing=a@x.com,b@x.com"   (repeatable; a bare address applies to every role)
   or the APPROVER_EMAILS environment variable. With neither, your active gcloud account is used.
 
 Examples
   python scripts/setup_bigquery.py                # create + seed (idempotent)
-  python scripts/setup_bigquery.py --reset-demo   # clear demo transactions, keep reference data
+  python scripts/setup_bigquery.py --reset-demo   # clear demo transactions, move the launch dates to today, keep reference data
   python scripts/setup_bigquery.py --reset        # drop everything and rebuild
   python scripts/setup_bigquery.py --print-ddl > bigquery/schema.sql  # DDL only, no GCP access needed
 """
 import argparse
 import os
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import default_account_email, guarded, preflight, resolve_project  # noqa: E402
-from campaign_provisioner import approvers as approvers_cfg  # noqa: E402
-from campaign_provisioner.data.schema import TABLES, TRANSACTION_TABLES, VIEWS  # noqa: E402
-from campaign_provisioner.data.seed_data import SEED  # noqa: E402
+from launchkit_provisioner import approvers as approvers_cfg  # noqa: E402
+from launchkit_provisioner.data.schema import TABLES, TRANSACTION_TABLES, VIEWS  # noqa: E402
+from launchkit_provisioner.data.seed_data import (APPROVER_ROLES, EMBARGO_DAYS, IN_HAND_DAYS, SEED,  # noqa: E402
+                                                  TEAM_ROLE)
 
 
 def ddl(ds: str) -> str:
@@ -42,7 +44,7 @@ def ddl(ds: str) -> str:
 
 
 def _json_rows(rows):
-    return [{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in r.items()} for r in rows]
+    return [{k: (v.isoformat() if isinstance(v, (datetime, date)) else v) for k, v in r.items()} for r in rows]
 
 
 def sync_approvers(client, ds, args):
@@ -50,7 +52,7 @@ def sync_approvers(client, ds, args):
     from google.cloud import bigquery
 
     spec = ";".join(getattr(args, "approver_email", None) or []) or os.getenv("APPROVER_EMAILS", "")
-    roles = [p["approver_role"] for p in SEED["approval_policy"] if p["requires_human"]]
+    roles = APPROVER_ROLES + [TEAM_ROLE]
     existing = next(iter(client.query(f"SELECT COUNT(*) n FROM `{ds}.approvers`").result()))["n"]
     if spec:
         config = approvers_cfg.parse(spec)
@@ -77,12 +79,12 @@ def sync_approvers(client, ds, args):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--project", default=None, help="defaults to GOOGLE_CLOUD_PROJECT or the gcloud project")
-    ap.add_argument("--dataset", default=os.getenv("BQ_DATASET", "campaign_provisioner"))
+    ap.add_argument("--dataset", default=os.getenv("BQ_DATASET", "launchkit"))
     ap.add_argument("--location", default=os.getenv("BQ_LOCATION", "US"))
     ap.add_argument("--reset", action="store_true", help="drop all tables/views and rebuild with seed data")
-    ap.add_argument("--reset-demo", action="store_true", help="clear demo transactions, keep reference data")
+    ap.add_argument("--reset-demo", action="store_true", help="clear demo transactions and move the launch dates to today, keep reference data")
     ap.add_argument("--approver-email", action="append", default=[], metavar="[ROLE=]EMAIL[,EMAIL]",
-                    help="who gets the approval notification email (repeatable)")
+                    help="who signs off / gets tracking updates (repeatable)")
     ap.add_argument("--print-ddl", action="store_true", help="print CREATE statements and exit")
     args = ap.parse_args()
 
@@ -107,8 +109,10 @@ def run(args, project=""):
         client.query(ddl(ds)).result()  # creates any table or view added since the dataset was first built
         for t in TRANSACTION_TABLES:
             client.query(f"TRUNCATE TABLE `{ds}.{t}`").result()
-        client.query(f"DELETE FROM `{ds}.budget_ledger` WHERE request_id != 'BASELINE'").result()
-        print(f"Demo transactions cleared in {ds}. Reference data and opening budgets untouched.")
+        client.query(f"UPDATE `{ds}.launches` SET in_hand_by = DATE_ADD(CURRENT_DATE(), INTERVAL {IN_HAND_DAYS} DAY), "
+                     f"embargo_date = DATE_ADD(CURRENT_DATE(), INTERVAL {EMBARGO_DAYS} DAY) WHERE TRUE").result()
+        print(f"Demo transactions cleared in {ds}. Launch dates moved to today (in-hand +{IN_HAND_DAYS} days, "
+              f"embargo +{EMBARGO_DAYS} days). Reference data untouched.")
         return
 
     dataset = bigquery.Dataset(ds)

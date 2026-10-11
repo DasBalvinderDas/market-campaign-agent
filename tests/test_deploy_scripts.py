@@ -16,9 +16,9 @@ def test_runtime_env_only_carries_app_settings(monkeypatch):
 def test_config_and_command():
     cfg = dep.build_config({"BQ_DATASET": "cp"}, "sa@p.iam.gserviceaccount.com")
     assert cfg["env_vars"] == {"BQ_DATASET": "cp"} and cfg["service_account"].startswith("sa@")
-    cmd = dep.deploy_command("p", "us-central1", "/tmp/c.json", Path("/x/campaign_provisioner"), "123")
+    cmd = dep.deploy_command("p", "us-central1", "/tmp/c.json", Path("/x/launchkit_provisioner"), "123")
     assert cmd[:3] == ["adk", "deploy", "agent_engine"] and "--agent_engine_id=123" in cmd
-    assert cmd[-1].endswith("campaign_provisioner") and "--project=p" in cmd
+    assert cmd[-1].endswith("launchkit_provisioner") and "--project=p" in cmd
 
 
 def test_resource_name_is_found_in_deploy_output():
@@ -113,19 +113,13 @@ def test_env_setup_script_is_valid_bash_and_refuses_to_run_unsourced():
     assert r.returncode == 1 and "source scripts/env_setup.sh" in r.stdout
 
 
-def test_integration_tools_are_built_lazily_and_fail_soft(monkeypatch):
-    import asyncio
-    from campaign_provisioner import config
-    from campaign_provisioner.workflow import integration as wi
+def test_a_tool_that_raises_is_reported_to_the_model_not_swallowed():
+    from launchkit_provisioner.workflow.callbacks import on_tool_error
 
-    monkeypatch.setattr(config, "WORKFLOW_BACKEND", "app_integration")
-    monkeypatch.setattr(config, "PROJECT", "")  # no project: building would fail, importing must not
-    tool = wi.build_po_tool()  # nothing built, no network
-    assert isinstance(tool, wi.LazyIntegrationToolset)
-    tools = asyncio.run(tool.get_tools())  # building fails -> a stub tool, not an exception
-    assert [t.name for t in tools] == ["create_purchase_order_unavailable"]
-    assert "could not be loaded" in wi.create_purchase_order_unavailable("R", "S", 1, "V")["error"]
-    assert [t.name for t in asyncio.run(wi.build_notify_tool().get_tools())] == ["notify_approver_unavailable"]
+    class _T:
+        name = "execute_plan"
+    out = on_tool_error(_T(), {}, None, RuntimeError("403 permission denied on integrations"))
+    assert out["status"] == "error" and out["tool"] == "execute_plan" and "403 permission denied" in out["message"]
 
 
 def test_log_filter_targets_the_deployment():
@@ -204,23 +198,3 @@ def test_denied_grant_writes_a_script_for_the_admin(monkeypatch, tmp_path, capsy
 def test_not_found_detection_for_a_deleted_deployment():
     assert dep.is_not_found("Failed to deploy: 404 NOT_FOUND. Reasoning Engine [..] is not found.")
     assert not dep.is_not_found("403 PERMISSION_DENIED")
-
-
-def test_approval_service_staging_and_command(tmp_path):
-    import deploy_approval_service as svc
-    svc.stage(tmp_path)
-    assert (tmp_path / "approval_service" / "main.py").exists() and (tmp_path / "campaign_provisioner" / "approval_flow.py").exists()
-    assert "approval_service.main:app" in (tmp_path / "Procfile").read_text()
-    assert "flask" in (tmp_path / "requirements.txt").read_text()
-    env = svc.service_env("p", {"BQ_DATASET": "cp", "GOOGLE_API_KEY": "secret", "APPROVER_EMAILS": "a@x.com"}, "k")
-    assert env == {"GOOGLE_CLOUD_PROJECT": "p", "APPROVAL_LINK_SECRET": "k", "BQ_DATASET": "cp"}  # no unrelated secrets
-    assert 'APPROVAL_LINK_SECRET: "k"' in svc.env_yaml(env)
-    cmd = svc.deploy_command("p", "us-central1", "/s", "/e.yaml", "app-svc@p.iam.gserviceaccount.com")
-    assert "--allow-unauthenticated" in cmd and "--service-account=app-svc@p.iam.gserviceaccount.com" in cmd
-
-
-def test_approval_service_failure_advice():
-    import deploy_approval_service as svc
-    assert "organisation" in svc.advice("ERROR: ... iam.allowedPolicyMemberDomains ...", "p", None)
-    assert "Service Account User" in svc.advice("Permission 'iam.serviceaccounts.actAs' denied", "p", "sa@p")
-    assert svc.advice("something else", "p", None) is None

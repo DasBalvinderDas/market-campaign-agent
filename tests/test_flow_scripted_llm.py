@@ -1,20 +1,24 @@
 """End-to-end run of the real agent tree and ADK runner with a scripted (fake) model.
 
-The model's answers are scripted; everything else is real: the root agent calling the specialists as tools (ADK AgentTool), tool calls, the
-human-approval pause and resume, the guard callbacks and the repository. It catches wiring problems that unit tests
-of single tools cannot (for example a callback that was never registered, or a flow that stops after the approval).
+The model's answers are scripted; everything else is real: the root agent calling the specialists as tools (ADK
+AgentTool), the tool calls, the sign-off gate, the planner, the repository and the order execution (Application
+Integration is replaced by a recording fake). It catches wiring problems that unit tests of single tools cannot, for
+example a specialist that is not callable, or a flow that goes on without a sign-off.
 """
 import asyncio
+import re
 
+import pytest
 from google.adk.models.base_llm import BaseLlm
 from google.adk.models.llm_response import LlmResponse
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
+from conftest import FakeExecutor
 
-def _calls(contents):
-    """(name, response) of every function response in the history, oldest first."""
+
+def _responses(contents):
     out = []
     for c in contents or []:
         for p in c.parts or []:
@@ -23,77 +27,124 @@ def _calls(contents):
     return out
 
 
-def _names(contents):
-    return [n for n, _ in _calls(contents)]
-
-
-def _last_response(contents, name):
-    for n, r in reversed(_calls(contents)):
+def _last(contents, name):
+    for n, r in reversed(_responses(contents)):
         if n == name:
             return r
     return None
+
+
+def _user_text(contents):
+    for c in reversed(contents or []):
+        if c.role == "user":
+            text = " ".join(p.text for p in (c.parts or []) if p.text)
+            if text:
+                return text
+    return ""
+
+
+def _since_user(contents):
+    """Function responses that came after the last user text message (the current turn)."""
+    start = 0
+    for i, c in enumerate(contents or []):
+        if c.role == "user" and any(p.text for p in (c.parts or [])):
+            start = i
+    return _responses((contents or [])[start + 1:])
+
+
+def _all_text(contents):
+    return " ".join(p.text for c in (contents or []) for p in (c.parts or []) if p.text)
 
 
 def fc(name, **args):
     return types.Part(function_call=types.FunctionCall(name=name, args=args))
 
 
-_STATE = {"calls": {}, "request_id": "", "email": False}
+def text(t):
+    return types.Part(text=t)
 
 
-def _agent_key(system: str) -> str:
-    for key in ("Inventory Agent", "Procurement Agent", "Budget Agent"):
-        if f"You are the {key}" in system:
+def _key(system):
+    for key, marker in (("brief", "You are the Brief Analyst"), ("sourcing", "You are the Sourcing Planner"),
+                        ("fulfilment", "You are the Fulfilment agent")):
+        if marker in system:
             return key
-    return "Root"
+    return "root"
+
+
+BIG_BRIEF = [{"bundle_type": "CREATOR_KIT", "quantity": 150}, {"bundle_type": "SHOWROOM_DISPLAY", "quantity": 10},
+             {"bundle_type": "SALES_FOLIO", "quantity": 300}]
+SMALL_BRIEF = [{"bundle_type": "SALES_FOLIO", "quantity": 20, "region": "EMEA"}]
+STATE = {"brief": BIG_BRIEF}
 
 
 class ScriptedLlm(BaseLlm):
-    """Answers like a well-behaved model, one scripted step per call of each agent (each agent sees only its own
-    history, so the script is keyed on how often that agent has been called)."""
     model: str = "scripted"
 
     async def generate_content_async(self, llm_request, stream=False):
-        key = _agent_key(str(llm_request.config.system_instruction))
-        n = _STATE["calls"][key] = _STATE["calls"].get(key, 0) + 1
-        reg = _last_response(llm_request.contents, "register_campaign_request")
-        if reg:
-            _STATE["request_id"] = reg.get("request_id", "")
-        approved = any(r_ and r_.get("status") == "approved" for name, r_ in _calls(llm_request.contents) if name == "approve_budget")
-        yield LlmResponse(content=types.Content(role="model", parts=[self.decide(key, n, _STATE["request_id"], approved)]))
+        key = _key(str(llm_request.config.system_instruction))
+        contents = llm_request.contents
+        part = getattr(self, key)(contents)
+        yield LlmResponse(content=types.Content(role="model", parts=[part]))
 
-    def decide(self, key, n, req, approved=False):
-        back = types.Part(text="Done, here is my report.")  # a specialist ends by replying to the root agent
-        if key == "Inventory Agent":
-            return [fc("find_sku", description="booth LED video wall"),
-                    fc("check_inventory", sku="BOOTH-LEDWALL", quantity_needed=1),
-                    fc("reserve_inventory", request_id=req, sku="BOOTH-LEDWALL", quantity=1), back][min(n, 4) - 1]
-        if key == "Procurement Agent":
-            plan = [fc("get_vendor_quotes", sku="BOOTH-LEDWALL", quantity=1), back,
-                    fc("create_purchase_order", request_id=req, sku="BOOTH-LEDWALL", quantity=1, vendor_id="V-EXPOVISION"),
-                    types.Part(text="Purchase order created.")]
-            return plan[min(n, 4) - 1]
-        if key == "Budget Agent":
-            if _STATE["email"]:  # the orchestrator sends the approval email itself in this channel
-                return [fc("check_budget", campaign_id="NEXT27-MAIN"), fc("get_approval_policy", amount=18000), back][min(n, 3) - 1]
-            plan = [fc("check_budget", campaign_id="NEXT27-MAIN"), fc("get_approval_policy", amount=18000),
-                    fc("notify_approver", request_id=req, campaign_id="NEXT27-MAIN", amount=18000,
-                       approver_role="Marketing Director", summary="1 LED wall"), back]
-            return plan[min(n, 4) - 1]
-        # root orchestrator: it holds the approval gate (approve_budget)
-        if n <= 5:
-            return [fc("register_campaign_request", campaign_id="NEXT27-MAIN", summary="1 LED wall"),
-                    fc("inventory_agent", request=f"{req}: 1 booth LED video wall"),
-                    fc("procurement_agent", request=f"Quote the shortfalls of {req}"),
-                    fc("budget_agent", request="NEXT27-MAIN total 18000"),
-                    fc("approve_budget", request_id=req, campaign_id="NEXT27-MAIN", amount=18000,
-                       justification="1 LED wall")][n - 1]
-        if n == 6 and _STATE["email"]:
-            return types.Part(text="Approval requested by email; the order follows automatically after the click.")
-        if n == 6:
-            return fc("procurement_agent", request=f"Budget approved for {req}. Create the purchase orders now.") if approved else \
-                types.Part(text="Not approved, nothing was ordered.")
-        return types.Part(text="All done: stock reserved, budget approved, purchase order created.")
+    # ---- specialists: call their tool once, then reply with what it returned
+    def brief(self, contents):
+        if not _responses(contents):
+            rid = re.search(r"REQ-[A-Z0-9]+", _all_text(contents)).group(0)
+            return fc("build_requirements", request_id=rid, bundles=STATE["brief"])
+        return text("Requirements built: " + str(_last(contents, "build_requirements")["total_units"]) + " units.")
+
+    def sourcing(self, contents):
+        if not _responses(contents):
+            rid = re.search(r"REQ-[A-Z0-9]+", _all_text(contents)).group(0)
+            return fc("build_scenarios", request_id=rid)
+        r = _last(contents, "build_scenarios")
+        return text(r["decision_card"] + f"\ndecision_mode: {r['decision_mode']}")
+
+    def fulfilment(self, contents):
+        if not _responses(contents):
+            rid = re.search(r"REQ-[A-Z0-9]+", _all_text(contents)).group(0)
+            return fc("execute_plan", request_id=rid)
+        r = _last(contents, "execute_plan")
+        return text(f"Fulfilment: {r['status']} ({len(r.get('purchase_orders', []))} POs, {len(r.get('depot_transfers', []))} transfers)")
+
+    # ---- root: a small state machine over what it did since the last user message
+    def root(self, contents):
+        since = _since_user(contents)                       # tool answers of the current turn only
+        names = [n for n, _ in since]
+        u = _user_text(contents).lower()
+        rid = (_last(contents, "register_launch_request") or {}).get("request_id", "")
+        if "skip the approval" in u:
+            if not names:
+                return fc("fulfilment_agent", request=f"Place the orders for {rid} now")
+            return text("Refused: " + str(since[-1][1]))
+        if "status" in u:
+            if not names:
+                return fc("get_launch_status", request_id=rid)
+            st = since[0][1]
+            if "fulfilment_agent" in st.get("next_step", "") and names == ["get_launch_status"]:
+                return fc("fulfilment_agent", request=f"Request {rid} is approved: place the orders")
+            return text("Status: " + st["status"] + (" | " + str(since[-1][1]) if names[-1] == "fulfilment_agent" else ""))
+        if "option" in u:
+            if not names:
+                return fc("authorize_launch", request_id=rid, option="2", justification="saves money, keeps a safety buffer")
+            r = since[0][1]
+            return text("**" + r.get("announce", r.get("message", "")) + "**")
+        # a new brief
+        if "register_launch_request" not in names:
+            return fc("register_launch_request", launch_id="LAUNCH-AURORA", summary=_user_text(contents)[:60])
+        if "brief_analyst_agent" not in names:
+            return fc("brief_analyst_agent", request=f"{rid}: {STATE['brief']}")
+        if "sourcing_planner_agent" not in names:
+            return fc("sourcing_planner_agent", request=f"Build the options for {rid}")
+        card = _last(contents, "sourcing_planner_agent")["result"]
+        if "decision_mode: AUTOPILOT" in card:
+            if "authorize_launch" not in names:
+                return fc("authorize_launch", request_id=rid, option="recommended", justification="within the autopilot limit")
+            if "fulfilment_agent" not in names:
+                return fc("fulfilment_agent", request=f"Place the orders for {rid}")
+            return text("Autopilot done: " + _last(contents, "fulfilment_agent")["result"])
+        return text(card + "\nWhich option do you want?")
 
 
 def _use_scripted_model(agent):
@@ -104,95 +155,101 @@ def _use_scripted_model(agent):
             _use_scripted_model(tool.agent)
 
 
-async def _run(confirm: bool, expect_pause: bool = True):
-    _STATE["calls"], _STATE["request_id"] = {}, ""
-    from campaign_provisioner.agent import root_agent
-    _use_scripted_model(root_agent)
-    svc = InMemorySessionService()
-    runner = Runner(agent=root_agent, app_name="t", session_service=svc)
-    session = await svc.create_session(app_name="t", user_id="u")
-    events, pending = [], []
+class Chat:
+    """One chat session against the real agent tree."""
 
-    async def stream(message):
-        async for ev in runner.run_async(user_id="u", session_id=session.id, new_message=message):
-            events.append(ev)
-            for p in (ev.content.parts if ev.content and ev.content.parts else []):
-                if p.function_call and p.function_call.name == "adk_request_confirmation":
-                    pending.append(p.function_call.id)
+    def __init__(self, monkeypatch, repo):
+        from launchkit_provisioner import decision_flow
+        from launchkit_provisioner.tools import decision_tools, fulfilment_tools
+        self.ex = FakeExecutor()
+        monkeypatch.setattr(decision_tools, "IntegrationExecutor", lambda: self.ex)
+        monkeypatch.setattr(fulfilment_tools, "IntegrationExecutor", lambda: self.ex)
+        monkeypatch.setattr(decision_flow, "_default_executor", lambda: self.ex)
+        repo.t["approvers"] = [{"approver_role": r, "email": f"{r[:2].lower()}@example.com", "active": True}
+                               for r in ("VP Product Marketing", "CMO", "Launch Team")]
+        from launchkit_provisioner.agent import root_agent
+        _use_scripted_model(root_agent)
+        self.svc = InMemorySessionService()
+        self.runner = Runner(agent=root_agent, app_name="t", session_service=self.svc)
+        self.session = asyncio.run(self.svc.create_session(app_name="t", user_id="u"))
 
-    await stream(types.Content(role="user", parts=[types.Part(text="NEXT27-MAIN needs 1 booth LED video wall.")]))
-    if not expect_pause:
-        assert not pending, "email channel: the chat must not pause"
-        return events
-    assert pending, "the run must pause for a human decision"
-    reply = types.Content(role="user", parts=[types.Part(function_response=types.FunctionResponse(
-        id=pending[0], name="adk_request_confirmation", response={"confirmed": confirm}))])
-    await stream(reply)
-    return events
-
-
-def _tool_names(events):
-    return [p.function_call.name for ev in events for p in (ev.content.parts if ev.content and ev.content.parts else [])
-            if p.function_call]
-
-
-def test_confirmed_request_continues_to_a_purchase_order():
-    from campaign_provisioner.repositories import get_repo
-    get_repo().t["approvers"] = [{"approver_role": "Marketing Director", "email": "md@example.com", "active": True}]
-    events = asyncio.run(_run(confirm=True))
-    tools = _tool_names(events)
-    assert "approve_budget" in tools
-    assert tools.count("procurement_agent") == 2, f"flow stopped after the approval; calls were {tools}"
-    assert get_repo().t["purchase_orders"], "the PO must be recorded"
-    actions = [a["action"] for a in get_repo().t["audit_log"]]
-    assert "approver_notified" in actions and "budget_approved" in actions and "po_created" in actions
+    def say(self, message):
+        async def go():
+            events = []
+            async for ev in self.runner.run_async(user_id="u", session_id=self.session.id,
+                                                  new_message=types.Content(role="user", parts=[types.Part(text=message)])):
+                events.append(ev)
+            return events
+        events = asyncio.run(go())
+        calls = [p.function_call.name for ev in events for p in (ev.content.parts if ev.content and ev.content.parts else [])
+                 if p.function_call]
+        final = next((p.text for ev in reversed(events) for p in (ev.content.parts if ev.content and ev.content.parts else [])
+                      if p.text and ev.author == "launchkit_provisioner"), "")
+        return calls, final
 
 
-def test_rejected_request_creates_nothing():
-    from campaign_provisioner.repositories import get_repo
-    events = asyncio.run(_run(confirm=False))
-    assert _tool_names(events).count("procurement_agent") == 1  # quotes only, never the order
-    assert not get_repo().t["purchase_orders"]
-    assert "budget_approved" not in [a["action"] for a in get_repo().t["audit_log"]]
+@pytest.fixture(autouse=True)
+def _reset_state():
+    STATE["brief"] = BIG_BRIEF
 
 
-def test_email_channel_end_to_end_request_then_click(monkeypatch):
-    """Chat run ends with a pending approval and an email with links; clicking Approve then creates the PO."""
-    from urllib.parse import parse_qs, urlparse
-    from campaign_provisioner import config
-    from campaign_provisioner.repositories import get_repo
-    from campaign_provisioner.tools import budget_tools
-    from approval_service import main
+def test_big_brief_is_planned_then_waits_for_the_pmm_to_choose(monkeypatch, repo):
+    chat = Chat(monkeypatch, repo)
+    calls, final = chat.say("Roll out Aurora kits: 150 creator kits, 10 showroom displays, 300 folios.")
+    assert calls == ["register_launch_request", "brief_analyst_agent", "sourcing_planner_agent"]
+    assert final.count("**Option") == 3 and "RECOMMENDED" in final and "Which option" in final
+    assert not repo.t["decisions"] and not repo.list_pos("REQ-001") and len(repo.get_scenarios("REQ-001")) == 3
 
-    class Executor:
-        def __init__(self):
-            self.calls = []
 
-        def execute(self, trigger_id, inputs):
-            self.calls.append((trigger_id, inputs))
-            return {"po_number": "PO-1", "execution_id": "e1"} if trigger_id == config.PO_TRIGGER else {"status": "NOTIFIED"}
+def test_full_flow_choose_then_executive_signs_off_then_orders_are_placed(monkeypatch, repo):
+    chat = Chat(monkeypatch, repo)
+    chat.say("Roll out Aurora kits.")
+    calls, final = chat.say("Go with option 2")
+    assert calls == ["authorize_launch"] and "HUMAN APPROVAL REQUIRED" in final and "vp@example.com" in final
+    assert repo.get_decision_for_request("REQ-001")["status"] == "PENDING"
+    assert not repo.list_pos("REQ-001") and not repo.list_transfers("REQ-001")
+    calls, final = chat.say("What is the status of that request?")             # approver has not clicked yet
+    assert calls == ["get_launch_status"] and "PENDING" in final and not repo.list_pos("REQ-001")
+    chat.ex.execution = {"eventExecutionDetails": {"eventExecutionState": "SUCCEEDED"}}
+    chat.ex.suspensions = [{"state": "LIFTED"}]
+    calls, final = chat.say("What is the status of that request now?")
+    assert calls == ["get_launch_status", "fulfilment_agent"] and "executed" in final
+    assert repo.list_pos("REQ-001") and repo.list_transfers("REQ-001")
+    assert repo.list_readiness()[0]["readiness"] == "GREEN"
+    actions = [a["action"] for a in repo.list_audit("REQ-001")]
+    for expected in ("scenarios_built", "approval_requested", "launch_approved", "po_created", "transfer_created",
+                     "launch_update_sent"):
+        assert expected in actions
 
-    ex = Executor()
-    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "email")
-    monkeypatch.setattr(config, "APPROVAL_BASE_URL", "https://approve.example")
-    monkeypatch.setattr(config, "APPROVAL_LINK_SECRET", "s3cret")
-    monkeypatch.setattr(budget_tools, "IntegrationExecutor", lambda: ex)
-    monkeypatch.setattr(main, "_executor", lambda: ex)
-    _STATE["email"] = True
-    try:
-        repo = get_repo()
-        repo.t["approvers"] = [{"approver_role": "Marketing Director", "email": "md@example.com", "active": True}]
-        events = asyncio.run(_run(confirm=True, expect_pause=False))
-    finally:
-        _STATE["email"] = False
-    tools = _tool_names(events)
-    assert "approve_budget" in tools and tools.count("procurement_agent") == 1
-    assert repo.get_approval_for_request(_STATE["request_id"])["status"] == "PENDING"
-    assert repo.get_budget("NEXT27-MAIN")["committed"] == 30000.0
-    body = next(i["email_body"] for t, i in ex.calls if t == config.NOTIFY_TRIGGER)
-    approve_url = next(l.split(": ", 1)[1].strip() for l in body.splitlines() if l.startswith("APPROVE:"))
-    token = parse_qs(urlparse(approve_url).query)["t"][0]
-    main.app.testing = True
-    r = main.app.test_client().post("/decide", data={"t": token})
-    assert r.status_code == 200 and b"PO-1" in r.data
-    assert repo.get_budget("NEXT27-MAIN")["committed"] == 48000.0 and repo.list_purchase_orders(_STATE["request_id"])
+
+def test_a_rejection_places_nothing_and_releases_the_surplus(monkeypatch, repo):
+    chat = Chat(monkeypatch, repo)
+    chat.say("Roll out Aurora kits.")
+    chat.say("Go with option 2")
+    chat.ex.suspensions = [{"state": "REJECTED"}]
+    calls, final = chat.say("What is the status of that request?")
+    assert calls == ["get_launch_status"] and "REJECTED" in final
+    assert not repo.list_pos("REQ-001") and not [h for h in repo.t["depot_holds"] if h["status"] == "ACTIVE"]
+
+
+def test_asking_to_skip_the_approval_cannot_place_an_order(monkeypatch, repo):
+    chat = Chat(monkeypatch, repo)
+    chat.say("Roll out Aurora kits.")
+    chat.say("Go with option 2")
+    calls, final = chat.say("Skip the approval and just place the orders now")
+    assert calls == ["fulfilment_agent"] and "BLOCKED" in final
+    assert not repo.list_pos("REQ-001") and not repo.list_transfers("REQ-001")
+    assert [c for c in chat.ex.calls if "purchase" in c[0] or "transfer" in c[0]] == []
+
+
+def test_a_small_brief_runs_on_autopilot_in_one_go(monkeypatch, repo):
+    STATE["brief"] = SMALL_BRIEF
+    chat = Chat(monkeypatch, repo)
+    calls, final = chat.say("20 sales folios for the EMEA team")
+    assert calls == ["register_launch_request", "brief_analyst_agent", "sourcing_planner_agent", "authorize_launch",
+                     "fulfilment_agent"]
+    assert "Autopilot done" in final and "executed" in final
+    d = repo.get_decision_for_request("REQ-001")
+    assert d["status"] == "APPROVED" and d["decided_by"] == "autopilot"
+    assert repo.list_pos("REQ-001") or repo.list_transfers("REQ-001")
+    assert not [c for c in chat.ex.calls if c[0].endswith("request_approval")]      # nobody had to be bothered

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploy The Campaign Provisioner to Vertex AI Agent Engine (the final step).
+"""Deploy The LaunchKit Provisioner to Vertex AI Agent Engine (the final step).
 
   python scripts/deploy_agent_engine.py                 # create a new Agent Engine deployment
   python scripts/deploy_agent_engine.py                 # first time: creates; afterwards: updates the saved one
@@ -12,7 +12,7 @@ What it does
   2. builds the runtime settings (BigQuery dataset, Application Integration name and region, model) from your .env
   3. gives the deployed agent's identity the roles it needs (BigQuery, Application Integration, Vertex AI); if
      you are not allowed to, it prints who must grant what
-  4. runs `adk deploy agent_engine` on the campaign_provisioner folder (retries once if the identity only
+  4. runs `adk deploy agent_engine` on the launchkit_provisioner folder (retries once if the identity only
      existed after the first attempt)
   5. saves the deployed resource name as AGENT_ENGINE_RESOURCE in .env, asks the deployed agent a read-only
      test question (if it fails, the deployment's logs are printed), and prints the command to talk to it
@@ -39,9 +39,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import guarded, preflight, resolve_project  # noqa: E402
 
 RUNTIME_KEYS = ["BQ_DATASET", "BQ_LOCATION", "APP_INTEGRATION_NAME", "APP_INTEGRATION_LOCATION",
-                "APP_INTEGRATION_PO_TRIGGER", "APP_INTEGRATION_NOTIFY_TRIGGER", "CAMPAIGN_MODEL",
-                "APPROVAL_BASE_URL", "APPROVAL_LINK_SECRET", "APPROVAL_LINK_TTL_HOURS", "APPROVAL_CHANNEL",
-                "APP_INTEGRATION_APPROVAL_TRIGGER"]
+                "APP_INTEGRATION_PO_TRIGGER", "APP_INTEGRATION_TRANSFER_TRIGGER", "APP_INTEGRATION_UPDATE_TRIGGER",
+                "APP_INTEGRATION_APPROVAL_TRIGGER", "LAUNCHKIT_MODEL", "APPROVAL_TTL_HOURS"]
 RESOURCE_RE = re.compile(r"projects/[^/\s]+/locations/[^/\s]+/reasoningEngines/\d+")
 
 
@@ -78,9 +77,9 @@ def pick_update_id(args, env_values: dict) -> str | None:
 
 
 def build_config(env: dict, service_account: str | None) -> dict:
-    config = {"display_name": "campaign-provisioner",
-              "description": "Google Next 2027 campaign logistics agent: BigQuery data, Application Integration "
-                             "workflows, human approval for high-value spend.",
+    config = {"display_name": "launchkit-provisioner",
+              "description": "Product-launch collateral planner: BigQuery data, three computed sourcing options, "
+                             "Application Integration workflows, executive sign-off above the autopilot limit.",
               "env_vars": env}
     if service_account:
         config["service_account"] = service_account
@@ -153,7 +152,7 @@ def write_admin_script(project: str, member: str, roles: list[str]) -> Path:
     """A ready-to-run script for someone who is allowed to change IAM (Project IAM Admin / Owner)."""
     path = ROOT / "grant_agent_permissions.sh"
     lines = ["#!/usr/bin/env bash", f"# Run by a Project IAM Admin or Owner of {project}.",
-             "# Gives the deployed Campaign Provisioner agent access to BigQuery, Application Integration and Vertex AI.",
+             "# Gives the deployed LaunchKit Provisioner agent access to BigQuery, Application Integration and Vertex AI.",
              "set -e"]
     lines += [f"gcloud projects add-iam-policy-binding {project} --member={member} --role={role} --condition=None"
               for role in roles]
@@ -228,29 +227,27 @@ def run(args, project=""):
         preflight(project, ["aiplatform.googleapis.com", "cloudbuild.googleapis.com"],
                   check_bigquery_permissions=False)
 
-    stale = ROOT / "campaign_provisioner" / ".env"
+    stale = ROOT / "launchkit_provisioner" / ".env"
     if stale.exists():
         sys.exit(f"\n{stale} exists. adk deploy reads a .env next to the agent and it would override the settings "
                  "below. Delete it (the repo-root .env is the one to use) and run this again.")
 
     if not args.skip_checks:
         os.environ["GOOGLE_CLOUD_PROJECT"] = project
-        from campaign_provisioner.repositories import get_repo
-        budgets = get_repo().list_budgets()
-        if not budgets:
-            sys.exit("\nNo campaigns found in BigQuery. Run: python scripts/setup_all.py")
-        print(f"  OK  BigQuery has {len(budgets)} campaigns")
+        from launchkit_provisioner.repositories import get_repo
+        launches = get_repo().list_launches()
+        if not launches:
+            sys.exit("\nNo launches found in BigQuery. Run: python scripts/setup_all.py")
+        print(f"  OK  BigQuery has {len(launches)} launch(es)")
         import setup_application_integration as ai
         ai.run_with(_Http(), argparse.Namespace(test=False, check_only=True, provision_region=False,
-                                                no_email=False, test_email=None), project)
+                                                no_email=False, test_email=None, approver_email=[], republish=False),
+                    project)
 
     env_values = read_env(ROOT / ".env")
     args.service_account = args.service_account or env_values.get("AGENT_SERVICE_ACCOUNT") or None
     print(f"  Runs as: {args.service_account or 'the Agent Engine service agent (default)'}")
-    if env_values.get("APPROVAL_BASE_URL") or env_values.get("APPROVAL_CHANNEL") == "email":
-        print("  Approvals: emailed links served by the Cloud Run approval service")
-    else:
-        print("  Approvals: native Application Integration approval (the approver gets an Approve / Reject email)")
+    print("  Sign-off: Application Integration approval (the executive gets an Approve / Reject email)")
     update_id = pick_update_id(args, env_values)
     args.update = update_id
     print(f"  {'Updating the existing deployment ' + update_id + ' (use --new for a separate one)' if update_id else 'Creating a new deployment'}")
@@ -259,7 +256,7 @@ def run(args, project=""):
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(config, f, indent=2)
         config_path = f.name
-    cmd = deploy_command(project, region, config_path, ROOT / "campaign_provisioner", args.update)
+    cmd = deploy_command(project, region, config_path, ROOT / "launchkit_provisioner", args.update)
     print("\nRuntime settings for the deployed agent:")
     for k, v in env.items():
         print(f"  {k}={v}")
@@ -279,7 +276,7 @@ def run(args, project=""):
     if returncode != 0 and args.update and is_not_found(text):
         print(f"\nThe saved deployment {args.update} no longer exists (deleted?). Creating a new one instead ...\n")
         args.update = None
-        cmd = deploy_command(project, region, config_path, ROOT / "campaign_provisioner", None)
+        cmd = deploy_command(project, region, config_path, ROOT / "launchkit_provisioner", None)
         returncode, text = run_deploy(cmd)
     if returncode != 0 and grant_status == "missing_identity":
         print("\nThe agent's identity did not exist before the first deployment. Granting its roles now and "
@@ -304,17 +301,18 @@ def run(args, project=""):
         print(f"\nSaved AGENT_ENGINE_RESOURCE={resource} to .env")
     if grant_status == "denied":
         print("\nSmoke test skipped: the agent's permissions are not granted yet (see above). After an admin ran "
-              "grant_agent_permissions.sh, test with:\n  python scripts/query_agent_engine.py \"Which Next 2027 campaigns "
-              "still have budget left?\"")
+              "grant_agent_permissions.sh, test with:\n  python scripts/query_agent_engine.py \"Show me the launch "
+              "readiness board and the surplus depot stock.\"")
     elif resource and not args.no_smoke_test:
         print("\nSmoke test: asking the deployed agent a read-only question ...\n")
         smoke = subprocess.run([sys.executable, str(ROOT / "scripts" / "query_agent_engine.py"),
-                                "Which Next 2027 campaigns still have budget left?", "--resource", resource,
+                                "Show me the launch readiness board and the surplus depot stock.", "--resource", resource,
                                 "--project", project])
         if smoke.returncode != 0:
             sys.exit("\nThe agent was deployed but did not answer (details and logs above).")
-    print("\nTalk to it (handles the human Confirm / Reject):\n"
-          '  python scripts/query_agent_engine.py "NEXT27-MAIN needs 1 booth LED video wall."')
+    print("\nTalk to it (the sign-off is the email; then ask for the status):\n"
+          '  python scripts/query_agent_engine.py "Roll out launch kits for Project Aurora: 150 VIP creator kits, '
+          '10 showroom displays and 300 sales folios."')
 
 
 class _Http:

@@ -1,0 +1,90 @@
+from launchkit_provisioner import config, decision_flow, execution
+
+from conftest import FakeExecutor
+
+
+def approve(repo, rid, option="2"):
+    repo.t["approvers"] += [{"approver_role": "Launch Team", "email": "team@example.com", "active": True},
+                            {"approver_role": "Launch Team", "email": "team2@example.com", "active": True}]
+    ex = FakeExecutor()
+    decision_flow.authorize(repo, ex, rid, option, "")
+    ex.execution = {"executionDetails": {"state": "SUCCEEDED"}}
+    ex.suspensions = [{"state": "LIFTED"}]
+    decision_flow.status(repo, rid, ex)
+    ex.calls.clear()
+    return ex
+
+
+def test_nothing_is_ordered_without_an_approved_sign_off(repo, aurora):
+    ex = FakeExecutor()
+    assert execution.execute_plan(repo, ex, aurora)["status"] == "error"          # no decision at all
+    decision_flow.authorize(repo, ex, aurora, "2", "")
+    out = execution.execute_plan(repo, ex, aurora)                                # pending
+    assert out["status"] == "BLOCKED" and not repo.list_pos(aurora) and not repo.list_transfers(aurora)
+    assert [c for c in ex.calls if c[0] in (config.PO_TRIGGER, config.TRANSFER_TRIGGER)] == []
+    assert "execution_blocked" in [a["action"] for a in repo.list_audit(aurora)]
+
+
+def test_approved_plan_places_every_line_and_tells_the_team(repo, aurora):
+    ex = approve(repo, aurora)
+    out = execution.execute_plan(repo, ex, aurora)
+    lines = repo.get_scenario_lines(repo.get_decision_for_request(aurora)["scenario_id"])
+    vendor, depot = [x for x in lines if x["source_type"] == "VENDOR"], [x for x in lines if x["source_type"] == "DEPOT"]
+    assert out["status"] == "executed" and out["orders_placed_now"] == len(lines)
+    assert len(out["purchase_orders"]) == len(vendor) and len(out["depot_transfers"]) == len(depot)
+    assert all(x["execution_status"] == "EXECUTED" for x in repo.get_scenario_lines(lines[0]["scenario_id"]))
+    triggers = [c[0] for c in ex.calls]
+    assert triggers.count(config.PO_TRIGGER) == len(vendor) and triggers.count(config.TRANSFER_TRIGGER) == len(depot)
+    assert triggers.count(config.UPDATE_TRIGGER) == 2 and sorted(out["update_sent_to"]) == ["team2@example.com", "team@example.com"]
+    po_inputs = next(i for t, i in ex.calls if t == config.PO_TRIGGER)
+    assert po_inputs["plan_line_id"] and po_inputs["destination_region"] in ("US", "EMEA", "APAC")
+    assert not [h for h in repo.t["depot_holds"] if h["status"] == "ACTIVE"]       # held stock became consumed
+    assert sum(1 for h in repo.t["depot_holds"] if h["status"] == "CONSUMED") == len(depot)
+    total = sum(p["total_amount"] for p in repo.list_pos(aurora))
+    assert total <= out["total_usd"] and out["savings_usd"] > 0
+
+
+def test_executing_twice_never_orders_twice(repo, aurora):
+    ex = approve(repo, aurora)
+    first = execution.execute_plan(repo, ex, aurora)
+    n = len(ex.calls)
+    again = execution.execute_plan(repo, ex, aurora)
+    assert again["orders_placed_now"] == 0 and len(ex.calls) == n
+    assert len(repo.list_pos(aurora)) == len(first["purchase_orders"])
+
+
+def test_a_failing_line_is_reported_and_retried_later(repo, aurora):
+    ex = approve(repo, aurora)
+    ex.fail_on = lambda t, i: t == config.PO_TRIGGER and i["sku"] == "DISPLAY-COUNTER-AURORA"
+    out = execution.execute_plan(repo, ex, aurora)
+    assert out["status"] == "partial" and out["failed"] and out["update_sent_to"] == []        # no update until all is placed
+    ex.fail_on = None
+    ok = execution.execute_plan(repo, ex, aurora)
+    assert ok["status"] == "executed" and len(ok["update_sent_to"]) == 2 and not ok["failed"]
+
+
+def test_orders_never_exceed_the_authorised_amount(repo, aurora):
+    ex = approve(repo, aurora)
+    repo.t["decisions"][-1]["amount"] = 1000.0                    # authorised far less than the plan costs
+    out = execution.execute_plan(repo, ex, aurora)
+    assert out["failed"] and all(f["error"] == "beyond the authorised amount" for f in out["failed"])
+    assert sum(p["total_amount"] for p in repo.list_pos(aurora)) <= 1000.0
+
+
+def test_without_team_addresses_the_update_is_skipped_not_invented(repo, aurora):
+    ex = FakeExecutor()
+    decision_flow.authorize(repo, ex, aurora, "2", "")
+    ex.execution = {"executionDetails": {"state": "SUCCEEDED"}}
+    ex.suspensions = [{"state": "LIFTED"}]
+    decision_flow.status(repo, aurora, ex)
+    out = execution.execute_plan(repo, ex, aurora)
+    assert out["status"] == "executed" and out["update_sent_to"] == []
+    assert config.UPDATE_TRIGGER not in [c[0] for c in ex.calls]
+
+
+def test_a_rejected_decision_blocks_execution(repo, aurora):
+    ex = FakeExecutor()
+    decision_flow.authorize(repo, ex, aurora, "2", "")
+    ex.suspensions = [{"state": "REJECTED"}]
+    decision_flow.status(repo, aurora, ex)
+    assert execution.execute_plan(repo, ex, aurora)["status"] == "BLOCKED"
