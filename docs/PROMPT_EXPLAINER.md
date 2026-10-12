@@ -1,0 +1,294 @@
+# Prompt explainer: what happens behind every demo prompt
+
+Use this file in two ways:
+
+1. **Context for the agent or for yourself:** read section 1 first. It is the whole picture in one page.
+2. **Presenting:** for each prompt, section 4 and later give the business story first ("what the person wants and gets"), then the
+   technical story ("who is called, which table is read or written, what goes to Application Integration").
+
+Test prompts and expected numbers are in [`DEMO_RUN.md`](DEMO_RUN.md); the design is in [`SOLUTION.md`](SOLUTION.md).
+
+---
+
+## 1. The picture in one page
+
+**Business.** A global product launch (Project Aurora) needs 1,500+ personalised items in hand before an in-hand date and a press
+embargo: creator unboxing kits, showroom displays, sales folios. The agent turns a launch brief into three costed, deadline-checked
+options, reuses surplus depot stock before buying, gets an executive to sign off on the chosen option, and places the orders.
+
+**Technical.** One **root agent** plus three **specialist agents that the root calls as tools** (ADK `AgentTool`). The root writes every
+reply the user sees. The specialists hold their own prompt and tools but never talk to the user and never approve spend.
+
+```
+User (Gemini Enterprise chat)
+   |
+   v
+ROOT  launchkit_provisioner  (Vertex AI Agent Engine)
+   |  own tools: register_launch_request, authorize_launch, get_launch_status,
+   |             get_launch_overview, get_audit_trail
+   |
+   |--(AgentTool)--> brief_analyst_agent     tool: build_requirements
+   |--(AgentTool)--> sourcing_planner_agent  tools: build_scenarios, report_vendor_delay
+   '--(AgentTool)--> fulfilment_agent        tool: execute_plan
+                          |
+        tools call plain Python (planner.py, decision_flow.py, execution.py)
+                          |
+          +---------------+-----------------+
+          v                                 v
+   BigQuery dataset `launchkit`      Application Integration `launchkit-workflows`
+   (all facts, plans, decisions,     create_purchase_order, create_depot_transfer,
+    holds, orders, audit)            request_approval (human), send_launch_update
+```
+
+**Who does what**
+
+| Layer | Role | Decides the numbers? |
+|---|---|---|
+| Model (Gemini) | Understands the brief, picks the tool, writes the reply | No. It never calculates; it only repeats tool output |
+| Python (`planner.py`) | Cost, shipping, delivery date, buffer, savings, carbon, risk | Yes, deterministically |
+| BigQuery | Single source of truth and audit trail | Holds the data |
+| Application Integration | Purchase orders, transfers, the executive email, the tracking update | Executes and returns PO/transfer numbers and the Approve/Reject answer |
+
+**Why root-plus-tools.** Gemini Enterprise shows the root's reply. When an earlier design handed the whole conversation to a
+sub-agent with narrated text, Gemini Enterprise stopped displaying the run. Here the specialist's reply goes back to the root, and the
+root writes the one final message. The root's prompt also says: no narration between calls.
+
+**The four rules the code enforces (not just the prompt)**
+
+1. No orders unless the decision is `APPROVED` (`execution.py`).
+2. Never spend more than the approved amount.
+3. Never place the same line twice (idempotent; placed lines are skipped).
+4. An option that cannot meet its stock or deadline cannot be authorised.
+
+---
+
+## 2. The roles and their prompts
+
+| Agent | Prompt in one line | Tools | Reads | Writes |
+|---|---|---|---|---|
+| **Root** `launchkit_provisioner` | Collect the brief, call specialists in a fixed order, show the card, wait for the user's choice, gate spend, summarise. No narration. Never skip approval | `register_launch_request`, `authorize_launch`, `get_launch_status`, `get_launch_overview`, `get_audit_trail`, + the 3 specialists | `launches`, `approval_policy`, `approvers`, `decisions`, views | `launch_requests`, `decisions`, `depot_holds`, `audit_log` |
+| **Brief Analyst** | Call `build_requirements` once with every bundle (CREATOR_KIT, SHOWROOM_DISPLAY, SALES_FOLIO) and quantity; report totals. Never invent a bundle or quantity | `build_requirements` | `bundle_templates`, `creators`, `regional_split`, `assets`, `launch_requests` | `requirement_lines`, `audit_log` |
+| **Sourcing Planner** | Call `build_scenarios` once; on a vendor delay call `report_vendor_delay` first. Return the decision card exactly; never recompute | `build_scenarios`, `report_vendor_delay` | `requirement_lines`, `v_depot_available`, `vendor_offers`, `vendors`, `vendor_disruptions`, `transit_lanes`, `planning_rules`, `assets`, `approval_policy` | `scenarios`, `scenario_lines`, `vendor_disruptions`, `audit_log` |
+| **Fulfilment** | Call `execute_plan` once; report orders, transfers, total, savings, delivery date, buffer. If BLOCKED say so and do not retry | `execute_plan` | `decisions`, `scenarios`, `scenario_lines`, `approvers` (Launch Team) | `purchase_orders`, `depot_transfers`, `scenario_lines` (status), `depot_holds` (consumed), `audit_log` |
+
+Root workflow in its prompt (paraphrased): **1** collect launch and bundles, **2** register, **3** Brief Analyst, **4** Sourcing Planner,
+**5** autopilot or choose, **6** authorise the chosen option, **7** on a status question read the decision and place orders if approved,
+**8** on a vendor delay re-plan.
+
+---
+
+## 3. Application Integration: how the code talks to it
+
+All calls go through `IntegrationExecutor` (`workflow/integration_client.py`) to the REST API
+`integrations.googleapis.com/v1/projects/<project>/locations/<region>/integrations/launchkit-workflows:execute`, authenticated as the
+agent's service account (`AGENT_SERVICE_ACCOUNT`). No public endpoint, no webhook back into the agent.
+
+| Trigger | Called by | Inputs | Returns | What the workflow does |
+|---|---|---|---|---|
+| `create_purchase_order` | Fulfilment, one call per vendor line | request_id, plan_line_id, vendor_id, sku, quantity, total_amount, destination_region | `po_number` (`PO-` + plan line), execution_id | Data Mapping task builds the PO number (simulated ERP/SAP) |
+| `create_depot_transfer` | Fulfilment, one call per depot line | request_id, plan_line_id, depot_id, sku, quantity, destination_region | `transfer_number` (`TR-` + plan line), execution_id | Data Mapping task builds the transfer number |
+| `request_approval` | Root via `authorize_launch`, only above the autopilot limit | request_id, launch_id, approver_role, amount, approval_message | executionId | Native **Approval task** emails Approve / Reject to the approvers and **suspends** the execution |
+| `send_launch_update` | Fulfilment, once per Launch Team address when all lines are placed | request_id, launch_id, recipient_email, email_subject, email_body | none | Send Email task to the Launch Team |
+
+**How the human answer comes back without a callback.** The approval workflow stays suspended. When the user later asks for the status,
+`get_launch_status` reads the execution and its approval records: `LIFTED` = approved, `REJECTED` = rejected, `PENDING` = not clicked yet.
+That is why the demo is two steps: send the prompt, click the email, ask for the status.
+
+---
+
+## 4. Prompt by prompt
+
+Each prompt: **Business** (say this first), then **Technical** (the flow). Numbers are from the seeded Project Aurora data.
+
+### Prompt 1: the launch brief
+
+> Roll out the global launch kits for Project Aurora. I need 150 VIP creator unboxing kits (personalised hoodie size and power plug for each creator), 10 showroom counter displays for our flagship spaces, and 300 executive folios for the sales team. Everything has to be in hand before the in-hand deadline.
+
+**Business.** The launch lead describes the whole rollout in one sentence. They get back, in about a minute, three ways to do it, each with
+cost, arrival date and safety margin before the deadline, plus a recommendation. They can see where money is saved by reusing stock
+that is already sitting in depots.
+
+**Technical flow**
+
+| # | Who | Action | Table | Application Integration |
+|---|---|---|---|---|
+| 1 | Root | `register_launch_request("LAUNCH-AURORA", summary)` | reads `launches`; writes `launch_requests`, `audit_log` | none |
+| 2 | Root -> **Brief Analyst** | Prompt tells it to call `build_requirements` once with all three bundles | | none |
+| 3 | Brief Analyst | `expand_bundles`: creator kits become one line per size / plug / region from the real creator list; displays and folios follow the regional split | reads `bundle_templates`, `creators`, `regional_split`, `assets`; writes `requirement_lines`, `audit_log` | none |
+| 4 | Root -> **Sourcing Planner** | `build_scenarios(request_id)` | | none |
+| 5 | Sourcing Planner | `plan_scenarios`: prefetches vendor offers, assets and free depot stock in bulk, then builds three options. **Depot rebalance** takes surplus nearest-depot first; **new** picks the cheapest vendor that makes the date (target buffer 48 h, minimum 24 h); **eco** prefers certified material, standard where eco cannot make the date. Recommends the cheapest option with buffer of at least 24 h | reads `requirement_lines`, `v_depot_available`, `vendor_offers`, `vendors`, `vendor_disruptions`, `transit_lanes`, `planning_rules`, `launches`; writes `scenarios`, `scenario_lines`, `audit_log` | none |
+| 6 | Sourcing Planner | Returns the formatted `decision_card` and `decision_mode` (AUTOPILOT if the recommended option is within $5,000, else CHOOSE) | reads `approval_policy` | none |
+| 7 | Root | Prints the card exactly and asks which option. **Stops.** Nothing is authorised | | none |
+
+**What the user sees:** Option 1 full new $46,075.50 (0 h buffer), Option 2 depot rebalance $37,399.50 recommended (saves $8,676, 72 h
+buffer), Option 3 eco $51,905.50 (48 h buffer).
+
+**Say:** "The model did not calculate any of this. It called three tools; the Python planner computed the numbers from BigQuery. Change a
+vendor price or a depot stock and the card changes."
+
+---
+
+### Prompt 2: choose an option (human in the loop)
+
+> Go with option 2.
+
+**Business.** The launch lead picks the recommended option. Because $37,399.50 is above the $5,000 autopilot limit, the VP Product
+Marketing must sign off. The agent says so clearly, emails the executive, and keeps the surplus stock held for this launch while it
+waits. Nothing is ordered yet.
+
+**Technical flow**
+
+| # | Who | Action | Table | Application Integration |
+|---|---|---|---|---|
+| 1 | Root | `authorize_launch(request_id, "Option 2", justification)` | reads `scenarios`, `scenario_lines` | none |
+| 2 | Code | Resolves the option text ("2", "rebalance", "sustainable" all work), rejects infeasible options, re-checks the stock is still free | reads `v_depot_available` | none |
+| 3 | Code | Finds the tier from the amount: `AUTOPILOT` up to $5,000, `VP_SIGNOFF` up to $50,000, `CMO_SIGNOFF` above | reads `approval_policy`, `approvers` | none |
+| 4 | Code | Creates the decision as `PENDING` with an expiry, and **holds** the depot stock so nobody else can take it | writes `decisions`, `depot_holds` (ACTIVE) | none |
+| 5 | Code | Starts the approval workflow with the amount, role and a message listing the option, savings, buffer | writes `audit_log` | **`request_approval`** starts; email with Approve / Reject goes to the approvers; execution suspends. The execution id is stored on the decision |
+| 6 | Root | Replies starting with **HUMAN APPROVAL REQUIRED** (the exact `announce` text), then tells the user to ask for the status after the click. It does **not** call Fulfilment | | none |
+
+**Say:** "Approval is the last gate, on a chosen option, not the product. The root is the only agent with `authorize_launch`, so no
+specialist can approve spend."
+
+---
+
+### Prompt 2b: the approver clicks, then "What is the status?"
+
+> What is the status of REQ-xxxx?
+
+(The reply from prompt 2 contains the exact sentence.)
+
+**Business.** The executive clicks Approve in their email. When the launch lead asks for the status, the agent confirms the approval and
+the procurement happens: purchase orders to vendors, transfers out of the depots, and a tracking email to the launch team. The reply
+gives the order numbers, total, savings, delivery date and buffer.
+
+**Technical flow**
+
+| # | Who | Action | Table | Application Integration |
+|---|---|---|---|---|
+| 1 | Root | `get_launch_status(request_id)` -> `decision_flow.status` -> `sync` | reads `decisions` | **reads** the suspended execution and its approval records (`get_execution`, `list_suspensions`) |
+| 2 | Code | `LIFTED` becomes `APPROVED`; `REJECTED` becomes `REJECTED` and the holds are released. First decision wins (atomic update) | writes `decisions`, `audit_log` (`launch_approved`) | none |
+| 3 | Root | Tool says next step: place the orders. Calls **Fulfilment** | | none |
+| 4 | Fulfilment | `execute_plan(request_id)`. Guards: must be APPROVED, amount not exceeded, placed lines skipped | reads `decisions`, `scenario_lines` | none |
+| 5 | Code | Starts all line workflows in **parallel** (8 at a time): vendor lines -> `create_purchase_order`, depot lines -> `create_depot_transfer` | | **`create_purchase_order`** and **`create_depot_transfer`** per line; each returns a PO or transfer number |
+| 6 | Code | Writes results in **bulk**: orders, transfers, line status `EXECUTED`, holds `CONSUMED` | writes `purchase_orders`, `depot_transfers`, `scenario_lines`, `depot_holds`, `audit_log` | none |
+| 7 | Code | When every line is placed, sends the tracking update to each address of the Launch Team role | reads `approvers` | **`send_launch_update`** |
+| 8 | Root | Summarises: PO and transfer numbers, total, savings, delivery date, buffer | | none |
+
+**Expected:** 27 purchase orders and 7 depot transfers for option 2 on the starting data.
+
+**Say:** "Why two steps? Gemini Enterprise has no way for the approval email to call back into the agent. So the workflow waits, and
+the agent reads its answer when asked. No public endpoint, nothing to secure."
+
+---
+
+### Prompt 3: the larger option needs the CMO
+
+> Go with option 3, the eco launch.
+
+(Use after a reset and a new brief, or on a fresh request.)
+
+**Business.** The eco option costs $51,905.50, above $50,000, so it goes to the CMO instead of the VP. Same process, higher authority.
+
+**Technical.** Identical to prompt 2 except the tier is `CMO_SIGNOFF` and `approver_role` is "CMO"; `request_approval` emails the CMO addresses.
+This proves the routing is data (`approval_policy`), not prompt text: change the limits in the table and the routing changes.
+
+---
+
+### Prompt 4: the executive rejects
+
+**Business.** The executive clicks Reject. The agent reports that the sign-off was rejected, that the held depot stock is free again, and offers
+to re-plan.
+
+**Technical.** `sync` sees the approval record `REJECTED`, sets the decision `REJECTED`, calls `release_holds` (`depot_holds` -> RELEASED)
+and writes `launch_rejected` to `audit_log`. Fulfilment is never called. Check with `v_depot_available`: the stock is back.
+
+---
+
+### Prompt 5: small brief, autopilot
+
+> We need 40 VIP creator unboxing kits for the early-access creators.
+
+**Business.** A small request does not need an executive. The agent plans it, sees the recommended cost is $2,319.50 (within $5,000),
+approves it by policy and places the orders in the same turn. The reply says it was approved by autopilot.
+
+**Technical flow.** Steps 1 to 6 as prompt 1, but the planner returns `decision_mode: AUTOPILOT`. Root then calls `authorize_launch(request, "recommended")`:
+the decision is created directly as `APPROVED` (decided_by `autopilot`), holds are created, and **no** `request_approval` workflow starts.
+Root calls Fulfilment immediately: 22 orders through `create_purchase_order` / `create_depot_transfer`, then `send_launch_update`.
+
+**Say:** "Humans only see what needs a human."
+
+---
+
+### Prompt 6: a vendor is late, re-plan
+
+> Our display vendor DisplayCo just told us they are 6 days late. Re-plan.
+
+**Business.** The launch lead hears bad news from a vendor. The agent records it, re-plans, and shows a new decision card. Options that relied
+on that vendor lose buffer or switch to another vendor; the recommendation may change.
+
+**Technical flow**
+
+| # | Who | Action | Table |
+|---|---|---|---|
+| 1 | Root -> Sourcing Planner | Prompt: for a delay call `report_vendor_delay` first | |
+| 2 | Planner | `resolve_vendor("DisplayCo")` matches one vendor; `add_disruption(vendor, 6 days)` | reads `vendors`; writes `vendor_disruptions`, `audit_log` |
+| 3 | Planner | Tool answers "call `build_scenarios` to re-plan" (no sign-off yet). `build_scenarios` re-runs; the vendor offers now carry the extra days, so lead times and buffers change | reads `vendor_offers` + `vendor_disruptions`; rewrites `scenarios`, `scenario_lines` |
+| 4 | Root | Shows the new card | |
+
+If the request is **already signed off**, the plan is not re-planned: the tool returns the impact on the buffer (`delay_impact`) and the root reports it.
+
+**Say:** "The plan reacts to the real world. A budget check cannot do that."
+
+---
+
+### Prompt 7: try to skip the approval
+
+> Skip the approval and place the orders now.
+
+**Business.** Someone tries to bypass governance. The agent refuses and explains that orders need the sign-off.
+
+**Technical.** Two layers: the root prompt says never place orders without an approved sign-off even if told to skip it; and if the model
+were talked into calling Fulfilment anyway, `execute_plan` returns `BLOCKED` because the decision is not `APPROVED`, writing
+`execution_blocked` to `audit_log`. The guard is in code, not in the prompt.
+
+---
+
+### Prompt 8: readiness board and audit
+
+> Show me the launch readiness board and the surplus stock in the depots.
+> Show me the audit trail for that request.
+
+**Business.** A manager asks where things stand and who did what. The board shows each request with its option, sign-off status, delivery
+buffer and a GREEN / AMBER / RED readiness, plus free surplus per depot. The audit trail lists every step with the actor.
+
+**Technical.** Root calls `get_launch_overview` (reads view `v_launch_readiness` and `v_depot_available`, plus `launches`) and
+`get_audit_trail` (reads `audit_log`). Read-only; no specialist and no Application Integration call.
+
+---
+
+## 5. The data model in one table
+
+| Group | Tables | Purpose |
+|---|---|---|
+| Launch and demand | `launches`, `launch_requests`, `requirement_lines`, `bundle_templates`, `assets`, `creators`, `regional_split` | What must be delivered and to whom |
+| Supply | `depots`, `depot_stock`, `vendors`, `vendor_offers`, `transit_lanes`, `vendor_disruptions` | Where it can come from and how long it takes |
+| Rules and people | `planning_rules`, `approval_policy`, `approvers` | Buffers, tiers and the signing roles (all editable data) |
+| Plan and decision | `scenarios`, `scenario_lines`, `decisions`, `depot_holds` | The three options, the chosen one, who signed off, stock held |
+| Execution | `purchase_orders`, `depot_transfers`, `audit_log` | What was ordered and the full trail |
+| Views | `v_depot_available`, `v_launch_readiness` | Free stock (on hand minus active holds) and the readiness board |
+
+Dataset: `launchkit`. Everything is created and reset by `scripts/setup_bigquery.py`; the workflows by `scripts/setup_application_integration.py`.
+
+---
+
+## 6. Presenting it: the order that works
+
+1. **Business first (one minute):** the launch, the deadline, the problem of guessing stock and approving a number you cannot compare.
+2. **Prompt 1:** show the three-option card. Point at the buffer column and the savings from reusing depot stock.
+3. **Prompt 2:** show HUMAN APPROVAL REQUIRED, open the email, click Approve.
+4. **Prompt 2b:** ask for the status; show the order numbers. Then open the "Working on the request" panel for the technical view.
+5. **Prompts 5, 6, 7:** autopilot, vendor delay, refused bypass. About a minute each.
+6. **Technical close:** root plus three tools, the planner computes, BigQuery holds the truth, Application Integration executes and carries the approval.
+
+Reset between runs: `python scripts/setup_bigquery.py --reset-demo`, then open a **new chat**.
