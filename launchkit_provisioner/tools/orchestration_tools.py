@@ -59,14 +59,34 @@ def get_vendor_report(request_id: str) -> dict:
 
 
 def show_checklist(mode: str = "", campaign: str = "", date: str = "", needs: str = "") -> dict:
-    """Show the four things to close on (what the user wants to do, the campaign name, the date, what is needed) with what
-    we know so far and the ONE next question. Call it on every question turn, passing what the user has told you so far
-    (leave the rest empty).
+    """Show the four things to close on (what the user wants to do, the campaign name, the date, what they pick) with what
+    we know so far and the ONE next question. When it is time to pick, it also shows what we can offer: ready-made packs and
+    single items with our stock, best vendor prices and ready-by dates. Call it on every question turn, passing what the
+    user has told you so far (leave the rest empty).
 
     Args:
         mode: "campaign" if they want to plan a whole campaign, "items" if they want to buy selected items.
         campaign: The campaign name the user chose. "Quick purchase" if the items are not for a campaign.
-        date: The date everything must be in hand, as the user said it or as a full date.
-        needs: A short summary of what they need and how many.
+        date: The date everything must be in hand as YYYY-MM-DD (for a campaign on file, the date on file if the user said to use it).
+        needs: A short summary of what they picked and how many.
     """
-    return {"status": "ok", "display_markdown": presentation.intake_checklist(mode, campaign, date, needs)}
+    from datetime import date as _date
+
+    repo = get_repo()
+    on_file = None
+    if campaign and not date:
+        known = next((x for x in repo.list_launches() if campaign.strip().lower() in
+                      (x["launch_id"].lower(), x["launch_name"].lower())), None)
+        on_file = known["in_hand_by"] if known else None
+    deadline = None
+    if date:
+        try:
+            deadline = _date.fromisoformat(date)
+        except ValueError:
+            deadline = None
+    catalog = presentation.catalog_markdown(repo, deadline, "items" if "item" in (mode or "").lower() else "campaign") \
+        if (mode and campaign and date and not needs) else ""
+    out = {"status": "ok", "display_markdown": presentation.intake_checklist(mode, campaign, date, needs, catalog, on_file)}
+    if on_file:
+        out["date_on_file"] = str(on_file)
+    return out

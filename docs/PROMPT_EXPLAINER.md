@@ -48,7 +48,7 @@ Instead of expecting a detailed brief, the assistant asks a few easy questions, 
 | 1 | 🧭 **Plan a whole campaign, or buy selected items?** | Both are supported; this must be clear early | Sets the path. *Whole campaign* is marked best. *Selected items* is never refused: it gets a gentle nudge once ("planning the whole campaign is better") and carries on |
 | 2 | 🎪 **What is your campaign called?** | The user is creating the campaign and we help set it up | `register_launch_request` finds it by name or id; a new name creates a **new campaign**. Selected items with no campaign use "Quick purchase" |
 | 3 | 📅 **By what date must everything be in hand?** | The deadline drives vendor choice and spare time | A new campaign gets the date given; a known one uses the date on file (or updates it, logged in `audit_log`) |
-| 4 | 🎁 **What do you need, and how many?** | The shopping list | `build_requirements` takes campaign bundles *or* selected items (item, how many, region) |
+| 4 | 🛒 **What would you like from our offer?** | People choose faster from what exists than they describe from nothing | `show_checklist` shows **🛍️ What we can offer you** (`presentation.catalog_markdown`): ready-made packs and single items, with our stock (`depot_stock`), the best vendor price (`vendor_offers`), ready-by dates against the user's date, a faster option and the eco price. The user picks and says how many; `build_requirements` takes bundles *or* selected items (item, how many, region) |
 
 **Business advice before planning.** After the shopping list the assistant checks it (`advisor.py`, plain rules over data, no model) and, if it finds something, shows **💡 Anything you may be missing?** and waits:
 

@@ -37,6 +37,7 @@ def capabilities_card() -> str:
 
 | | I can | In simple words |
 |---|---|---|
+| 🛍️ | Show you **what we offer** | Our stock, best vendor prices, ready-by dates. You pick |
 | 🧾 | Make your **shopping list** | Exact items, amounts and places |
 | 💡 | Spot **what you may be missing** | Spares, extra items, dates that are too tight |
 | ♻️ | Check **our stock** | Use what we own before buying |
@@ -60,17 +61,101 @@ _ITEMS_TIP = ("💡 **Good to know:** planning the **whole campaign** is better.
               "stronger case for better rates. Want that instead? Say *plan the whole campaign*. Otherwise we carry on with your items.")
 
 
-def intake_checklist(mode: str = "", campaign: str = "", date_text: str = "", needs: str = "") -> str:
+def _fits(ready: date, deadline: date | None) -> str:
+    if deadline is None:
+        return ""
+    gap = (deadline - ready).days
+    return "🔴 too late" if gap < 0 else ("🟡 tight" if gap < 3 else "🟢 fits")
+
+
+def catalog_markdown(repo, deadline: date | None = None, focus: str = "campaign", today: date | None = None) -> str:
+    """What we can offer: ready-made packs and single items, with our stock, the best vendor price and ready-by dates."""
+    today = today or date.today()
+    assets = {a["sku"]: a for a in repo.list_assets()}
+    offers = repo.list_vendor_offers_all()
+    stock: dict = {}
+    for d in repo.list_depot_free():
+        if int(d["free"]) > 0:
+            stock.setdefault(d["sku"], []).append((d["depot_name"].split(" ")[0], int(d["free"])))
+    groups: dict = {}
+    for sku in assets:
+        groups.setdefault(_item_label(assets, sku), []).append(sku)
+
+    def ready(o):
+        return today + timedelta(days=int(o["lead_days"]) + int(o["delay_days"]))
+
+    info = {}
+    for label, skus in groups.items():
+        mine = [o for o in offers if o["sku"] == skus[0]]
+        std = [o for o in mine if o["variant"] == "STANDARD"]
+        eco = [o for o in mine if o["variant"] == "ECO"]
+        best = min(std, key=lambda o: (float(o["unit_price"]), int(o["lead_days"]))) if std else None
+        fast = min(mine, key=lambda o: (int(o["lead_days"]) + int(o["delay_days"]), float(o["unit_price"]))) if mine else None
+        free = {}
+        for k in skus:
+            for place, n in stock.get(k, []):
+                free[place] = free.get(place, 0) + n
+        info[label] = {"skus": skus, "best": best, "fast": fast, "eco": min(eco, key=lambda o: float(o["unit_price"])) if eco else None,
+                       "free": free, "free_total": sum(free.values())}
+
+    packs = []
+    for btype in repo.list_bundle_types():
+        templates = repo.get_bundle_templates(btype)
+        parts = []
+        for t in templates:
+            sku = next((k for k in assets if _pattern(t["sku_pattern"]).match(k)), None)
+            if sku:
+                parts.append((_item_label(assets, sku), int(t["qty_per_bundle"])))
+        if not parts:
+            continue
+        price = sum(q * float(info[l]["best"]["unit_price"]) for l, q in parts if info[l]["best"])
+        ready_by = max((ready(info[l]["best"]) for l, _ in parts if info[l]["best"]), default=None)
+        in_stock = ", ".join(f"{l} {info[l]['free_total']}" for l, _ in parts if info[l]["free_total"])
+        packs.append((templates[0]["description"], ", ".join(l for l, _ in parts), in_stock, price, ready_by))
+    out = ["### 🛍️ What we can offer you", f"Prices are per unit. *Ready by* is when the vendor finishes; shipping time comes on top. Today is **{day(today)}**"
+           + (f" and your date is **{day(deadline)}**." if deadline else "."), ""]
+    pack_md = ["**🎁 Ready-made packs** (the easy way)", "", "| 🎁 Pack | 🧩 What is inside | ♻️ Part of it in our stock | 💰 From (per pack) | 📅 Ready by | 🚦 |",
+               "|---|---|---|---|---|---|"]
+    pack_md += [f"| **{n}** | {inside} | {fs or '-'} | {money(pr)} | {day(rb) if rb else '-'} | {_fits(rb, deadline) if rb else ''} |"
+                for n, inside, fs, pr, rb in packs]
+    item_md = ["**🧩 Single items** (pick only what you need)", "",
+               "| 🧩 Item | ♻️ In our stock | 💰 Best price | 🏭 Vendor | 📅 Ready by | 🚦 | ⚡ Faster option | 🌱 Eco |", "|---|---|---|---|---|---|---|---|"]
+    for label, v in info.items():
+        b, f, e = v["best"], v["fast"], v["eco"]
+        stock_txt = ", ".join(f"{n} {p}" for p, n in v["free"].items()) or "-"
+        if b:
+            rb = ready(b)
+            faster = (f"{f['vendor_name']} {money(f['unit_price'])}, {day(ready(f))}" if f["vendor_id"] != b["vendor_id"]
+                      and ready(f) < rb else "-")
+            row = (money(b["unit_price"]), b["vendor_name"], day(rb), _fits(rb, deadline), faster,
+                   money(e["unit_price"]) if e else "-")
+        else:
+            row = ("-", "-", "-", "", "-", "-")
+        item_md.append(f"| {label} | {stock_txt} | " + " | ".join(row) + " |")
+    first, second = (pack_md, item_md) if focus != "items" else (item_md, pack_md)
+    out += first + [""] + second
+    out += ["", "👉 **Pick what you want.** Say how many, for example *150 VIP guest welcome kits* or *5 venue display stands for the US*. "
+                "You can mix packs and items. I will show your shopping list and tell you what you may be missing."]
+    return "\n".join(out)
+
+
+def intake_checklist(mode: str = "", campaign: str = "", date_text: str = "", needs: str = "", catalog: str = "",
+                     date_on_file: date | None = None) -> str:
     """The four things to close on, with what we have so far and the ONE next question."""
     m = (mode or "").lower()
     kind = "items" if any(w in m for w in ("item", "select", "single", "few", "just")) else (
         "campaign" if any(w in m for w in ("campaign", "whole", "plan", "event", "full")) else "")
     quick = (campaign or "").strip().lower() in ("quick purchase", "no campaign", "none")
+    try:
+        shown_date = day(date.fromisoformat(date_text)) if date_text else ""
+    except ValueError:
+        shown_date = date_text
     rows = [("🧭 What you want to do", {"campaign": "Plan a whole campaign ⭐", "items": "Buy selected items"}.get(kind, "")),
             ("🎪 Campaign name", "No campaign (quick purchase)" if quick else campaign),
-            ("📅 Date it must be in hand", date_text), ("🎁 What you need and how many", needs)]
+            ("📅 Date it must be in hand", shown_date), ("🛒 What you pick", needs)]
     out = ["### 📝 Let's close on 4 things", "", "| | What | Your answer |", "|---|---|---|"]
     out += [f"| {'✅' if v else '⬜'} | {k} | {v or ''} |" for k, v in rows]
+    after = ""
     if not kind:
         ask = ("**Do you want to plan a whole campaign, or buy selected items?**\n\n"
                "🅰️ **Whole campaign** ⭐ best: I help you set it up.\n\n🅱️ **Selected items**: for a campaign or just a quick purchase.")
@@ -78,15 +163,16 @@ def intake_checklist(mode: str = "", campaign: str = "", date_text: str = "", ne
         ask = ("**What is your campaign called?**" if kind == "campaign" else
                "**Is this for a campaign?** Tell me its name, or say *no campaign*.\n\n" + _ITEMS_TIP)
     elif not date_text:
-        ask = "**By what date must everything be in hand?** *(Please give day, month and year.)*"
+        ask = ("**By what date must everything be in hand?** *(Please give day, month and year.)*" if not date_on_file else
+               f"**Your campaign is on file with the date {day(date_on_file)}.** Say *use that date*, or give a new full date.")
     elif not needs:
-        ask = ("**What does your campaign need, and how many?**\n\n💡 Tell me everything, for example *150 guest welcome kits, "
-               "10 venue display stands and 300 sales folders*. I will check what you may be missing."
-               if kind == "campaign" else
-               "**Which items, how many, and for which region?** *(US, EMEA or APAC)*\n\nFor example *5 venue display stands for the US*.")
+        ask = "**What would you like from our offer?**"
+        after = catalog
     else:
         ask = ""
     out += ["", "### 👉 Next question" if ask else "### ✅ All 4 closed. Let me look at your list.", ask]
+    if after:
+        out += ["", after]
     return "\n".join(out).rstrip()
 
 

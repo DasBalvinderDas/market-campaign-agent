@@ -77,9 +77,18 @@ Every question turn shows the same small checklist (✅ closed, ⬜ open) and **
 | 🧭 Whole campaign or selected items? | `A whole campaign` | ✅ ⬜ ⬜ ⬜ |
 | 🎪 What is your campaign called? (you are creating it) | `Summer Sale Campaign` | ✅ ✅ ⬜ ⬜ |
 | 📅 By what date must everything be in hand? (full date) | `20 December 2026` | ✅ ✅ ✅ ⬜ |
-| 🎁 What does your campaign need, and how many? | `150 VIP guest welcome kits and 300 sales folders` | ✅ ✅ ✅ ✅ |
+| 🛒 What would you like from our offer? (the assistant shows **🛍️ What we can offer you**, see below) | `150 VIP guest welcome kits and 300 sales folders` | ✅ ✅ ✅ ✅ |
 
-A new campaign name creates a **new campaign** with the date you give. (The data also has the *Spring Product Launch Event*; use that name and its date on file is used.)
+**You pick from what we have; you do not type a list from nothing.** After the date, the assistant shows **🛍️ What we can offer you**:
+
+| Part | What it shows |
+|---|---|
+| 🎁 Ready-made packs | guest welcome kit, sales folder pack, venue display stand: what is inside, which parts we already have in stock, the price per pack, the *ready by* date and 🟢 fits / 🟡 tight / 🔴 too late against your date |
+| 🧩 Single items | per item: ♻️ our stock and where (for example 120 Dallas), 💰 best price and 🏭 vendor, 📅 ready by, 🚦 fits your date, ⚡ a faster option if there is one (for example RapidDisplay $1,650, ready sooner), 🌱 the eco price |
+
+Then it says *Pick what you want. Say how many.* Mix packs and items; you can add or remove later (`add 10 venue display stands`, `remove the brochures`). Selected items starts with the item table; a whole campaign starts with the packs.
+
+A new campaign name creates a **new campaign** with the date you give. (The data also has the *Spring Product Launch Event*; use that name and it offers the date on file: say *use that date*.)
 You can skip ahead: `Plan my Summer Sale Campaign, in hand by 20 December 2026: 150 VIP guest welcome kits and 300 sales folders.` answers everything at once.
 
 **Selected items** (the other way in): answer `Selected items`. The assistant asks *Is this for a campaign? Tell me its name, or say no campaign*, says once that planning the
