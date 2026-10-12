@@ -1,6 +1,6 @@
 # The LaunchKit Provisioner
 
-An autonomous Google ADK agent that handles a **whole event** instead of one item at a time. Underneath it is still a purchase order, procurement and approval system, but it takes a full event brief, turns it into a shopping list (Bill of Materials), compares many vendors, and places bulk orders. It plans against a deadline. A Product Marketing Manager gives it a
+An autonomous Google ADK agent that handles a **whole campaign** instead of one item at a time. Underneath it is still a purchase order, procurement and approval system, but it takes a full event brief, turns it into a shopping list (Bill of Materials), compares many vendors, and places bulk orders. It plans against a deadline. A Product Marketing Manager gives it a
 brief ("150 VIP guest welcome kits, 10 venue display stands, 300 sales folders for Spring Launch Event"); it works out what is needed in which
 region, reuses surplus stock from regional depots, **computes three sourcing options** (plain-English names: *Buy everything new*, *Use our stock first, buy the rest*, *Go green*) against the in-hand date and the press
 embargo, lets the manager choose, gets a named executive to sign off above the autopilot limit, and has the purchase orders and
@@ -42,7 +42,7 @@ tables, views and demo data and the Application Integration workflows. Full step
 
 ## How a request flows
 
-1. **Questions** (chat): the assistant asks, one at a time, *what is the event*, *by what date*, *what do you need and how many*, with a ✅/⬜ checklist (a whole event plan is encouraged; a single item works too). It then shows the shopping list and **business advice** (spares, a kind of bundle you left out, the rest of a bundle, a date that is too close) and waits for *Looks good*. It looks up stock and vendors itself.
+1. **Questions** (chat): the assistant asks, one at a time, *what is the event*, *by what date*, *what do you need and how many*, with a ✅/⬜ checklist (). It then shows the shopping list and **business advice** (spares, a kind of bundle you left out, the rest of a bundle, a date that is too close) and waits for *Looks good*. It looks up stock and vendors itself.
 2. **Plan**: the Brief Analyst and the Sourcing Planner compute the requirement lines and three options from BigQuery. One reply,
    in simple words with tables and icons: the **shopping list (BOM)**, the **vendor comparison**, and a **3-choices table** (price, saving,
    arrival date, spare time, pollution, who has to say OK).

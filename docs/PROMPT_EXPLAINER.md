@@ -29,7 +29,7 @@ so the wording is the same every time and no number is typed by the model.
 | 9 | Multi-level approval and prompts | The ladder **up to $5,000 automatic, up to $50,000 VP, above that CMO**, with *this order* marked; prompts for each level (`DEMO_RUN.md`, case 3) and "Who has to approve what?" | `approval_policy` table; tool `get_approval_rules` |
 
 **The idea to say first:** underneath it is still a **purchase order, procurement and approval system**. The difference is that it does not ask
-for one item at a time. You give it a **whole event**, and it deals with **many vendors at once**: shopping list, vendor comparison, three
+for one item at a time. You give it a **whole campaign**, and it deals with **many vendors at once**: shopping list, vendor comparison, three
 choices, the right approver by order size, then all the orders together. That is the magic to call out.
 
 **About the Approve / Decline buttons (point 4).** The two links in the approval email are created by Google's Application Integration approval
@@ -45,9 +45,10 @@ Instead of expecting a detailed brief, the assistant asks a few easy questions, 
 
 | # | It asks | Why | What it does with the answer |
 |---|---|---|---|
-| 1 | 🎪 **What is the event?** | Everything is planned against one event | `register_launch_request` finds it by name or id. An unknown name is a **new event** |
-| 2 | 📅 **By what date must everything be in hand?** | The deadline drives vendor choice and spare time | Uses the date on file for a known event (or updates it, logged in `audit_log`); a new event gets the date you give |
-| 3 | 🎁 **What do you need, and how many?** | The shopping list | `build_requirements` takes event bundles *or* single items. It **encourages the whole event plan**: more stock reuse, more vendors to compare, a stronger case for better rates |
+| 1 | 🧭 **Plan a whole campaign, or buy selected items?** | Both are supported; this must be clear early | Sets the path. *Whole campaign* is marked best. *Selected items* is never refused: it gets a gentle nudge once ("planning the whole campaign is better") and carries on |
+| 2 | 🎪 **What is your campaign called?** | The user is creating the campaign and we help set it up | `register_launch_request` finds it by name or id; a new name creates a **new campaign**. Selected items with no campaign use "Quick purchase" |
+| 3 | 📅 **By what date must everything be in hand?** | The deadline drives vendor choice and spare time | A new campaign gets the date given; a known one uses the date on file (or updates it, logged in `audit_log`) |
+| 4 | 🎁 **What do you need, and how many?** | The shopping list | `build_requirements` takes campaign bundles *or* selected items (item, how many, region) |
 
 **Business advice before planning.** After the shopping list the assistant checks it (`advisor.py`, plain rules over data, no model) and, if it finds something, shows **💡 Anything you may be missing?** and waits:
 
@@ -66,10 +67,9 @@ It does **not** ask about stock or vendors. It looks those up itself and shows t
 Then the user decides: **"Does this plan feel good?"** They can say *Choose option 2*, or ask for a change (*make it 200 kits*, *add 50 brochures*, *a week earlier*);
 the assistant rebuilds the list and the plan. Only after a choice does the approval start, then the orders.
 
-**Single item?** That works too: the same steps, shorter, a simple purchase order with approval by amount if needed. The reply adds the tip to share the whole
-event plan next time. Items are matched by plain words (*hoodie size M*, *gift box*); unclear ones are asked back (*which size?*), and a region is required.
+**Selected items?** That works too, also for a campaign: the same steps, shorter, a simple purchase order with approval by amount if needed. The advice adds *Plan the whole campaign*, and the 3-choices table repeats the tip. Items are matched by plain words (*hoodie size M*, *gift box*); unclear ones are asked back (*which size?*), and a region is required.
 
-**New event?** The assistant creates it (`EVT-...`) with the date you give. It has no guest list yet, so guest kits use the standard guest mix, and it says so. `--reset-demo`
+**New campaign?** The assistant creates it (`EVT-...`) with the date you give. It has no guest list yet, so guest kits use the standard guest mix, and it says so. `--reset-demo`
 removes events made in the chat.
 
 ---

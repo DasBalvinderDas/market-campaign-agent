@@ -59,25 +59,31 @@ Use a **new chat** for each case, after `--reset-demo`. Numbers below are for th
 in Gemini Enterprise. Every answer is written in simple words, with tables and icons. The assistant asks a few easy questions first.
 
 **The idea to say first:** underneath it is still a purchase order, procurement and approval system. But instead of asking for one item at a
-time, you give it a **whole event**, and it deals with **many vendors at once**: shopping list, vendor comparison, three choices, the right
+time, you give it a **whole campaign**, and it deals with **many vendors at once**: shopping list, vendor comparison, three choices, the right
 approver, then all the orders together.
 
-### Case 0: say hello, then close on three things
+### Case 0: say hello, then close on four things
 
 > Hi
 
-**Expected:** a short card: **I can** (shopping list, spot what you may be missing, check our stock, compare vendors, 3 choices, the right OK, place all orders, buy one single
-item), **💡 Best way to use me** (tell me the whole event) and a checklist with three open boxes. It ends with the first question: **What is the event?**
+**Expected:** a short card: **I can** (shopping list, spot what you may be missing, check our stock, compare vendors, 3 choices, the right OK, place all orders) and
+**🧭 Two ways to start**: 🅰️ plan a **whole campaign** ⭐ (best: more stock to reuse, more vendors, a stronger case for better rates) or 🅱️ buy **selected items** (for a campaign or a quick
+purchase). It ends with the first question: **Do you want to plan a whole campaign, or buy selected items?**
 
-Every question turn shows the same small checklist, with ✅ for what is closed and ⬜ for what is open, and **one** next question:
+Every question turn shows the same small checklist (✅ closed, ⬜ open) and **one** next question:
 
 | It asks | You say | Checklist after |
 |---|---|---|
-| 🎪 What is the event? | `The Spring Product Launch Event` | ✅ ⬜ ⬜ |
-| 📅 By what date must everything be in hand? (full date; for a known event it tells you the date on file) | `The date on file is fine` or `20 December 2026` | ✅ ✅ ⬜ |
-| 🎁 What do you need, and how many? (it encourages the whole event) | `150 VIP guest welcome kits and 300 sales folders` | ✅ ✅ ✅ |
+| 🧭 Whole campaign or selected items? | `A whole campaign` | ✅ ⬜ ⬜ ⬜ |
+| 🎪 What is your campaign called? (you are creating it) | `Summer Sale Campaign` | ✅ ✅ ⬜ ⬜ |
+| 📅 By what date must everything be in hand? (full date) | `20 December 2026` | ✅ ✅ ✅ ⬜ |
+| 🎁 What does your campaign need, and how many? | `150 VIP guest welcome kits and 300 sales folders` | ✅ ✅ ✅ ✅ |
 
-You can skip ahead: `Plan our Spring Product Launch Event. We need 150 VIP guest welcome kits and 300 sales folders. Everything must arrive before the deadline.` answers all three at once.
+A new campaign name creates a **new campaign** with the date you give. (The data also has the *Spring Product Launch Event*; use that name and its date on file is used.)
+You can skip ahead: `Plan my Summer Sale Campaign, in hand by 20 December 2026: 150 VIP guest welcome kits and 300 sales folders.` answers everything at once.
+
+**Selected items** (the other way in): answer `Selected items`. The assistant asks *Is this for a campaign? Tell me its name, or say no campaign*, says once that planning the
+whole campaign is better (and offers to switch with *plan the whole campaign*), then asks which items, how many and which region. Nothing is refused.
 
 ### Case 0b: the assistant spots what you may be missing (business advice)
 
@@ -111,19 +117,19 @@ Reply `Looks good`. **Expected:** one message, in this order, and nothing is ord
 | 🌍 Pollution (CO₂) | 4,200 kg | 3,702 kg | 2,378 kg |
 | ✍️ Who has to say OK | VP Product Marketing | VP Product Marketing | CMO |
 
-Then: **Does this plan feel good?** *Say "Choose option 2", or tell me what to change.* **Shows:** a whole event worked out across many vendors, with the
+Then: **Does this plan feel good?** *Say "Choose option 2", or tell me what to change.* **Shows:** a whole campaign worked out across many vendors, with the
 choices computed against the deadline. If the shopping list had nothing to advise, the plan comes straight after the third answer.
 
 **Change the plan before you commit** (same chat): `Make it 200 guest welcome kits.` or `Add 50 product brochures for the US.` The assistant rebuilds the list and the plan.
 Nothing is ordered until you choose.
 
-### Case 1b: a single item (a simple purchase order)
+### Case 1b: selected items (a simple purchase order)
 
-> We need 5 venue display stands for the US, by the end of next month. (answer its questions: event "Quick purchase", the full date)
+> Selected items. (then answer: *no campaign*, a full date, and `5 venue display stands for the US`)
 
-**Expected:** the same steps, shorter: shopping list with one row, stock, vendors, three choices, and a tip: *this is a single-item purchase, and that works fine,
-but if you tell me your whole event plan I can reuse more of our own stock, compare more vendors and we have a stronger case for better rates.* Then choose, and the
-approval level follows the amount (a few thousand dollars is automatic or VP, depending on the total).
+**Expected:** the same steps, shorter: shopping list with one row, advice (*📣 Plan the whole campaign*, plus the rest of the bundle if the item belongs to one), stock, vendors, three choices, and a tip:
+*buying selected items works fine, but if you plan the whole campaign with me I can reuse more of our own stock, compare more vendors, and we have a stronger case for better rates.*
+Say `Looks good` to carry on with just the items, then choose; the approval level follows the amount.
 
 ### Case 2: the executive says OK, the two-step flow (human in the loop)
 
@@ -139,7 +145,7 @@ approval ladder with *this order* marked, a four-step tracker (email sent, appro
 2. Ask in the same chat: `What is the status of that request?`
 
 **Expected:** **✅ Done! All your orders are placed**: one row of numbers (total $37,399.50, $8,676.00 saved, arrives 3 Nov with 3 days to spare, 27 purchase orders + 7 warehouse moves,
-3,702 kg pollution); **What we did, in 4 lines** (one whole event with 1,210 items; 7 vendors; 240 items from our own stock with a picture bar; the amount and who approved);
+3,702 kg pollution); **What we did, in 4 lines** (one whole campaign with 1,210 items; 7 vendors; 240 items from our own stock with a picture bar; the amount and who approved);
 **Who we bought from, and why** (one row per vendor); **From our own warehouses**; and one line on **why so many orders** (one per item per region, all placed together).
 
 ### Case 3: who has to approve what? (multi-level approval)

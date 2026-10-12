@@ -14,7 +14,7 @@ APP, OWNER = "LaunchKit Provisioner Agent (Product Launch Collateral Planner)", 
 
 AGENTS = [
     ("Root Agent", "LaunchKit Provisioner (Orchestrator)",
-     "The root agent is the Event Procurement Assistant, the front-line coordinator. Underneath it is a purchase order, procurement and approval system, but it handles a whole event brief (many items, many vendors) instead of single items. On a greeting it shows what it can do and what it needs. It takes the event brief, registers the request and calls the three specialist "
+     "The root agent is the Campaign Procurement Assistant, the front-line coordinator. Underneath it is a purchase order, procurement and approval system, but it handles a whole campaign brief (many items, many vendors) instead of single items. On a greeting it shows what it can do and what it needs. It takes the event brief, registers the request and calls the three specialist "
      "agents in a fixed order: Brief Analyst, Sourcing Planner, then (after sign-off) Fulfilment. It shows the manager, in simple words with tables and icons, the shopping list (Bill of Materials), the vendor comparison and the 3-choices table "
      "and waits for a choice. It holds the human-in-the-loop sign-off gate: only the root can call "
      "authorize_launch. Spend within the autopilot limit is approved by policy; above it an Application Integration approval emails the "
