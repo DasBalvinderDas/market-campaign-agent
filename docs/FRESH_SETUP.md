@@ -11,6 +11,7 @@ BigQuery dataset: `launchkit`. Application Integration: `launchkit-workflows` (4
 | Get ready for a demo (usual routine) | [B. Before every demo](#b-before-every-demo) |
 | Wipe BigQuery and rebuild it | [C. Full BigQuery rebuild](#c-full-bigquery-rebuild) |
 | Pick up new code after a `git pull` | [D. Update after new code](#d-update-after-new-code) |
+| Load the latest items, vendors, prices and stock into BigQuery | [E2. Update the items and vendors data](#e2-update-the-items-and-vendors-data) |
 | Change who gets the sign-off email | [E. Change approver emails](#e-change-approver-emails) |
 | Test the sign-off or debug a wrong status | [F. Test and debug the sign-off](#f-test-and-debug-the-sign-off) |
 | Something went wrong | [G. Problems](#g-problems) |
@@ -75,11 +76,33 @@ git pull origin claude/budget-approval-reshape
 source scripts/env_setup.sh
 python scripts/setup_application_integration.py --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
 python scripts/setup_bigquery.py --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
+python scripts/setup_bigquery.py --refresh-reference   # picks up new items, vendors, prices and stock, and resets the demo
 python scripts/deploy_agent_engine.py
-python scripts/setup_bigquery.py --reset-demo
 ```
 
 The agent logic runs inside the deployment, so redeploy whenever code changes. Data, tiers and approvers need no redeploy.
+
+## E2. Update the items and vendors data
+
+The offer the assistant shows (packs, items, our stock, vendor prices and ready-by dates) comes from BigQuery. The demo catalog (items, vendors,
+price offers, stock) lives in `launchkit_provisioner/data/seed_data.py` and is loaded when the dataset is first built. If you pulled a newer
+catalog, load it into the dataset you already have:
+
+```bash
+python scripts/setup_bigquery.py --refresh-reference     # reload items, vendors, offers, stock, lanes, rules, tiers; then reset the demo
+python scripts/verify_setup.py                           # prints the counts: 19 items (SKUs), 12 vendors, 51 price offers
+```
+
+It keeps the approver emails, the guest list and the campaigns, and clears the demo transactions (old plans and orders). No redeploy is needed.
+
+To change a single price or stock number yourself, edit the table in BigQuery; the next answer uses it:
+
+```bash
+bq query --use_legacy_sql=false "UPDATE \`$GOOGLE_CLOUD_PROJECT.launchkit.vendor_offers\` SET unit_price = 39 WHERE vendor_id='V-APPAREL' AND sku LIKE 'HOODIE-EVENT-%' AND variant='STANDARD'"
+bq query --use_legacy_sql=false "UPDATE \`$GOOGLE_CLOUD_PROJECT.launchkit.depot_stock\` SET on_hand = 300 WHERE depot_id='DEPOT-LON-01' AND sku='TOTE-CANVAS'"
+```
+
+Tables: `assets` (items), `vendors`, `vendor_offers` (price, days to make, carbon per vendor, item and variant), `depot_stock` (units per warehouse), `bundle_templates` (what is in a pack).
 
 ## E. Change approver emails
 

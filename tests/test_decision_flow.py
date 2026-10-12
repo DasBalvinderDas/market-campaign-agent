@@ -66,8 +66,8 @@ def test_the_decision_is_idempotent_and_cannot_be_switched(repo, aurora):
 
 
 def test_an_option_that_misses_the_deadline_cannot_be_authorised(repo, aurora):
-    for v in ("V-RAPIDDISPLAY", "V-DISPLAYCO"):
-        repo.add_disruption(v, 10, "x")
+    for v in ("V-RAPIDDISPLAY", "V-DISPLAYCO", "V-STAGEPRO"):
+        repo.add_disruption(v, 20, "x")
     sc, lines = planner.plan_scenarios(repo, aurora)
     repo.replace_scenarios(aurora, sc, lines)
     out = decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "")

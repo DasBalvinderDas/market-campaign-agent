@@ -110,8 +110,9 @@ def test_deadline_aware_vendor_choice_pays_for_speed_only_where_needed(repo, aur
 
 
 def test_a_vendor_delay_replans_and_can_change_the_recommendation(repo, aurora):
-    repo.add_disruption("V-RAPIDDISPLAY", 10, "factory fire")
-    repo.add_disruption("V-DISPLAYCO", 10, "port strike")
+    repo.add_disruption("V-RAPIDDISPLAY", 20, "factory fire")
+    repo.add_disruption("V-DISPLAYCO", 20, "port strike")
+    repo.add_disruption("V-STAGEPRO", 20, "customs")
     scenarios2, lines2 = planner.plan_scenarios(repo, aurora)
     by = {s["option_code"]: s for s in scenarios2}
     assert all(s["buffer_hours"] < 0 and not s["feasible"] for s in by.values())   # nobody can make the date
@@ -176,5 +177,6 @@ def test_when_the_cheap_display_vendor_is_late_the_planner_switches_and_flags_th
 
 def test_when_nothing_meets_the_minimum_buffer_the_least_bad_cheapest_option_is_flagged(repo, aurora):
     repo.add_disruption("V-LUXPACK", 5, "late board")                                       # boxes: no option can make the date
+    repo.add_disruption("V-GIFTCRAFT", 5, "late board")
     sc, _ = planner.plan_scenarios(repo, aurora)
     assert not any(s["feasible"] for s in sc) and [s["option_code"] for s in sc if s["recommended"]] == ["REBALANCE"]

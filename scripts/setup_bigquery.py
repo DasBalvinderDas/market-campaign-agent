@@ -12,6 +12,7 @@ BigQuery table `approvers`:
 
 Examples
   python scripts/setup_bigquery.py                # create + seed (idempotent)
+  python scripts/setup_bigquery.py --refresh-reference   # load the latest items, vendors, offers and stock, then reset the demo
   python scripts/setup_bigquery.py --reset-demo   # clear demo transactions, move the launch dates to today, keep reference data
   python scripts/setup_bigquery.py --reset        # drop everything and rebuild
   python scripts/setup_bigquery.py --print-ddl > bigquery/schema.sql  # DDL only, no GCP access needed
@@ -85,6 +86,8 @@ def main():
     ap.add_argument("--reset-demo", action="store_true", help="clear demo transactions and move the launch dates to today, keep reference data")
     ap.add_argument("--approver-email", action="append", default=[], metavar="[ROLE=]EMAIL[,EMAIL]",
                     help="who signs off / gets tracking updates (repeatable)")
+    ap.add_argument("--refresh-reference", action="store_true",
+                    help="reload items, vendors, offers, stock, lanes, rules and tiers from seed_data.py, then clear the demo transactions")
     ap.add_argument("--print-ddl", action="store_true", help="print CREATE statements and exit")
     args = ap.parse_args()
 
@@ -93,6 +96,23 @@ def main():
         return
     project = resolve_project(args.project)
     run(args, project=project)
+
+
+REFERENCE_TABLES = ["assets", "bundle_templates", "regional_split", "depots", "depot_stock", "transit_lanes", "vendors",
+                    "vendor_offers", "planning_rules", "approval_policy"]
+
+
+def refresh_reference(client, ds, bigquery):
+    """Load the items, vendors, offers, stock, lanes, rules and tiers from seed_data.py over what is in BigQuery.
+    Approvers, guests and the campaigns are left alone."""
+    client.query(ddl(ds)).result()
+    for name in REFERENCE_TABLES:
+        t = TABLES[name]
+        cfg = bigquery.LoadJobConfig(
+            schema=[bigquery.SchemaField(c, typ, mode=mode) for c, typ, mode, _ in t["columns"]],
+            write_disposition="WRITE_TRUNCATE")
+        client.load_table_from_json(_json_rows(SEED[name]), f"{ds}.{name}", job_config=cfg).result()
+        print(f"  reloaded {len(SEED[name]):>3} rows into {name}")
 
 
 @guarded
@@ -104,6 +124,10 @@ def run(args, project=""):
         preflight(project, ["bigquery.googleapis.com"])
     client = bigquery.Client(project=project, location=args.location)
     ds = f"{project}.{args.dataset}"
+
+    if args.refresh_reference:
+        refresh_reference(client, ds, bigquery)
+        args.reset_demo = True          # old plans and orders may point at items or stock that just changed
 
     if args.reset_demo:
         client.query(ddl(ds)).result()  # creates any table or view added since the dataset was first built

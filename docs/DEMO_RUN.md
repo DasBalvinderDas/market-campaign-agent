@@ -84,7 +84,7 @@ Every question turn shows the same small checklist (✅ closed, ⬜ open) and **
 | Part | What it shows |
 |---|---|
 | 🎁 Ready-made packs | guest welcome kit, sales folder pack, venue display stand: what is inside, which parts we already have in stock, the price per pack, the *ready by* date and 🟢 fits / 🟡 tight / 🔴 too late against your date |
-| 🧩 Single items | per item: ♻️ our stock and where (for example 120 Dallas), 💰 best price and 🏭 vendor, 📅 ready by, 🚦 fits your date, ⚡ a faster option if there is one (for example RapidDisplay $1,650, ready sooner), 🌱 the eco price |
+| 🧩 Single items | 12 items (19 SKUs): the pack items plus campaign extras (canvas tote bag, steel water bottle, roll-up banner, name badge with lanyard, sticker pack), every item with at least two vendors. Per item: ♻️ our stock and where (for example 120 Dallas), 💰 best price and 🏭 vendor, 📅 ready by, 🚦 fits your date, ⚡ a faster option if there is one (for example RapidDisplay $1,650, ready sooner), 🌱 the eco price |
 
 Then it says *Pick what you want. Say how many.* Mix packs and items; you can add or remove later (`add 10 venue display stands`, `remove the brochures`). Selected items starts with the item table; a whole campaign starts with the packs.
 
@@ -113,7 +113,7 @@ Reply `Looks good`. **Expected:** one message, in this order, and nothing is ord
 
 1. **📌 In short**: the best choice in four lines (option, price and saving, arrival and spare time, who has to say OK) and a picture of how much our own stock covers (🟩🟩⬜⬜⬜…).
 2. **♻️ Step 2: What we already have in stock**: free units per warehouse and how many the best choice uses.
-3. **🏭 Step 3: What vendors can do, and by when**: 7 vendors, 24 price offers, one row per vendor and item with price and *ready by* date, who was chosen, late vendors marked,
+3. **🏭 Step 3: What vendors can do, and by when**: 12 vendors, 38 price offers for the items on your list, one row per vendor and item with price and *ready by* date, who was chosen, late vendors marked,
    and why RapidDisplay was used even though DisplayCo is cheaper.
 4. **🎯 Step 4: Your 3 choices**, as one table (with the full demo brief of 150 kits, 10 stands, 300 folders):
 

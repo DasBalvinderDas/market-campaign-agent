@@ -56,10 +56,10 @@ def test_vendor_delay_before_a_decision_asks_for_a_re_plan(repo):
     rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
     brief_tools.build_requirements(rid, bundles(("VENUE_DISPLAY", 10, "")))
     before = sourcing_tools.build_scenarios(rid)
-    out = sourcing_tools.report_vendor_delay(rid, "rapiddisplay", 8, "late")
-    assert out["status"] == "ok" and out["vendor"] == "RapidDisplay" and out["delay_days"] == 8 and "build_scenarios" in out["next_step"]
+    out = sourcing_tools.report_vendor_delay(rid, "displayco", 8, "late")
+    assert out["status"] == "ok" and out["vendor"] == "DisplayCo" and out["delay_days"] == 8 and "build_scenarios" in out["next_step"]
     after = sourcing_tools.build_scenarios(rid)
-    assert after["active_vendor_delays"][0]["vendor_id"] == "V-RAPIDDISPLAY"
+    assert after["active_vendor_delays"][0]["vendor_id"] == "V-DISPLAYCO"
     assert [o["buffer_hours"] for o in after["options"]] != [o["buffer_hours"] for o in before["options"]]
 
 

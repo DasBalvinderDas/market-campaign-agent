@@ -101,6 +101,8 @@ depot, quantity and amount comes from the stored plan.
 
 ## 7. BigQuery data model
 
+The offer catalog is data: `assets` (19 items), `vendors` (12), `vendor_offers` (51: price, days to make, carbon, STANDARD or ECO; every item has at least two vendors) and `depot_stock` (12 rows). The extra vendors for the pack items are always dearer or slower than the first one, so the demo numbers stay the same; the campaign extras (tote bag, water bottle, roll-up banner, name badge with lanyard, sticker pack) have their own stock and competing vendors. `python scripts/setup_bigquery.py --refresh-reference` loads a newer catalog into an existing dataset (see `docs/FRESH_SETUP.md`).
+
 Full DDL: [`bigquery/schema.sql`](../bigquery/schema.sql) (generated from `launchkit_provisioner/data/schema.py`).
 
 | Group | Tables and views |

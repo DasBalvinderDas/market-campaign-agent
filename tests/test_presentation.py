@@ -36,7 +36,7 @@ def test_build_requirements_returns_the_bom_for_the_chat(repo):
 
 def test_vendor_report_shows_vendors_compared_and_why_the_faster_one_was_used(repo, aurora):
     md = presentation.vendor_report(repo, aurora)
-    assert "7 vendors" in md and "24 price offers" in md
+    assert "12 vendors" in md and "38 price offers" in md
     assert "DisplayCo" in md and "RapidDisplay" in md and "✅ Chosen" in md
     assert "even though DisplayCo is cheaper" in md
     assert "Ready by" in md and "🔴" not in md

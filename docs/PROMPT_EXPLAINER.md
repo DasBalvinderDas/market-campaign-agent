@@ -87,7 +87,7 @@ the press embargo lifts. Between now and then, three groups need physical things
 - **10 flagship venues** need counter displays.
 - **300 sales executives** need leather folders for customer meetings.
 
-That is about 1,500 items, from seven vendors, to three regions. Miss the date and a guest posts the unboxing a week late, a venue
+That is about 1,500 items, from twelve vendors to compare, to three regions. Miss the date and a guest posts the unboxing a week late, a venue
 opens with an empty counter, or a sales team walks into a meeting without a folder. A launch only happens once.
 
 ### How this used to go
@@ -307,7 +307,7 @@ Nothing the agent says comes from anywhere else.
 | London EMEA Marketing Hub | EMEA | PWR-EU-C / PWR-UK-G | 10 / 40 |
 | Singapore APAC Depot | APAC | PWR-AU-I / PWR-JP-A | 10 / 15 |
 
-**3. Vendor terms: `vendor_offers`** (24 rows: 7 vendors, STANDARD and ECO variants). A sample:
+**3. Vendor terms: `vendor_offers`** (51 rows: 12 vendors, 19 items, STANDARD and ECO variants; every item has at least two vendors). A sample:
 
 | vendor | sku | variant | unit_price | lead_days | carbon_kg |
 |---|---|---|---|---|---|
@@ -606,7 +606,7 @@ that is already sitting in depots.
 | 6 | Sourcing Planner | Returns the **vendor comparison** (every vendor checked, who was chosen, stock we already own), the 3-choices table and `decision_mode` (AUTOPILOT if the recommended option is within $5,000, else CHOOSE) | reads `approval_policy`, `vendor_offers`, `depot stock` | none |
 | 7 | Root | Shows one message: shopping list, vendors compared, the 3 choices, then asks which option. **Stops.** Nothing is authorised | | none |
 
-**What the user sees, in this order:** (1) the shopping list: 1,210 items in 31 order lines; (2) the vendor comparison: 7 vendors, 24 offers, who was chosen and why RapidDisplay was used
+**What the user sees, in this order:** (1) the shopping list: 1,210 items in 31 order lines; (2) the vendor comparison: 12 vendors, 38 offers, who was chosen and why RapidDisplay was used
 even though DisplayCo is cheaper; (3) one table with the three choices: Option 1 *Buy everything new* $46,075.50 (no spare time), Option 2 *Use our stock first, buy the rest* $37,399.50
 (saves $8,676, 3 days to spare, best choice), Option 3 *Go green* $51,905.50 (2 days to spare).
 

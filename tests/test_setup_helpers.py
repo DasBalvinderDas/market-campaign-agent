@@ -122,3 +122,40 @@ def test_importing_the_package_does_not_build_agents_or_touch_the_cloud():
     r = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True,
                        cwd=str(Path(__file__).resolve().parent.parent))
     assert r.returncode == 0, r.stderr
+
+
+def test_refresh_reference_reloads_catalog_tables_only():
+    import setup_bigquery as sb
+    from launchkit_provisioner.data.seed_data import SEED
+
+    class Job:
+        def result(self):
+            return self
+
+    class Client:
+        def __init__(self):
+            self.loads, self.queries = [], []
+
+        def query(self, sql):
+            self.queries.append(sql)
+            return Job()
+
+        def load_table_from_json(self, rows, table, job_config=None):
+            self.loads.append((table, len(rows), job_config.write_disposition))
+            return Job()
+
+    class BQ:
+        class LoadJobConfig:
+            def __init__(self, schema=None, write_disposition=None):
+                self.write_disposition = write_disposition
+
+        class SchemaField:
+            def __init__(self, *a, **k):
+                pass
+
+    c = Client()
+    sb.refresh_reference(c, "p.d", BQ)
+    tables = {t.split(".")[-1]: n for t, n, _ in c.loads}
+    assert set(tables) == set(sb.REFERENCE_TABLES) and all(w == "WRITE_TRUNCATE" for _, _, w in c.loads)
+    assert tables["vendor_offers"] == len(SEED["vendor_offers"]) and tables["assets"] == len(SEED["assets"])
+    assert "approvers" not in tables and "guests" not in tables and "launches" not in tables

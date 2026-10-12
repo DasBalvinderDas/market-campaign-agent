@@ -59,7 +59,7 @@ TOOLS = [
 
 BQ = [
     ("launches", "Table", "The launch with its in-hand deadline and press embargo (re-based to today by --reset-demo).", "Planner, tools", "Setup script"),
-    ("assets", "Table", "Collateral catalog with ship factor (size / weight).", "Planner", "Setup script"),
+    ("assets", "Table", "Item catalog (19 items) with ship factor (size / weight): pack items and campaign extras. Feeds the offer shown to the user.", "Planner, offer, BOM", "Setup script; refresh with --refresh-reference"),
     ("bundle_templates", "Table", "What goes into one guest welcome kit, venue display stand or sales folder.", "Brief analyst", "Setup script"),
     ("guests", "Table", "150 guests: hoodie size, region and power plug (personalisation).", "Brief analyst", "Setup script"),
     ("regional_split", "Table", "How venue and sales bundles spread over regions.", "Brief analyst", "Setup script"),
@@ -68,7 +68,7 @@ BQ = [
     ("v_depot_available", "View", "Free surplus = on hand minus active and consumed holds.", "Planner, sign-off, overview", "-"),
     ("transit_lanes", "Table", "Shipping days and cost between regions.", "Planner", "Setup script"),
     ("vendors", "Table", "Manufacturers and where they ship from.", "Planner", "Setup script"),
-    ("vendor_offers", "Table", "Price, lead time and carbon per vendor, SKU and variant (STANDARD / ECO).", "Planner", "Setup script"),
+    ("vendor_offers", "Table", "Price, lead time and carbon per vendor, SKU and variant (STANDARD / ECO). 12 vendors, 51 offers, at least two vendors per item.", "Planner, offer, vendor report", "Setup script; refresh with --refresh-reference"),
     ("planning_rules", "Table", "Minimum and target safety buffer, depot handling days, transfer carbon.", "Planner", "Setup script; editable"),
     ("approval_policy", "Table", "Tiers: AUTOPILOT up to $5,000, VP sign-off up to $50,000, CMO above.", "Sign-off", "Setup script; editable"),
     ("approvers", "Table", "Emails per role (VP Product Marketing, CMO, Launch Team).", "Sign-off, fulfilment", "Setup script (--approver-email)"),

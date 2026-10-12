@@ -59,6 +59,31 @@ def _offers():
     add("V-PRINTCO", "FOLDER-LEATHER", "ECO", 29.0, 11, 0.9)
     add("V-PRINTCO", "BROCHURE-PRODUCT", "STANDARD", 3.0, 6, 0.3)
     add("V-PRINTCO", "BROCHURE-PRODUCT", "ECO", 3.5, 7, 0.1)
+    # Second and third vendors for the items above: real competition on the offer, always dearer or slower
+    # than the vendor above, so the best price and the demo numbers stay the same.
+    add("V-GIFTCRAFT", "GIFT-BOX-BLACK", "STANDARD", 92.0, 15, 4.5)
+    for sku, _ in _HOODIES:
+        add("V-THREADLY", sku, "STANDARD", 47.0, 14, 8.0)
+    for sku, _ in _PLUGS:
+        add("V-VOLTLINE", sku, "STANDARD", 9.8, 8, 1.1)
+    add("V-INKWELL", "NAME-CARD", "STANDARD", 6.8, 6, 0.2)
+    add("V-INKWELL", "FOLDER-LEATHER", "STANDARD", 31.0, 10, 2.6)
+    add("V-INKWELL", "BROCHURE-PRODUCT", "STANDARD", 3.9, 7, 0.3)
+    add("V-STAGEPRO", "DISPLAY-STAND", "STANDARD", 1760.0, 12, 140.0)
+    # Campaign extras: items that are not part of a pack, each with at least two vendors
+    add("V-THREADLY", "TOTE-CANVAS", "STANDARD", 6.5, 10, 1.8)
+    add("V-THREADLY", "TOTE-CANVAS", "ECO", 8.0, 12, 0.6)
+    add("V-GIFTCRAFT", "TOTE-CANVAS", "STANDARD", 7.2, 8, 2.0)
+    add("V-GIFTCRAFT", "BOTTLE-STEEL", "STANDARD", 8.5, 9, 2.4)
+    add("V-LUXPACK", "BOTTLE-STEEL", "STANDARD", 9.2, 11, 2.2)
+    add("V-LUXPACK", "BOTTLE-STEEL", "ECO", 11.0, 13, 0.9)
+    add("V-INKWELL", "BANNER-ROLLUP", "STANDARD", 55.0, 6, 6.0)
+    add("V-PRINTCO", "BANNER-ROLLUP", "STANDARD", 48.0, 9, 5.5)
+    add("V-INKWELL", "BADGE-LANYARD", "STANDARD", 2.2, 4, 0.4)
+    add("V-ENGRAVE", "BADGE-LANYARD", "STANDARD", 2.6, 5, 0.4)
+    add("V-PRINTCO", "STICKER-PACK", "STANDARD", 0.8, 5, 0.05)
+    add("V-INKWELL", "STICKER-PACK", "STANDARD", 0.9, 4, 0.05)
+    add("V-INKWELL", "STICKER-PACK", "ECO", 1.1, 5, 0.02)
     return rows
 
 
@@ -79,7 +104,13 @@ SEED = {
            {"sku": "FOLDER-LEATHER", "name": "Leather sales folder", "component_type": "FOLDER",
             "ship_factor": 1.2},
            {"sku": "BROCHURE-PRODUCT", "name": "Product brochure", "component_type": "PRINT",
-            "ship_factor": 0.2}]),
+            "ship_factor": 0.2},
+           {"sku": "TOTE-CANVAS", "name": "Canvas tote bag", "component_type": "GIFT", "ship_factor": 0.3},
+           {"sku": "BOTTLE-STEEL", "name": "Steel water bottle", "component_type": "GIFT", "ship_factor": 0.4},
+           {"sku": "BANNER-ROLLUP", "name": "Roll-up banner", "component_type": "DISPLAY", "ship_factor": 2.0},
+           {"sku": "BADGE-LANYARD", "name": "Name badge with lanyard", "component_type": "PERSONALISATION",
+            "ship_factor": 0.05},
+           {"sku": "STICKER-PACK", "name": "Sticker pack", "component_type": "PRINT", "ship_factor": 0.02}]),
     "bundle_templates": [
         {"bundle_type": "GUEST_KIT", "description": "VIP guest welcome kit", "sku_pattern": "GIFT-BOX-BLACK",
          "qty_per_bundle": 1, "split_by": "NONE"},
@@ -117,6 +148,13 @@ SEED = {
         {"depot_id": "DEPOT-DAL-02", "sku": "FOLDER-LEATHER", "on_hand": 120},
         {"depot_id": "DEPOT-SIN-03", "sku": "PWR-JP-A", "on_hand": 15},
         {"depot_id": "DEPOT-SIN-03", "sku": "PWR-AU-I", "on_hand": 10},
+        # stock of campaign extras (not part of any pack)
+        {"depot_id": "DEPOT-LON-01", "sku": "TOTE-CANVAS", "on_hand": 200},
+        {"depot_id": "DEPOT-DAL-02", "sku": "BOTTLE-STEEL", "on_hand": 150},
+        {"depot_id": "DEPOT-SIN-03", "sku": "BOTTLE-STEEL", "on_hand": 80},
+        {"depot_id": "DEPOT-DAL-02", "sku": "BANNER-ROLLUP", "on_hand": 25},
+        {"depot_id": "DEPOT-LON-01", "sku": "BANNER-ROLLUP", "on_hand": 10},
+        {"depot_id": "DEPOT-LON-01", "sku": "STICKER-PACK", "on_hand": 1000},
     ],
     "transit_lanes": [
         {"from_region": "US", "to_region": "US", "days": 2, "cost_per_unit": 1.0},
@@ -137,6 +175,11 @@ SEED = {
         {"vendor_id": "V-DISPLAYCO", "vendor_name": "DisplayCo", "home_region": "US", "active": True},
         {"vendor_id": "V-RAPIDDISPLAY", "vendor_name": "RapidDisplay", "home_region": "US", "active": True},
         {"vendor_id": "V-PRINTCO", "vendor_name": "PrintCo", "home_region": "EMEA", "active": True},
+        {"vendor_id": "V-GIFTCRAFT", "vendor_name": "GiftCraft Packaging", "home_region": "EMEA", "active": True},
+        {"vendor_id": "V-THREADLY", "vendor_name": "Threadly Apparel", "home_region": "APAC", "active": True},
+        {"vendor_id": "V-VOLTLINE", "vendor_name": "VoltLine Adapters", "home_region": "EMEA", "active": True},
+        {"vendor_id": "V-INKWELL", "vendor_name": "Inkwell Print", "home_region": "US", "active": True},
+        {"vendor_id": "V-STAGEPRO", "vendor_name": "StagePro Displays", "home_region": "APAC", "active": True},
     ],
     "vendor_offers": _offers(),
     "planning_rules": [
