@@ -169,10 +169,9 @@ def test_the_offer_shows_a_suggested_plan_for_the_headcount():
     assert {"item": "Roll-up banner", "quantity": 6, "region": "US"} in out["suggested"]["items"]
 
 
-def test_the_offer_shows_stock_only_where_the_campaign_is():
-    us = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "USA")["display_markdown"]
-    sg = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "Singapore")["display_markdown"]
-    assert "| Leather sales folder | 120 Dallas |" in us and "| Leather sales folder | - |" in sg
+def test_the_offer_shows_stock_in_every_warehouse_because_it_can_be_moved():
+    md = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "Singapore")["display_markdown"]
+    assert "| Leather sales folder | 120 Dallas |" in md and "| Steel water bottle | 150 Dallas, 80 Singapore |" in md
 
 
 def test_the_offer_prices_follow_the_date():

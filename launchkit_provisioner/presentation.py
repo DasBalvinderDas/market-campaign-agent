@@ -26,10 +26,10 @@ def spare(hours, min_buffer=24) -> str:
     """Spare time before the deadline in plain words, with a traffic light."""
     days = int(hours) // 24
     if hours < 0:
-        return f"🔴 {-days} days LATE"
+        return f"🔴 {-days} day LATE" if days == -1 else f"🔴 {-days} days LATE"
     if hours < min_buffer:
         return "🟡 none (tight!)"
-    return f"🟢 {days} days to spare"
+    return f"🟢 {days} day to spare" if days == 1 else f"🟢 {days} days to spare"
 
 
 # ---------------------------------------------------------------------------- the first hello
@@ -118,7 +118,7 @@ def catalog_markdown(repo, deadline: date | None = None, focus: str = "campaign"
     offers = repo.list_vendor_offers_all()
     stock: dict = {}
     for d in repo.list_depot_free():
-        if int(d["free"]) > 0 and (not region or d["region"] == region):
+        if int(d["free"]) > 0:      # every warehouse: stock from another region can be moved in
             stock.setdefault(d["sku"], []).append((d["depot_name"].split(" ")[0], int(d["free"])))
     groups: dict = {}
     for sku in assets:
@@ -613,7 +613,7 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
            f"| **{money(total)}** | {saved} | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) | "
            f"{len(vlines)} purchase orders + {len(dlines)} warehouse moves | {scenario['carbon_kg']:,.0f} kg |",
            "", "### 📖 What we did, in 4 lines",
-           f"1. 🎪 We planned **one whole campaign**: **{items:,} items**, {len(item_names({ln['sku'] for ln in lines}).split(', '))} different products, 3 regions.",
+           f"1. 🎪 We planned **one whole campaign**: **{items:,} items**, {len(item_names({ln['sku'] for ln in lines}).split(', '))} different products, {len({ln['region'] for ln in lines})} {'region' if len({ln['region'] for ln in lines}) == 1 else 'regions'}.",
            f"2. 🏭 We compared vendors and bought from **{len(by_vendor)}** of them.",
            f"3. ♻️ We took **{own:,} items from our own stock** {bar(100 * own / items) if items else ''}, so we did not buy them twice.",
            f"4. ✍️ {approval}", "", "### 🏭 Who we bought from, and why", "",

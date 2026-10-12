@@ -41,14 +41,21 @@ service, so it needs your yes first.
 
 ## The guided questions: how the assistant gets the details
 
-Instead of expecting a detailed brief, the assistant asks a few easy questions, **one at a time** (and skips anything you already told it). Every question turn shows the same small checklist, from the tool `show_checklist`: ✅ for what is closed, ⬜ for what is open, and the one next question.
+Instead of expecting a detailed brief, the assistant has a natural conversation and asks for what is missing, **one thing at a time** (and skips anything you already told it). Every question turn shows the same small checklist, from the tool `show_checklist`: ✅ for what is closed, ⬜ for what is open, and the one next question.
 
 | # | It asks | Why | What it does with the answer |
 |---|---|---|---|
-| 1 | 🧭 **Plan a whole campaign, or buy selected items?** | Both are supported; this must be clear early | Sets the path. *Whole campaign* is marked best. *Selected items* is never refused: it gets a gentle nudge once ("planning the whole campaign is better") and carries on |
-| 2 | 🎪 **What is your campaign called?** | The user is creating the campaign and we help set it up | `register_launch_request` finds it by name or id; a new name creates a **new campaign**. Selected items with no campaign use "Quick purchase" |
-| 3 | 📅 **By what date must everything be in hand?** | The deadline drives vendor choice and spare time | A new campaign gets the date given; a known one uses the date on file (or updates it, logged in `audit_log`) |
-| 4 | 🛒 **What would you like from our offer?** | People choose faster from what exists than they describe from nothing | `show_checklist` shows **🛍️ What we can offer you** (`presentation.catalog_markdown`): ready-made packs and single items, with our stock (`depot_stock`), the best vendor price (`vendor_offers`), ready-by dates against the user's date, a faster option and the eco price. The user picks and says how many; `build_requirements` takes bundles *or* selected items (item, how many, region) |
+| 1 | 👥📅 **How many people, and on which date?** (the user can say both in the first sentence: *"a campaign for 300 people on 31st Oct"*) | Natural conversation: read what the user said, ask only what is missing | The root passes what it understood to `show_checklist`; `dates.parse_date` reads *31st Oct*, *Oct 31*, *31/10*; a missing year means the next one |
+| 2 | 📍 **Where is your campaign?** (USA, Canada, London, Singapore) | The place decides the region: vendors, warehouse, shipping | `show_checklist` shows `presentation.venues_markdown` (vendors based there, our warehouse and stock, how it is served) from the `venues` table. Canada maps to the US region. Every pick gets that region |
+| 3 | 🎪 **What would you like to call your campaign?** | The user is creating the campaign and we help set it up | `register_launch_request` creates a **new campaign** with the date (or finds a known one) |
+| 4 | 🛒 **What would you like from our offer?** | People choose faster from what exists than they describe from nothing | `show_checklist` shows **🛍️ What we can offer you** (`catalog_markdown`): ready-made packs and single items, our stock (`depot_stock`, every warehouse), the best vendor price **for the user's date** (`vendor_offers` × `vendor_date_pricing`), ready-by dates, a faster option, the eco price, and **💡 a suggested amount for the headcount** (`suggested_per_person`). *"Use the suggested plan"* sends the suggested bundles and items to the shopping list |
+
+Selected items only: the date, the place and the pick (no headcount, no name: *Quick purchase*).
+
+**Vendors price by date.** `vendor_date_pricing` holds a price factor by how many days ahead the order is placed (early-bird 8% off at 45+ days, 5% at 35+, standard 21 to 34, rush 6% / 12% / 20%
+closer in; DisplayCo has its own early-bird band). The planner multiplies every vendor unit price by the factor for the user's date, so the offer, the plans and the purchase orders all use the
+same price. After the three choices the assistant shows **📅 Could another date save you money?**: the same list planned for 14 and 7 days earlier, the date itself and 7, 14 and 28 days later
+(`planner.plan_dates`, nothing is stored), with the best total, the difference and the spare time. *"Move it to 4 Dec"* plans again for that date.
 
 **Business advice before planning.** After the shopping list the assistant checks it (`advisor.py`, plain rules over data, no model) and, if it finds something, shows **💡 Anything you may be missing?** and waits:
 
@@ -289,7 +296,7 @@ the option chosen, and places the orders, with every number computed and every s
 
 ### A. Where the data is
 
-One BigQuery dataset, `gebu-demo-sandbox.launchkit`: 13 reference tables the business owns, 10 transaction tables the agents write, 2 views.
+One BigQuery dataset, `gebu-demo-sandbox.launchkit`: 15 reference tables the business owns, 10 transaction tables the agents write, 2 views.
 Nothing the agent says comes from anywhere else.
 
 **1. Launch deadline: `launches`** (dates are re-based by `--reset-demo`)

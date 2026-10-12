@@ -90,10 +90,10 @@ catalog, load it into the dataset you already have:
 
 ```bash
 python scripts/setup_bigquery.py --refresh-reference     # reload items, vendors, offers, stock, lanes, rules, tiers; then reset the demo
-python scripts/verify_setup.py                           # prints the counts: 19 items (SKUs), 12 vendors, 51 price offers
+python scripts/verify_setup.py                           # prints the counts: 19 items (SKUs), 12 vendors, 51 price offers, and the venues (USA, Canada, London, Singapore) with 11 date-pricing rows
 ```
 
-It keeps the approver emails, the guest list and the campaigns, and clears the demo transactions (old plans and orders). No redeploy is needed.
+It keeps the approver emails, the guest list and the campaigns, and clears the demo transactions (old plans and orders). **Run it before you deploy** a new version: the agent reads new tables (`venues`, `vendor_date_pricing`) and new columns (`suggested_per_person`), and the refresh adds them. If it ever reports a schema problem, `python scripts/setup_bigquery.py --reset --approver-email "..."` rebuilds everything.
 
 To change a single price or stock number yourself, edit the table in BigQuery; the next answer uses it:
 
@@ -102,7 +102,7 @@ bq query --use_legacy_sql=false "UPDATE \`$GOOGLE_CLOUD_PROJECT.launchkit.vendor
 bq query --use_legacy_sql=false "UPDATE \`$GOOGLE_CLOUD_PROJECT.launchkit.depot_stock\` SET on_hand = 300 WHERE depot_id='DEPOT-LON-01' AND sku='TOTE-CANVAS'"
 ```
 
-Tables: `assets` (items), `vendors`, `vendor_offers` (price, days to make, carbon per vendor, item and variant), `depot_stock` (units per warehouse), `bundle_templates` (what is in a pack).
+Tables: `assets` (items), `vendors`, `vendor_offers` (price, days to make, carbon per vendor, item and variant), `depot_stock` (units per warehouse), `bundle_templates` (what is in a pack), `venues` (where a campaign can be held and the region that serves it), `vendor_date_pricing` (early-bird and rush price factors by days ahead).
 
 ## E. Change approver emails
 

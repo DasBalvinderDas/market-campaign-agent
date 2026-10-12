@@ -101,7 +101,7 @@ depot, quantity and amount comes from the stored plan.
 
 ## 7. BigQuery data model
 
-The offer catalog is data: `assets` (19 items), `vendors` (12), `vendor_offers` (51: price, days to make, carbon, STANDARD or ECO; every item has at least two vendors) and `depot_stock` (12 rows). The extra vendors for the pack items are always dearer or slower than the first one, so the demo numbers stay the same; the campaign extras (tote bag, water bottle, roll-up banner, name badge with lanyard, sticker pack) have their own stock and competing vendors. `python scripts/setup_bigquery.py --refresh-reference` loads a newer catalog into an existing dataset (see `docs/FRESH_SETUP.md`).
+The offer catalog is data: `assets` (19 items), `vendors` (12), `vendor_offers` (51: price, days to make, carbon, STANDARD or ECO; every item has at least two vendors) and `depot_stock` (12 rows), `venues` (4), `vendor_date_pricing` (11 bands) and the `suggested_per_person` columns on `assets` and `bundle_templates`. The extra vendors for the pack items are always dearer or slower than the first one, so the demo numbers stay the same; the campaign extras (tote bag, water bottle, roll-up banner, name badge with lanyard, sticker pack) have their own stock and competing vendors. `python scripts/setup_bigquery.py --refresh-reference` loads a newer catalog into an existing dataset (see `docs/FRESH_SETUP.md`).
 
 Full DDL: [`bigquery/schema.sql`](../bigquery/schema.sql) (generated from `launchkit_provisioner/data/schema.py`).
 
@@ -166,6 +166,8 @@ identical to BigQuery.
 | After the orders: the story, vendors and why, why so many orders | `order_summary` (Fulfilment) | `scenario_lines`, `vendor_offers`, `decisions` |
 | Status, board, audit as tables | `status_markdown`, `board_markdown`, `audit_markdown` | views and tables |
 | Launch-team tracking email | `_update_email` (HTML, sent by `send_launch_update`) | the plan |
+
+**Natural conversation:** the user talks freely (*a campaign for 300 people on 31st Oct*); the root reads headcount, date, place, name and picks from their words and asks only for what is missing. Where we deliver comes from the `venues` table (USA, Canada, London, Singapore map to the US, EMEA and APAC regions); the offer shows a suggested amount per headcount (`suggested_per_person`). Vendors price by date (`vendor_date_pricing`: early-bird discounts and rush charges, applied to every plan and purchase order), and the plan ends with the same list priced for other dates so the user can delay or go early to save money.
 
 **Guided questions and advice:** the first question is *whole campaign or selected items?* (both work, the whole campaign is encouraged); the second is the campaign name, because the user is creating the campaign. After the date the assistant shows **what we can offer** (`catalog_markdown`: packs and single items, our stock, best vendor price, ready-by dates against the user's date, a faster option, the eco price) so the user picks instead of describing a list. Every question turn shows a ✅/⬜ checklist (`show_checklist`). Before planning, `advisor.py` checks the shopping list with plain rules (spares from `SPARE_PERCENT`, a kind of bundle that is missing, the rest of a bundle for a single item, a date the vendors cannot meet) and the user adds something or says *Looks good*. The plan opens with a 📌 *In short* box.
 

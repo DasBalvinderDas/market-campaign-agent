@@ -1,6 +1,6 @@
 # Demo run: setup, test prompts and what to expect
 
-This is the guide for running and presenting the LaunchKit Provisioner. **For a ready-to-copy demo of the full cycle (one item, then a campaign), use [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).** Setup and reset commands are in
+This is the guide for running and presenting the LaunchKit Provisioner. **For a ready-to-copy demo of the full cycle (one item, then a campaign for 300 people), use [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).** Setup and reset commands are in
 [`FRESH_SETUP.md`](FRESH_SETUP.md); the design is in [`SOLUTION.md`](SOLUTION.md).
 
 ## 1. At a glance
@@ -55,6 +55,10 @@ Nothing is mocked and nothing is built by hand: re-running a script is safe.
 
 ## 5. Test prompts
 
+> **Two sets of numbers.** The new conversation asks *where* the campaign is (USA, Canada, London or Singapore) and sends every pick to that place, so its numbers are in [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md)
+> (for example $8,923.50 for 300 people in the USA). Cases 1 to 8 below use the original **three-region brief** (kits, folders and stands spread over the USA, Europe and Asia) and its numbers
+> ($37,399.50 and so on); they show the same behaviours.
+
 Use a **new chat** for each case, after `--reset-demo`. Numbers below are for the unchanged demo data. A full request takes about a minute
 in Gemini Enterprise. Every answer is written in simple words, with tables and icons. The assistant asks a few easy questions first.
 
@@ -62,37 +66,28 @@ in Gemini Enterprise. Every answer is written in simple words, with tables and i
 time, you give it a **whole campaign**, and it deals with **many vendors at once**: shopping list, vendor comparison, three choices, the right
 approver, then all the orders together.
 
-### Case 0: say hello, then close on four things
+### Case 0: say hello, or just say what you want
 
 > Hi
 
-**Expected:** a short card: **I can** (shopping list, spot what you may be missing, check our stock, compare vendors, 3 choices, the right OK, place all orders) and
-**🧭 Two ways to start**: 🅰️ plan a **whole campaign** ⭐ (best: more stock to reuse, more vendors, a stronger case for better rates) or 🅱️ buy **selected items** (for a campaign or a quick
-purchase). It ends with the first question: **Do you want to plan a whole campaign, or buy selected items?**
+**Expected:** a short card: **I can** (show where we can deliver, show what we offer, shopping list, spot what you may be missing, compare vendors, find the best date, get the right OK,
+place all orders), **Just talk to me** with an example, and the first question: **Tell me about your campaign: how many people, and on which date?**
 
-Every question turn shows the same small checklist (✅ closed, ⬜ open) and **one** next question:
+You do not have to answer in a fixed order. Say what you have, in your own words; the assistant reads it and asks only for what is missing, one thing at a time, with a small ✅/⬜ table:
 
-| It asks | You say | Checklist after |
+> Hi, I am looking for a campaign for 300 people on 31st Oct.
+
+| Step | The assistant shows | You say |
 |---|---|---|
-| 🧭 Whole campaign or selected items? | `A whole campaign` | ✅ ⬜ ⬜ ⬜ |
-| 🎪 What is your campaign called? (you are creating it) | `Summer Sale Campaign` | ✅ ✅ ⬜ ⬜ |
-| 📅 By what date must everything be in hand? (full date) | `20 December 2026` | ✅ ✅ ✅ ⬜ |
-| 🛒 What would you like from our offer? (the assistant shows **🛍️ What we can offer you**, see below) | `150 VIP guest welcome kits and 300 sales folders` | ✅ ✅ ✅ ✅ |
+| 1 | ✅ people, ✅ date. **📍 Where can we deliver?**: USA, Canada, London, Singapore, with the vendors based there, our warehouse and stock, and how it is served | `USA` |
+| 2 | **What would you like to call your campaign?** | `Summer Sale Campaign` |
+| 3 | **🛍️ What we can offer you**: packs and items, our stock, best prices for your date, ready-by dates, and **💡 for 300 people** (a suggested plan) | `Use the suggested plan` (or your own picks) |
 
-**You pick from what we have; you do not type a list from nothing.** After the date, the assistant shows **🛍️ What we can offer you**:
+Dates are understood the way people say them: `31st Oct`, `31 October 2026`, `Oct 31`, `31/10`. A year that is left out is the next one. Places are `USA`, `Canada` (served from the US), `London`, `Singapore`.
+**Selected items** works the same way: `I need 30 name badges for the USA by 31 Oct.` needs no headcount and no campaign name (it is filed as a *Quick purchase*), and still shows our offer first if you leave something out.
 
-| Part | What it shows |
-|---|---|
-| 🎁 Ready-made packs | guest welcome kit, sales folder pack, venue display stand: what is inside, which parts we already have in stock, the price per pack, the *ready by* date and 🟢 fits / 🟡 tight / 🔴 too late against your date |
-| 🧩 Single items | 12 items (19 SKUs): the pack items plus campaign extras (canvas tote bag, steel water bottle, roll-up banner, name badge with lanyard, sticker pack), every item with at least two vendors. Per item: ♻️ our stock and where (for example 120 Dallas), 💰 best price and 🏭 vendor, 📅 ready by, 🚦 fits your date, ⚡ a faster option if there is one (for example RapidDisplay $1,650, ready sooner), 🌱 the eco price |
-
-Then it says *Pick what you want. Say how many.* Mix packs and items; you can add or remove later (`add 10 venue display stands`, `remove the brochures`). Selected items starts with the item table; a whole campaign starts with the packs.
-
-A new campaign name creates a **new campaign** with the date you give. (The data also has the *Spring Product Launch Event*; use that name and it offers the date on file: say *use that date*.)
-You can skip ahead: `Plan my Summer Sale Campaign, in hand by 20 December 2026: 150 VIP guest welcome kits and 300 sales folders.` answers everything at once.
-
-**Selected items** (the other way in): answer `Selected items`. The assistant asks *Is this for a campaign? Tell me its name, or say no campaign*, says once that planning the
-whole campaign is better (and offers to switch with *plan the whole campaign*), then asks which items, how many and which region. Nothing is refused.
+**Vendors price by date.** Early orders get an early-bird price (5% off at 35+ days, 8% at 45+), a rush costs more (6% at 14 to 20 days, 12% at 7 to 13, 20% under 7), and DisplayCo gives 7% off from 30 days.
+The 21 to 34 day band is the standard price. The offer shows prices for **your** date, and the plan ends with **📅 Could another date save you money?**: the same list on other dates.
 
 ### Case 0b: the assistant spots what you may be missing (business advice)
 

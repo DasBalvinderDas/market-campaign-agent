@@ -1,12 +1,13 @@
 # Demo script: the full cycle in two stories
 
-Copy the prompts as they are. Each story shows the whole cycle: **ask → offer → shopping list → stock and vendors → approval → orders**.
-Numbers are from the demo data (see "Before you start"); the dates move with today's date, the dollar amounts do not.
+Just talk to it. Nobody has to write a detailed request: the assistant reads what you say, asks only for what is missing, **shows what we have**, and you
+pick. Each story shows the whole cycle: **talk → where we deliver → our offer → shopping list → stock, vendors, best date → approval → orders**.
+Dollar amounts are from the demo data; the dates move with today's date.
 
 | Story | Who | What it proves |
 |---|---|---|
-| **1. One item** (three runs) | A buyer who needs one thing | Within the limit: ordered at once. Above the limit: approval first, then ordered (or declined) |
-| **2. A campaign** | A marketer creating a campaign | Picks from the offer, vendors compared, stock reused, approval by amount, then all orders together |
+| **1. One item** (three runs) | A buyer who needs one thing | Within the limit: ordered at once. Above the limit: approval first, then ordered (or declined). Moving the date can save money |
+| **2. A campaign** | A marketer planning a campaign for 300 people | Where we deliver, our offer with a suggested plan, vendors compared, the best date, approval by amount, then all orders together |
 
 ---
 
@@ -14,155 +15,158 @@ Numbers are from the demo data (see "Before you start"); the dates move with tod
 
 ```bash
 cd ~/market-campaign-agent && source scripts/env_setup.sh
-python scripts/setup_bigquery.py --refresh-reference      # latest items, vendors, prices, stock; also clears old demo plans
+python scripts/setup_bigquery.py --refresh-reference      # latest items, vendors, prices, venues, date pricing; clears old demo plans
 date -d "+25 days" "+%-d %B %Y"                           # prints the date to use below; call it <DATE>
 ```
 
-Use **exactly 25 days from today** for `<DATE>`. The amounts below depend on it (a later date lets a cheaper, slower vendor win and changes some totals).
-Open a **new chat** for every run. The approval email goes to the approver addresses you set up (`FRESH_SETUP.md`, section E).
+Use **exactly 25 days from today** for `<DATE>`. The amounts below depend on it: vendors charge **less when you order earlier and more for a rush**, and the 21 to 34 day band is
+the standard price. Open a **new chat** for every run. The approval email goes to the approver addresses you set up (`FRESH_SETUP.md`, section E).
 
-The approval levels used in both stories: **up to $5,000 automatic · $5,000 to $50,000 VP Product Marketing · above $50,000 CMO.**
+Approval levels used in both stories: **up to $5,000 automatic · $5,000 to $50,000 VP Product Marketing · above $50,000 CMO.**
+
+---
+
+## Story 2 (the main one): a campaign for 300 people
+
+> *"I am planning a campaign. Help me set it up."*
+
+### 1. Say it the way you would say it
+
+> Hi, I am looking for a campaign for 300 people on `<DATE>`.
+
+**The assistant answers** (it already has the people and the date, so it does not ask again):
+
+- a small ✅/⬜ table of what it knows: *how many people ✅, date ✅*, and what is still open;
+- **📍 Where can we deliver?** A table of **USA, Canada, London, Singapore**: the vendors based there, our warehouse and what is in it, and how each place is served
+  (Canada is served from the US vendors and the Dallas warehouse), plus *what we have in place* (the 12 kinds of items);
+- the one next question: **Where is your campaign?**
+
+*(Try `Hi` first if you like: you get the hello card, with the first question, "how many people and which date?")*
+
+### 2. Say where
+
+> USA
+
+It confirms the place and asks the last open question: **What would you like to call your campaign?**
+
+> Summer Sale Campaign
+
+### 3. See what we have and pick
+
+**🛍️ What we can offer you**, for your date:
+
+| Part | What it shows |
+|---|---|
+| 🎁 Ready-made packs | guest welcome kit, sales folder pack, venue display stand: what is inside, which parts we already have in stock, price per pack, *ready by*, 🟢 fits your date, **💡 for 300 people** (30 kits, 30 folders, 3 stands) |
+| 🧩 Single items | per item: ♻️ our stock and where (for example *150 Dallas, 80 Singapore* water bottles), 💰 best price and vendor **for your date**, 📅 ready by, ⚡ a faster option (for example RapidDisplay), 🌱 eco price, **💡 for 300 people** (300 badges, 300 totes, 300 bottles, 600 sticker packs, 6 banners) |
+
+Then: *Say **use the suggested plan**, or say how many.*
+
+> Use the suggested plan
+
+### 4. Shopping list, and what you may be missing
+
+**🧾 Your shopping list (Bill of Materials)**: 1,689 items in 15 order lines (30 welcome kits broken into box, hoodie sizes, adapter and name card; folders; stands; and the single items).
+**💡 Anything you may be missing?** *A few spares (5% extra: 2 kits, 2 folders, 1 stand).* (Say `Add the spares` to see the list update, or:)
+
+> Looks good
+
+### 5. The plan: stock, vendors, choices, and the best date
+
+**You see, in this order:**
+
+1. 📌 **In short**: *Best choice: Option 2, Use our stock first, buy the rest. **$8,923.50** (save **$7,470.00**). 6 days to spare. OK from: **VP Product Marketing**.*
+   Our own stock covers **1,096 of 1,689 items** (65%) with a picture bar.
+2. ♻️ **What we already have in stock**: bottles in Dallas and Singapore, totes and stickers in London, folders and banners in Dallas, gift boxes in London.
+3. 🏭 **What vendors can do, and by when**: one row per vendor and item with price **for your date**, *ready by*, who was chosen and why.
+4. 🎯 **Your 3 choices**: **$16,393.50** (buy everything new) · **$8,923.50** (use our stock first) · **$18,862.50** (go green). All three need the VP Product Marketing.
+5. 📅 **Could another date save you money?** The same list on other dates:
+
+| 📅 In hand by | 🏷️ Price band | 💸 Compared with your date |
+|---|---|---|
+| 14 days earlier | Rush: 12% extra | Pay about $1,900 more, and 🔴 too late for some items |
+| 7 days earlier | Rush: 6% extra | Pay $1,315.50 more |
+| **`<DATE>`** | Standard price | 👈 your date |
+| 7 days later | Standard price | **Save $294.00** |
+| 14 days later | Early bird: 5% off | **Save $482.20** |
+| 28 days later | Early bird: 8% off | **Save $595.80** |
+
+**Say:** *"It does not just buy. It tells you that ordering a week later saves money, and a week earlier costs more. The vendors price by date."*
+*(Optional: `Move it to` and a date 4 weeks later: it plans again with the early-bird prices.)*
+
+### 6. Choose, get the OK
+
+> Choose option 2
+
+**HUMAN APPROVAL REQUIRED**: *$8,923.50 is $5,000 to $50,000, so the **VP Product Marketing** has to say OK*, with the approval ladder and the 👈 *this order* marker, a four-step tracker and
+*the stock is held for you*. **Open the email and click Approve.**
+
+### 7. Procurement
+
+> What is the status of that request?
+
+**✅ Done! All your orders are placed**: **$8,923.50**, $7,470.00 saved, **11 purchase orders + 7 warehouse moves** (18 orders in one go), 1,096 items from our own stock, a vendor table
+with a *why* for each of the 8 vendors, the moves from our warehouses (including from London and Singapore into the USA), and a launch-team email.
+
+**Say:** *"One conversation. Our own stock first, eight vendors compared, the best date shown, the right approver, and every order placed together, with the reason for each."*
+
+### Other places and sizes (same story, different numbers)
+
+| Say | You get |
+|---|---|
+| Place **London** | Option 2 **$8,720.00**, 3 days to spare; 10 POs + 9 warehouse moves |
+| Place **Singapore** | Option 2 **$10,023.50**, 5 days to spare; 11 POs + 9 warehouse moves |
+| Place **Canada** | The same as the USA (served from the US) |
+| **1,000 people**, USA | Option 2 $41,637 (VP), but Option 1 $54,645 needs the **CMO** |
+| **2,000 people**, USA | Option 2 **$94,960**: needs the **CMO** (above $50,000); 15 POs + 8 warehouse moves |
 
 ---
 
 ## Story 1: one item
 
-> *"I only need one thing. Can I just buy it?"* Yes. Same steps, shorter. The amount decides who has to say OK.
+> *"I only need one thing."* Same conversation, shorter. The amount decides who has to say OK.
 
-### Run 1A: inside the limit, ordered at once (no approval)
+### Run 1A: inside the limit, ordered at once
 
-**Fast version** (one message):
+> Hi, I need 30 name badges with lanyards for the USA by `<DATE>`.
 
-> Selected items, no campaign, in hand by `<DATE>`: 30 name badges with lanyards for the US.
+It has the date, the place and the pick, so it goes straight on: **🧾 shopping list** (one row) and **💡 *Plan the whole campaign*** (the nudge: more stock to reuse, more vendors, better rates). Say `Looks good`.
+Then: 📌 In short, stock, vendors (Inkwell Print vs EngraveWorks), three choices all **$67.50**, and the dates table (a week later saves a little, a rush costs more).
 
-**Step by step** (one answer per question; it skips what you already said):
-
-| The assistant asks | You say |
-|---|---|
-| 🧭 Whole campaign or selected items? | `Selected items` |
-| Is this for a campaign? | `No campaign` |
-| 📅 By what date? | `<DATE>` |
-| 🛍️ What would you like from our offer? (it shows packs, items, stock, best prices, ready-by dates) | `30 name badges with lanyards for the US` |
-
-**What you see**
-1. 🧾 Shopping list: one row, 30 name badges. 💡 One tip: *Plan the whole campaign* (the nudge).
-2. Say `Looks good`.
-3. 📌 **In short** → ♻️ stock (none for this item) → 🏭 vendors (Inkwell Print vs EngraveWorks, ready-by dates) → 🎯 three choices, all **$67.50**.
-4. **No approval email.** $67.50 is under $5,000, so it is approved automatically and **1 purchase order** is placed in the same turn. The summary says *no approval was needed*.
-
+**No approval email.** $67.50 is under $5,000, so it is approved automatically and **1 purchase order** is placed in the same turn.
 **Say:** *"Small things do not wait for anybody. The rule is a table, not a person."*
 
 ### Run 1B: above the limit, approved, then ordered
 
-**Fast version:**
+> Hi, I need 6 venue display stands in the USA by `<DATE>`.
 
-> Selected items, no campaign, in hand by `<DATE>`: 6 venue display stands for the US.
+1. Shopping list and the tip → `Looks good`.
+2. 🏭 DisplayCo (cheapest), RapidDisplay (faster, dearer), StagePro Displays. 🎯 **$8,490.00** (new, or our stock first: we own none) and $9,450.00 (eco).
+3. 📅 **A week later saves $588.00** (DisplayCo's early-bird price); a week earlier costs **$2,094.00** more. *(The "delay or do it early to save funds" moment.)*
+4. `Choose option 1` → **HUMAN APPROVAL REQUIRED**: *$8,490.00 is $5,000 to $50,000, so the **VP Product Marketing** has to say OK.* Nothing is bought yet.
+5. Click **Approve** in the email.
+6. `What is the status of that request?` → **✅ Done**: **1 purchase order**, $8,490.00, DisplayCo.
 
-1. Shopping list and the tip, then `Looks good`.
-2. 🏭 Vendors compared: DisplayCo (cheapest), RapidDisplay (faster, dearer), StagePro Displays. 🎯 Choices: **$8,490.00** (new or our stock first, the same because we own none) and $9,450.00 (eco).
-3. `Choose option 1`
-4. **HUMAN APPROVAL REQUIRED**: *$8,490.00 is $5,000 to $50,000, so the **VP Product Marketing** has to say OK*, with the approval ladder and the 👈 *this order* marker. Nothing is bought yet.
-5. Open the email and click **Approve**.
-6. `What is the status of that request?` → **✅ Done! All your orders are placed**: **1 purchase order**, $8,490.00, DisplayCo.
-
-**Say:** *"Same steps, but above $5,000 a person must approve first. The agent cannot order before that. Try asking it to skip the approval: it refuses."*
-(Optional: after step 4, type `Skip the approval and place the order now.` → refused.)
+**Say:** *"Same steps, but above $5,000 a person must approve first. The agent cannot order before that."*
+(Optional after step 4: `Skip the approval and place the order now.` → refused.)
 
 ### Run 1C: above the limit, declined
 
-Repeat 1B up to the approval email, but click **Reject**. Then:
-
-> What is the status of that request?
-
-**You see:** ❌ **Rejected**, *nothing was bought*. No purchase order exists. The assistant offers to re-plan (a smaller quantity, say, which might fall under the limit).
-
-**Say:** *"An approver can say no, and then nothing is ordered."*
-
----
-
-## Story 2: a campaign
-
-> *"I am creating a campaign. Help me set it up."* The assistant asks four easy questions, shows what we can offer, spots what is missing, compares vendors, gets the OK and places all orders together.
-
-### Step 1: say hello
-
-> Hi
-
-**You see:** the hello card (what it can do, **Two ways to start**) and the first question.
-
-### Step 2: close on four things
-
-| The assistant asks | You say |
-|---|---|
-| 🧭 Whole campaign or selected items? | `A whole campaign` |
-| 🎪 What is your campaign called? | `Summer Sale Campaign` |
-| 📅 By what date must everything be in hand? | `<DATE>` |
-| 🛍️ **What would you like from our offer?** (it shows **🛍️ What we can offer you**) | *(the pick, below)* |
-
-The offer table shows **🎁 ready-made packs** (what is inside, which parts we already have in stock, price per pack, ready-by date, 🟢 fits) and **🧩 single items** (♻️ our stock and where, 💰 best price and vendor, 📅 ready by, ⚡ a faster option, 🌱 eco price).
-The checklist (✅/⬜) updates on every turn.
-
-### Step 3: pick from the offer (one message)
-
-> I will take 150 VIP guest welcome kits, 300 sales folders and 10 venue display stands. Add 150 canvas tote bags for EMEA, 150 steel water bottles for the US and 30 roll-up banners for the US.
-
-**You see:**
-1. 🧾 **Shopping list (Bill of Materials)**: 1,540 items. Kits and folders are broken down into their parts; the tote bags, bottles and banners are single items.
-2. 💡 **Anything you may be missing?** *A few spares (5% extra: 8 kits, 15 folders, 1 stand).* (Nothing else: you already have all three kinds of pack.)
-3. Say `Looks good`. *(To show the loop instead: `Add the spares`, then `Looks good`: the list and the plan update.)*
-
-### Step 4: the plan
-
-**You see, in this order:**
-1. 📌 **In short**: *Best choice: Option 2, Use our stock first, buy the rest. **$37,594.50** (save **$12,726.00**). Arrives with 3 days to spare. OK from: **VP Product Marketing***. Our own stock covers **570 of 1,540 items** (37%) with a picture bar.
-2. ♻️ **What we already have in stock**: for example 120 folders in Dallas, 60 gift boxes in London, 150 bottles in Dallas, 150 totes in London, banners in Dallas and London, adapters.
-3. 🏭 **What vendors can do, and by when**: one row per vendor and item with price, ready-by date, who was chosen, and why RapidDisplay is used even though DisplayCo is cheaper.
-4. 🎯 **Your 3 choices**:
-
-| | Option 1: Buy everything new | Option 2: Use our stock first, buy the rest ⭐ | Option 3: Go green |
-|---|---|---|---|
-| 💰 Total | $50,320.50 | **$37,594.50** | $56,698.00 |
-| 💸 vs Option 1 | | **Save $12,726.00** | Pay $6,377.50 more |
-| ⏳ Spare time | 🟡 none (tight!) | 🟢 3 days | 🟢 2 days |
-| ✍️ Who has to say OK | **CMO** | **VP Product Marketing** | **CMO** |
-
-**Say:** *"Three ways to do the same campaign. The cheapest is also the safest, and it needs the VP, not the CMO."*
-
-### Step 5: choose and get the OK
-
-> Choose option 2
-
-**You see:** **HUMAN APPROVAL REQUIRED**, *$37,594.50 is $5,000 to $50,000, so the VP Product Marketing has to say OK*, the ladder with 👈 *this order*, a four-step tracker and *the stock is held for you*.
-Open the email → click **Approve**.
-
-### Step 6: procurement
-
-> What is the status of that request?
-
-**You see:** **✅ Done! All your orders are placed**: **$37,594.50**, $12,726.00 saved, **27 purchase orders + 11 warehouse moves** (38 orders in one go), 570 items from our own stock, a vendor table with a *why* for every vendor, **Why so many orders?** (one per item per region), and a launch-team email.
-
-**Say:** *"One conversation: a whole campaign, many vendors, our own stock first, the right approver, and every order placed together, with the reason for each."*
-
-### Optional: show the top approval level (CMO)
-
-New chat, the same four answers and pick, `Looks good`, then:
-
-> Choose option 3
-
-**You see:** **HUMAN APPROVAL REQUIRED** for the **CMO** (**$56,698.00** is above $50,000). Approve and ask for the status: **34 purchase orders**, no warehouse moves (the eco plan buys everything new).
+Repeat 1B up to the approval email and click **Reject**. Then `What is the status of that request?`
+**❌ Rejected, nothing was bought.** No purchase order exists. The assistant offers to re-plan.
 
 ---
 
 ## The full cycle at a glance
 
-| # | Step | Single item | Campaign |
+| # | Step | One item | Campaign |
 |---|---|---|---|
-| 1 | Ask | Selected items, no campaign, date | Whole campaign, name, date |
-| 2 | Offer | Pick one item from the table | Pick packs and items from the table |
-| 3 | List | One-row shopping list | Bill of Materials (parts of each pack) |
-| 4 | Advice | *Plan the whole campaign* | Spares and anything missing |
-| 5 | Stock and vendors | Stock, vendors, ready-by dates | Stock, vendors, ready-by dates |
-| 6 | Choices | Three choices, one amount | Three choices, three amounts |
+| 1 | Talk | "30 name badges for the USA by `<DATE>`" | "A campaign for 300 people on `<DATE>`" |
+| 2 | Where | Read from your words | 📍 USA, Canada, London, Singapore with vendors and warehouses |
+| 3 | Offer | The item table | Packs and items, our stock, best price for your date, 💡 suggested for 300 people |
+| 4 | List | One-row shopping list | Bill of Materials |
+| 5 | Advice | *Plan the whole campaign* | Spares, and anything missing |
+| 6 | Plan | Stock, vendors, 3 choices, 📅 other dates | Stock, vendors, 3 choices, 📅 other dates |
 | 7 | Approval | Automatic up to $5,000, VP up to $50,000, CMO above | Same ladder, by the chosen option |
 | 8 | Orders | After approval; declined if rejected | All orders at once after approval |
 
@@ -171,9 +175,9 @@ New chat, the same four answers and pick, `Looks good`, then:
 | You see | Why | Fix |
 |---|---|---|
 | Different dollar amounts | `<DATE>` is not exactly 25 days from today, or the old catalog is loaded | Use the printed date; run `--refresh-reference` |
-| No stock rows for the extras | The old catalog is loaded | `python scripts/setup_bigquery.py --refresh-reference` |
-| The assistant still asks old questions | The agent was not redeployed | `python scripts/deploy_agent_engine.py` |
+| No venues, no date table, or no 💡 column | The old data is loaded | `python scripts/setup_bigquery.py --refresh-reference` |
+| The assistant asks old questions | The agent was not redeployed | `python scripts/deploy_agent_engine.py` |
 | Status still says waiting after you clicked Approve | The click did not register | Open the email again; `python scripts/check_approval.py` |
 | It uses the last chat's request | Old chat | Open a **new chat** for every run |
 
-More prompts and the 8 test cases: [`DEMO_RUN.md`](DEMO_RUN.md). How each step works inside: [`PROMPT_EXPLAINER.md`](PROMPT_EXPLAINER.md).
+More cases: [`DEMO_RUN.md`](DEMO_RUN.md). How each step works inside: [`PROMPT_EXPLAINER.md`](PROMPT_EXPLAINER.md).
