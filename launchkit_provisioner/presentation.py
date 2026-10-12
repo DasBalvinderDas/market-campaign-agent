@@ -338,9 +338,10 @@ def _pattern(sku_pattern: str):
 
 
 def bom_markdown(repo, request_id: str) -> str:
-    """The Bill of Materials: what goes into each bundle, how many in total, and where it goes."""
+    """The Bill of Materials, short: one row per pack (with what is inside) and one row per single item."""
     lines = repo.get_requirement_lines(request_id)
     assets = {a["sku"]: a for a in repo.list_assets()}
+    regions = sorted({ln["region"] for ln in lines})
     rows, total_items = [], 0
     for btype in dict.fromkeys(ln["bundle_type"] for ln in lines):
         blines = [ln for ln in lines if ln["bundle_type"] == btype]
@@ -348,40 +349,34 @@ def bom_markdown(repo, request_id: str) -> str:
             for sku in dict.fromkeys(ln["sku"] for ln in blines):
                 hit = [ln for ln in blines if ln["sku"] == sku]
                 qty = sum(ln["quantity"] for ln in hit)
-                rows.append(("**Single items**" if not any(r[0] for r in rows if r[0].startswith("**Single")) else "",
-                             assets[sku]["name"], "-", qty,
-                             " · ".join(f"{k} {v}" for k, v in _sum_by(hit, lambda ln: ln["region"]))))
+                rows.append((assets[sku]["name"], f"{qty:,}", "", _sum_by(hit, lambda ln: ln["region"])))
                 total_items += qty
             continue
-        templates = repo.get_bundle_templates(btype)
-        first = True
-        count = None
-        for t in templates:
-            rx = _pattern(t["sku_pattern"])
-            hit = [ln for ln in blines if rx.match(ln["sku"])]
+        inside, count, first_desc, split = [], None, "", []
+        for t in repo.get_bundle_templates(btype):
+            hit = [ln for ln in blines if _pattern(t["sku_pattern"]).match(ln["sku"])]
             if not hit:
                 continue
             qty = sum(ln["quantity"] for ln in hit)
-            if count is None:
-                count = qty // max(int(t["qty_per_bundle"]), 1)
-            if t["split_by"] == "SIZE":
-                split = " · ".join(f"{k} {v}" for k, v in _sum_by(hit, lambda ln: ln["sku"].rsplit("-", 1)[1]))
-            elif t["split_by"] == "PLUG":
-                split = " · ".join(f"{k} {v}" for k, v in _sum_by(hit, lambda ln: ln["sku"][4:]))
-            else:
-                split = " · ".join(f"{k} {v}" for k, v in _sum_by(hit, lambda ln: ln["region"]))
-            asset = assets[hit[0]["sku"]]
-            rows.append((t["description"] if first else "", _group_label(t, asset), int(t["qty_per_bundle"]), qty, split))
             total_items += qty
-            first = False
-        if rows and count is not None:
-            idx = next(i for i in range(len(rows) - 1, -1, -1) if rows[i][0])
-            rows[idx] = (f"**{rows[idx][0]}** ({count} {_UNITS.get(btype, 'bundles')})",) + rows[idx][1:]
-    out = ["### 🧾 Step 1: Your shopping list (Bill of Materials)",
-           "Everything you need, worked out from what you told me.", "",
-           "| 🎁 Bundle | 🧩 Item | Per bundle | Total needed | 🌍 Where it goes |", "|---|---|---|---|---|"]
-    out += [f"| {b} | {i} | {p} | **{q:,}** | {s} |" for b, i, p, q, s in rows]
-    out += ["", f"📦 **{total_items:,} items in total**, in {plural(len(lines), 'order line')} (one per item and region)."]
+            if count is None:
+                count, first_desc = qty // max(int(t["qty_per_bundle"]), 1), t["description"]
+                split = _sum_by(hit, lambda ln: ln["region"])
+            label = _group_label(t, assets[hit[0]["sku"]])
+            if t["split_by"] == "SIZE":
+                label += f" ({plural(len({ln['sku'] for ln in hit}), 'size')})"
+            elif t["split_by"] == "PLUG":
+                label += f" ({plural(len({ln['sku'] for ln in hit}), 'plug type')})"
+            inside.append(label)
+        if count is not None:
+            rows.append((f"**{first_desc}**", f"{count:,} {_UNITS.get(btype, 'bundles')}", " · ".join(inside), split))
+    where = len(regions) > 1
+    out = ["### 🧾 Step 1: Your shopping list (Bill of Materials)", "",
+           "| 🎁 What | 🔢 How many | 🧩 What is inside |" + (" 🌍 Where |" if where else ""),
+           "|---|---|---|" + ("---|" if where else "")]
+    for name, qty, inside, split in rows:
+        out.append(f"| {name} | **{qty}** | {inside or '-'} |" + (f" {' · '.join(f'{k} {v}' for k, v in split)} |" if where else ""))
+    out += ["", f"📦 **{total_items:,} items** in total."]
     return "\n".join(out)
 
 
@@ -467,56 +462,74 @@ def stock_report(repo, request_id: str) -> str:
             used_units[k] = used_units.get(k, 0) + ln["quantity"]
     agg: dict = {}
     for d in depot:
-        a = agg.setdefault((_item_label(assets, d["sku"]), d["depot_name"]), [0, 0])
-        a[0] += int(d["free"])
-        a[1] += used_units.get((d["depot_id"], d["sku"]), 0)
-    out += ["| 🧩 Item | 🏢 Warehouse | Free units | Used in the best choice |", "|---|---|---|---|"]
-    out += [f"| {item} | {wh} | {free} | {used} |" for (item, wh), (free, used) in agg.items()]
+        a = agg.setdefault(_item_label(assets, d["sku"]), {"free": 0, "used": 0, "where": {}})
+        a["free"] += int(d["free"])
+        a["used"] += used_units.get((d["depot_id"], d["sku"]), 0)
+        short = d["depot_name"].split(" ")[0]
+        a["where"][short] = a["where"].get(short, 0) + int(d["free"])
+    out += ["| 🧩 Item | ♻️ We have | 🏢 Where | ✅ Used in the best choice |", "|---|---|---|---|"]
+    out += [f"| {item} | {a['free']:,} | {', '.join(f'{p} {n:,}' for p, n in a['where'].items())} | **{a['used']:,}** |"
+            for item, a in agg.items()]
     return "\n".join(out)
 
 
 def vendor_report(repo, request_id: str, today: date | None = None) -> str:
-    """Which vendors were compared for each item, what we saw, when each can be ready, and who was picked."""
+    """Which vendors were compared for each item and who was picked: one short row per item."""
     today = today or date.today()
     req = repo.get_request(request_id)
     deadline = repo.get_launch(req["launch_id"])["in_hand_by"]
+    window = (deadline - today).days
+    rules = repo.list_date_pricing()
     lines = repo.get_requirement_lines(request_id)
     needed = {ln["sku"] for ln in lines}
     assets = {a["sku"]: a for a in repo.list_assets()}
     offers = [o for o in repo.list_vendor_offers_all() if o["sku"] in needed]
+    vendors = {v["vendor_id"]: v["vendor_name"] for v in repo.list_vendors()}
     _best, plan = _best_plan(repo, request_id)
-    picked_vendor = {(ln["sku"], ln["source_id"]) for ln in plan if ln["source_type"] == "VENDOR"}
+
+    def price(o):
+        return float(o["unit_price"]) * price_factor(rules, o["vendor_id"], window)[0]
+
     groups: dict = {}
     for o in offers:
-        groups.setdefault(_item_label(assets, o["sku"]), {}).setdefault(o["vendor_id"], []).append(o)
-
-    def ready(o):
-        d = today + timedelta(days=int(o["lead_days"]) + int(o["delay_days"]))
-        return f"{day(d)}{' 🔴' if d > deadline else ''}"
-
-    out = ["### 🏭 Step 3: What vendors can do, and by when",
-           f"We looked at **{len({o['vendor_id'] for o in offers})} vendors** and **{len(offers)} price offers** "
-           f"for the {len(groups)} different items. Shipping time to each region comes on top of *ready by*. "
-           f"Deadline: **{day(deadline)}**.", "",
-           "| 🧩 Item | 🏭 Vendor | 💰 Price each (normal / eco) | 📅 Ready by (normal / eco) | Result |",
-           "|---|---|---|---|---|"]
-    notes = []
-    for item, vendors in groups.items():
-        std_price = lambda v: min((float(x["unit_price"]) for x in vendors[v] if x["variant"] == "STANDARD"), default=1e9)
-        cheapest = min(vendors, key=std_price)
-        for vid, offs in vendors.items():
-            std = next((x for x in offs if x["variant"] == "STANDARD"), None)
-            eco = next((x for x in offs if x["variant"] == "ECO"), None)
-            name = offs[0]["vendor_name"]
-            delay = max(int(x["delay_days"]) for x in offs)
-            price = " / ".join([money(std["unit_price"]) if std else "-", money(eco["unit_price"]) if eco else "-"])
-            when = " / ".join([ready(std) if std else "-", ready(eco) if eco else "-"])
-            used = any((o["sku"], vid) in picked_vendor for o in offs)
-            result = ("✅ Chosen" if used else "➖ Not needed") + (f" · ⚠️ running {delay} days late" if delay else "")
-            out.append(f"| {item} | {name} | {price} | {when} | {result} |")
-            if used and vid != cheapest and len(vendors) > 1:
-                notes.append(f"🧠 **{item}**: we used {name} for some orders even though {vendors[cheapest][0]['vendor_name']} is "
-                             f"cheaper, because {name} is ready sooner and the cheaper one would not arrive in time.")
+        groups.setdefault(_item_label(assets, o["sku"]), []).append(o)
+    chosen: dict = {}
+    for ln in plan:
+        if ln["source_type"] == "VENDOR":
+            chosen.setdefault(_item_label(assets, ln["sku"]), {}).setdefault(ln["source_id"], 0)
+            chosen[_item_label(assets, ln["sku"])][ln["source_id"]] += ln["quantity"]
+    n_vendors = len({o["vendor_id"] for o in offers})
+    out = ["### 🏭 Step 3: Vendors we compared",
+           f"We compared **{n_vendors} vendors** and **{len(offers)} price offers** for your {len(groups)} items. "
+           f"Prices are per unit for your date (**{day(deadline)}**).", "",
+           "| 🧩 Item | ✅ Chosen vendor | 💰 Price | 📅 Ready by | 🔍 Compared | 🥈 Next best |", "|---|---|---|---|---|---|"]
+    notes, late = [], set()
+    for item, offs in groups.items():
+        for o in offs:
+            if int(o["delay_days"]):
+                late.add((o["vendor_name"], int(o["delay_days"])))
+        picked = chosen.get(item, {})
+        std = [o for o in offs if o["variant"] == "STANDARD"] or offs
+        by_vendor = {}
+        for o in std:
+            cur = by_vendor.get(o["vendor_id"])
+            if cur is None or price(o) < price(cur):
+                by_vendor[o["vendor_id"]] = o
+        if picked:
+            top = max(picked, key=picked.get)
+            o = by_vendor.get(top) or next(x for x in offs if x["vendor_id"] == top)
+            names = " + ".join(vendors.get(v, v) for v in sorted(picked, key=picked.get, reverse=True)[:2])
+            rest = [x for v, x in by_vendor.items() if v not in picked]
+            nxt = min(rest, key=price) if rest else None
+            out.append(f"| {item} | **{names}** | {money(price(o))} | {day(today + timedelta(days=int(o['lead_days']) + int(o['delay_days'])))} | "
+                       f"{plural(len(by_vendor), 'vendor')} | {(nxt['vendor_name'] + ' ' + money(price(nxt))) if nxt else '-'} |")
+            cheapest = min(by_vendor.values(), key=price)
+            if cheapest["vendor_id"] not in picked and len(by_vendor) > 1:
+                notes.append(f"🧠 **{item}**: {names} is used because {cheapest['vendor_name']} is cheaper but would not arrive in time.")
+        else:
+            out.append(f"| {item} | ♻️ **Our own stock** | - | - | {plural(len(by_vendor), 'vendor')} | no need to buy |")
+    for name, days in sorted(late):
+        notes.append(f"⚠️ **{name}** is running **{days} days late**.")
     return "\n".join(out + ([""] + notes if notes else []))
 
 
@@ -571,8 +584,8 @@ def _why(ln: dict, offers: list[dict], eco_plan: bool) -> str:
         return "🌱 eco-friendly option"
     cheaper_slow = [o for o in alts if float(o["unit_price"]) < float(ln["unit_price"])]
     if cheaper_slow:
-        return "⚡ fastest way to make the date (a cheaper vendor was too slow)"
-    return "💰 lowest price that arrives on time"
+        return "⚡ cheaper vendors were too slow"
+    return "💰 cheapest that arrives on time"
 
 
 def bar(pct: float, width: int = 10) -> str:
@@ -659,17 +672,18 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
            f"2. 🏭 We compared vendors and bought from **{len(by_vendor)}** of them." if len(by_vendor) != 1 else "2. 🏭 We compared vendors and picked the best one.",
            f"3. ♻️ We took **{own:,} items from our own stock** {bar(100 * own / items) if items else ''}, so we did not buy them twice.",
            f"4. ✍️ {approval}", "", "### 🏭 Who we bought from, and why", "",
-           "| 🏭 Vendor | 🧩 What | 🧾 Orders | 📦 Items | 💵 Amount | 🧠 Why |", "|---|---|---|---|---|---|"]
+           "| 🏭 Vendor | 🧩 What | 💵 Amount | 🧠 Why |", "|---|---|---|---|"]
     for vid, v in sorted(by_vendor.items(), key=lambda kv: -kv[1]["amount"]):
-        out.append(f"| {vendors.get(vid, vid)} | {item_names(v['skus'])} | {v['orders']} | {v['units']:,} | "
-                   f"{money(v['amount'])} | {' · '.join(sorted(v['why']))} |")
+        out.append(f"| {vendors.get(vid, vid)} | {item_names(v['skus'])} ({v['units']:,}) | {money(v['amount'])} | "
+                   f"{' · '.join(sorted(v['why']))} |")
     if dlines:
         agg: dict = {}
         for ln in dlines:
-            k = (depots.get(ln["source_id"], ln["source_id"]), _item_label(assets, ln["sku"]), ln["region"])
-            agg[k] = agg.get(k, 0) + ln["quantity"]
-        out += ["", "### ♻️ From our own warehouses", "", "| 🏢 From | 🧩 What | 📦 Items | 🌍 To |", "|---|---|---|---|"]
-        out += [f"| {w} | {i} | {q} | {r} |" for (w, i, r), q in agg.items()]
+            w = depots.get(ln["source_id"], ln["source_id"]).split(" ")[0]
+            agg.setdefault(w, {})
+            agg[w][_item_label(assets, ln["sku"])] = agg[w].get(_item_label(assets, ln["sku"]), 0) + ln["quantity"]
+        out += ["", "♻️ **From our own warehouses** (" + plural(len(dlines), "move") + "): "
+                + " · ".join(f"**{w}**: " + ", ".join(f"{i} {q:,}" for i, q in items_.items()) for w, items_ in agg.items())]
     if len(vlines) + len(dlines) > 3:
         out += ["", f"❓ **Why so many orders?** One order per item per region: **{len(vlines)} + {len(dlines)}**, all placed together."]
     if update_sent_to:

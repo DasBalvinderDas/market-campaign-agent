@@ -151,9 +151,9 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 > | Product brochure | - | $3.00 | PrintCo | 18 Oct 2026 | 🟢 fits | - | $3.50 | - |
 > | Canvas tote bag | 200 London | $6.50 | Threadly Apparel | 22 Oct 2026 | 🟢 fits | GiftCraft Packaging $7.20, 20 Oct 2026 | $8.00 | 300 |
 > | Steel water bottle | 150 Dallas, 80 Singapore | $8.50 | GiftCraft Packaging | 21 Oct 2026 | 🟢 fits | - | $11.00 | 300 |
-> | Roll-up banner | 25 Dallas, 10 London | $48.00 | PrintCo | 21 Oct 2026 | 🟢 fits | Inkwell Print $55.00, 18 Oct 2026 | - | 6 |
+> | Roll-up banner | 25 Dallas, 10 London | $48.00 | PrintCo | 21 Oct 2026 | 🟢 fits | Inkwell Print $55.00, 18 Oct 2026 | - | - |
 > | Name badge with lanyard | - | $2.20 | Inkwell Print | 16 Oct 2026 | 🟢 fits | - | - | 300 |
-> | Sticker pack | 1000 London | $0.80 | PrintCo | 17 Oct 2026 | 🟢 fits | Inkwell Print $0.90, 16 Oct 2026 | $1.10 | 600 |
+> | Sticker pack | 1000 London | $0.80 | PrintCo | 17 Oct 2026 | 🟢 fits | Inkwell Print $0.90, 16 Oct 2026 | $1.10 | - |
 >
 > 👉 **Pick what you want.** Say **use the suggested plan**, or say how many, for example *150 VIP guest welcome kits* or *5 venue display stands*. You can mix packs and items. I will show your shopping list and tell you what you may be missing.
 
@@ -164,24 +164,17 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 **🤖 The assistant shows:**
 
 > ### 🧾 Step 1: Your shopping list (Bill of Materials)
-> Everything you need, worked out from what you told me.
 >
-> | 🎁 Bundle | 🧩 Item | Per bundle | Total needed | 🌍 Where it goes |
-> |---|---|---|---|---|
-> | **VIP guest welcome kit** (30 kits) | Black gift box | 1 | **30** | US 30 |
-> |  | Event hoodie | 1 | **30** | L 12 · M 9 · S 4 · XL 5 |
-> |  | Power adapter | 1 | **30** | US-A 30 |
-> |  | Engraved name card | 1 | **30** | US 30 |
-> | **Sales team folder pack** (30 folders) | Leather sales folder | 1 | **30** | US 30 |
-> |  | Product brochure | 1 | **30** | US 30 |
-> | **Venue display stand** (3 stands) | Venue display stand | 1 | **3** | US 3 |
-> | **Single items** | Name badge with lanyard | - | **300** | US 300 |
-> |  | Roll-up banner | - | **6** | US 6 |
-> |  | Steel water bottle | - | **300** | US 300 |
-> |  | Sticker pack | - | **600** | US 600 |
-> |  | Canvas tote bag | - | **300** | US 300 |
+> | 🎁 What | 🔢 How many | 🧩 What is inside |
+> |---|---|---|
+> | **VIP guest welcome kit** | **30 kits** | Black gift box · Event hoodie (4 sizes) · Power adapter (1 plug type) · Engraved name card |
+> | **Sales team folder pack** | **30 folders** | Leather sales folder · Product brochure |
+> | **Venue display stand** | **3 stands** | Venue display stand |
+> | Name badge with lanyard | **300** | - |
+> | Steel water bottle | **300** | - |
+> | Canvas tote bag | **300** | - |
 >
-> 📦 **1,689 items in total**, in 15 order lines (one per item and region).
+> 📦 **1,083 items** in total.
 >
 > ### 💡 Step 1b: Anything you may be missing?
 >
@@ -199,58 +192,39 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 
 > ### 📌 In short
 > > 🎯 **Best choice: Option 2, Use our stock first, buy the rest**  
-> > 💰 **$8,923.50** (save **$7,470.00**)  
+> > 💰 **$8,863.50** (save **$6,666.00**)  
 > > 📅 Arrives **31 Oct 2026**, 6 days to spare  
 > > ✍️ OK from: **VP Product Marketing**
 >
-> ♻️ Our own stock covers **1,096 of 1,689 items** (65%) 🟩🟩🟩🟩🟩🟩⬜⬜⬜⬜
+> ♻️ Our own stock covers **490 of 1,083 items** (45%) 🟩🟩🟩🟩🟩⬜⬜⬜⬜⬜
 >
 > ### ♻️ Step 2: What we already have in stock
 > We always look in our own warehouses first, so we do not buy things twice.
 >
-> | 🧩 Item | 🏢 Warehouse | Free units | Used in the best choice |
+> | 🧩 Item | ♻️ We have | 🏢 Where | ✅ Used in the best choice |
 > |---|---|---|---|
-> | Roll-up banner | Dallas Marketing Depot | 25 | 6 |
-> | Steel water bottle | Dallas Marketing Depot | 150 | 150 |
-> | Leather sales folder | Dallas Marketing Depot | 120 | 30 |
-> | Roll-up banner | London EMEA Marketing Hub | 10 | 0 |
-> | Black gift box | London EMEA Marketing Hub | 60 | 30 |
-> | Sticker pack | London EMEA Marketing Hub | 1000 | 600 |
-> | Canvas tote bag | London EMEA Marketing Hub | 200 | 200 |
-> | Steel water bottle | Singapore APAC Depot | 80 | 80 |
+> | Steel water bottle | 230 | Dallas 150, Singapore 80 | **230** |
+> | Leather sales folder | 120 | Dallas 120 | **30** |
+> | Black gift box | 60 | London 60 | **30** |
+> | Canvas tote bag | 200 | London 200 | **200** |
 >
-> ### 🏭 Step 3: What vendors can do, and by when
-> We looked at **12 vendors** and **43 price offers** for the 12 different items. Shipping time to each region comes on top of *ready by*. Deadline: **6 Nov 2026**.
+> ### 🏭 Step 3: Vendors we compared
+> We compared **12 vendors** and **38 price offers** for your 10 items. Prices are per unit for your date (**6 Nov 2026**).
 >
-> | 🧩 Item | 🏭 Vendor | 💰 Price each (normal / eco) | 📅 Ready by (normal / eco) | Result |
-> |---|---|---|---|---|
-> | Name badge with lanyard | Inkwell Print | $2.20 / - | 16 Oct 2026 / - | ✅ Chosen |
-> | Name badge with lanyard | EngraveWorks | $2.60 / - | 17 Oct 2026 / - | ➖ Not needed |
-> | Roll-up banner | Inkwell Print | $55.00 / - | 18 Oct 2026 / - | ➖ Not needed |
-> | Roll-up banner | PrintCo | $48.00 / - | 21 Oct 2026 / - | ➖ Not needed |
-> | Steel water bottle | GiftCraft Packaging | $8.50 / - | 21 Oct 2026 / - | ➖ Not needed |
-> | Steel water bottle | LuxPack Studio | $9.20 / $11.00 | 23 Oct 2026 / 25 Oct 2026 | ✅ Chosen |
-> | Product brochure | PrintCo | $3.00 / $3.50 | 18 Oct 2026 / 19 Oct 2026 | ✅ Chosen |
-> | Product brochure | Inkwell Print | $3.90 / - | 19 Oct 2026 / - | ➖ Not needed |
-> | Venue display stand | DisplayCo | $1,400.00 / $1,560.00 | 29 Oct 2026 / 31 Oct 2026 | ✅ Chosen |
-> | Venue display stand | RapidDisplay | $1,650.00 / - | 22 Oct 2026 / - | ➖ Not needed |
-> | Venue display stand | StagePro Displays | $1,760.00 / - | 24 Oct 2026 / - | ➖ Not needed |
-> | Leather sales folder | PrintCo | $25.00 / $29.00 | 21 Oct 2026 / 23 Oct 2026 | ➖ Not needed |
-> | Leather sales folder | Inkwell Print | $31.00 / - | 22 Oct 2026 / - | ➖ Not needed |
-> | Black gift box | LuxPack Studio | $85.00 / $98.00 | 26 Oct 2026 / 28 Oct 2026 | ➖ Not needed |
-> | Black gift box | GiftCraft Packaging | $92.00 / - | 27 Oct 2026 / - | ➖ Not needed |
-> | Event hoodie | StyleWorks Apparel | $42.00 / $52.00 | 24 Oct 2026 / 27 Oct 2026 | ✅ Chosen |
-> | Event hoodie | Threadly Apparel | $47.00 / - | 26 Oct 2026 / - | ➖ Not needed |
-> | Engraved name card | EngraveWorks | $6.00 / $7.00 | 17 Oct 2026 / 18 Oct 2026 | ✅ Chosen |
-> | Engraved name card | Inkwell Print | $6.80 / - | 18 Oct 2026 / - | ➖ Not needed |
-> | Power adapter | PowerTech Accessories | $9.00 / - | 19 Oct 2026 / - | ✅ Chosen |
-> | Power adapter | VoltLine Adapters | $9.80 / - | 20 Oct 2026 / - | ➖ Not needed |
-> | Sticker pack | PrintCo | $0.80 / - | 17 Oct 2026 / - | ➖ Not needed |
-> | Sticker pack | Inkwell Print | $0.90 / $1.10 | 16 Oct 2026 / 17 Oct 2026 | ➖ Not needed |
-> | Canvas tote bag | Threadly Apparel | $6.50 / $8.00 | 22 Oct 2026 / 24 Oct 2026 | ✅ Chosen |
-> | Canvas tote bag | GiftCraft Packaging | $7.20 / - | 20 Oct 2026 / - | ➖ Not needed |
+> | 🧩 Item | ✅ Chosen vendor | 💰 Price | 📅 Ready by | 🔍 Compared | 🥈 Next best |
+> |---|---|---|---|---|---|
+> | Name badge with lanyard | **Inkwell Print** | $2.20 | 16 Oct 2026 | 2 vendors | EngraveWorks $2.60 |
+> | Steel water bottle | **LuxPack Studio** | $9.20 | 23 Oct 2026 | 2 vendors | GiftCraft Packaging $8.50 |
+> | Product brochure | **PrintCo** | $3.00 | 18 Oct 2026 | 2 vendors | Inkwell Print $3.90 |
+> | Venue display stand | **DisplayCo** | $1,400.00 | 29 Oct 2026 | 3 vendors | RapidDisplay $1,650.00 |
+> | Leather sales folder | ♻️ **Our own stock** | - | - | 2 vendors | no need to buy |
+> | Black gift box | ♻️ **Our own stock** | - | - | 2 vendors | no need to buy |
+> | Event hoodie | **StyleWorks Apparel** | $42.00 | 24 Oct 2026 | 2 vendors | Threadly Apparel $47.00 |
+> | Engraved name card | **EngraveWorks** | $6.00 | 17 Oct 2026 | 2 vendors | Inkwell Print $6.80 |
+> | Power adapter | **PowerTech Accessories** | $9.00 | 19 Oct 2026 | 2 vendors | VoltLine Adapters $9.80 |
+> | Canvas tote bag | **Threadly Apparel** | $6.50 | 22 Oct 2026 | 2 vendors | GiftCraft Packaging $7.20 |
 >
-> 🧠 **Steel water bottle**: we used LuxPack Studio for some orders even though GiftCraft Packaging is cheaper, because LuxPack Studio is ready sooner and the cheaper one would not arrive in time.
+> 🧠 **Steel water bottle**: LuxPack Studio is used because GiftCraft Packaging is cheaper but would not arrive in time.
 >
 > ### 🎯 Step 4: Your 3 choices for the USA Autumn Showcase
 > 📅 Deadline (in our hands): **6 Nov 2026**
@@ -258,12 +232,12 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 >
 > | Everything we compare | 🛒 **Option 1: Buy everything new** | ♻️ **Option 2: Use our stock first, buy the rest** ⭐ **Best choice** | 🌱 **Option 3: Go green with eco-friendly materials** |
 > |---|---|---|---|
-> | 💰 Total price | $16,393.50 | $8,923.50 | $18,862.50 |
-> | 💸 Compared with Option 1 | - | **Save $7,470.00** | Pay $2,469.00 more |
+> | 💰 Total price | $15,529.50 | $8,863.50 | $17,854.50 |
+> | 💸 Compared with Option 1 | - | **Save $6,666.00** | Pay $2,325.00 more |
 > | 📅 Everything arrives | 31 Oct 2026 | 31 Oct 2026 | 2 Nov 2026 |
 > | ⏳ Spare time before the deadline | 🟢 6 days to spare | 🟢 6 days to spare | 🟢 4 days to spare |
-> | 🌍 Pollution (CO₂) | 2,262 kg | 1,232 kg | 1,055 kg |
-> | 🛠️ How we get it | Order all 1,689 items new from the cheapest vendors. | Take 1,096 items we already own from our warehouses and order the other 593. | 1,353 items made from eco-friendly materials, 336 normal ones where eco is too slow. |
+> | 🌍 Pollution (CO₂) | 2,199 kg | 1,222 kg | 1,010 kg |
+> | 🛠️ How we get it | Order all 1,083 items new from the cheapest vendors. | Take 490 items we already own from our warehouses and order the other 593. | 753 items made from eco-friendly materials, 330 normal ones where eco is too slow. |
 > | ✍️ Who has to say OK | VP Product Marketing | VP Product Marketing | VP Product Marketing |
 >
 > 🚦 🟢 plenty of spare time · 🟡 tight · 🔴 too late
@@ -275,12 +249,12 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 >
 > | 📅 In hand by | 🏷️ Price band | 💰 Best total | 💸 Compared with your date | ⏳ Spare time | ✍️ OK from |
 > |---|---|---|---|---|---|
-> | **23 Oct 2026** | Rush: 12% extra | $10,800.80 | Pay $1,877.30 more | 🔴 too late for some items | VP Product Marketing |
-> | **30 Oct 2026** | Rush: 6% extra | $10,239.00 | Pay $1,315.50 more | 🟢 3 days to spare | VP Product Marketing |
-> | **6 Nov 2026** | Standard price | $8,923.50 | 👈 **your date** | 🟢 6 days to spare | VP Product Marketing |
-> | **13 Nov 2026** | Standard price | $8,629.50 | **Save $294.00** | 🟢 13 days to spare | VP Product Marketing |
-> | **20 Nov 2026** | Early bird: 5% off | $8,441.30 | **Save $482.20** | 🟢 20 days to spare | VP Product Marketing |
-> | **4 Dec 2026** | Early bird: 8% off | $8,327.70 | **Save $595.80** | 🟢 34 days to spare | VP Product Marketing |
+> | **23 Oct 2026** | Rush: 12% extra | $10,740.80 | Pay $1,877.30 more | 🔴 too late for some items | VP Product Marketing |
+> | **30 Oct 2026** | Rush: 6% extra | $10,179.00 | Pay $1,315.50 more | 🟢 3 days to spare | VP Product Marketing |
+> | **6 Nov 2026** | Standard price | $8,863.50 | 👈 **your date** | 🟢 6 days to spare | VP Product Marketing |
+> | **13 Nov 2026** | Standard price | $8,569.50 | **Save $294.00** | 🟢 13 days to spare | VP Product Marketing |
+> | **20 Nov 2026** | Early bird: 5% off | $8,381.30 | **Save $482.20** | 🟢 20 days to spare | VP Product Marketing |
+> | **4 Dec 2026** | Early bird: 8% off | $8,267.70 | **Save $595.80** | 🟢 34 days to spare | VP Product Marketing |
 >
 > 💡 The cheapest is **4 Dec 2026**: you would save **$595.80**. Want that? Say *move it to 4 Dec 2026*.
 
@@ -290,10 +264,10 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 
 **🤖 The assistant shows:**
 
-> **HUMAN APPROVAL REQUIRED: an approval email with Approve / Reject buttons has been sent to vp@example.com (VP Product Marketing) for Use our stock first, buy the rest, USD 8,923.50. No orders are placed until it is approved.**
+> **HUMAN APPROVAL REQUIRED: an approval email with Approve / Reject buttons has been sent to vp@example.com (VP Product Marketing) for Use our stock first, buy the rest, USD 8,863.50. No orders are placed until it is approved.**
 >
 > ### ✍️ Step 5: Getting the OK
-> You chose **Use our stock first, buy the rest** for **$8,923.50**.
+> You chose **Use our stock first, buy the rest** for **$8,863.50**.
 >
 > | 💵 Order value | ✍️ Who has to say OK | 👈 |
 > |---|---|---|
@@ -323,40 +297,30 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 >
 > | 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 Pollution |
 > |---|---|---|---|---|
-> | **$8,923.50** | **$7,470.00** saved | **31 Oct 2026** (6 days to spare) | 11 purchase orders + 7 warehouse moves | 1,232 kg |
+> | **$8,863.50** | **$6,666.00** saved | **31 Oct 2026** (6 days to spare) | 11 purchase orders + 5 warehouse moves | 1,222 kg |
 >
 > ### 📖 What we did, in 4 lines
-> 1. 🎪 We planned **one whole campaign**: **1,689 items**, 12 different products, 1 region.
+> 1. 🎪 We planned **one whole campaign**: **1,083 items**, 10 different products, 1 region.
 > 2. 🏭 We compared vendors and bought from **8** of them.
-> 3. ♻️ We took **1,096 items from our own stock** 🟩🟩🟩🟩🟩🟩⬜⬜⬜⬜, so we did not buy them twice.
-> 4. ✍️ $8,923.50 is $5,000.00 to $50,000.00, so **VP Product Marketing** approved it ✅
+> 3. ♻️ We took **490 items from our own stock** 🟩🟩🟩🟩🟩⬜⬜⬜⬜⬜, so we did not buy them twice.
+> 4. ✍️ $8,863.50 is $5,000.00 to $50,000.00, so **VP Product Marketing** approved it ✅
 >
 > ### 🏭 Who we bought from, and why
 >
-> | 🏭 Vendor | 🧩 What | 🧾 Orders | 📦 Items | 💵 Amount | 🧠 Why |
-> |---|---|---|---|---|---|
-> | DisplayCo | Venue display stand | 1 | 3 | $4,245.00 | 💰 lowest price that arrives on time |
-> | StyleWorks Apparel | Event hoodie | 4 | 30 | $1,275.00 | 💰 lowest price that arrives on time |
-> | Threadly Apparel | Canvas tote bag | 1 | 100 | $800.00 | 💰 lowest price that arrives on time |
-> | Inkwell Print | Name badge with lanyard | 1 | 300 | $675.00 | 💰 lowest price that arrives on time |
-> | LuxPack Studio | Steel water bottle | 1 | 70 | $672.00 | ⚡ fastest way to make the date (a cheaper vendor was too slow) |
-> | PowerTech Accessories | Power adapter | 1 | 30 | $285.00 | 💰 lowest price that arrives on time |
-> | EngraveWorks | Engraved name card | 1 | 30 | $181.50 | 💰 lowest price that arrives on time |
-> | PrintCo | Product brochure | 1 | 30 | $114.00 | 💰 lowest price that arrives on time |
->
-> ### ♻️ From our own warehouses
->
-> | 🏢 From | 🧩 What | 📦 Items | 🌍 To |
+> | 🏭 Vendor | 🧩 What | 💵 Amount | 🧠 Why |
 > |---|---|---|---|
-> | London EMEA Marketing Hub | Black gift box | 30 | US |
-> | Dallas Marketing Depot | Leather sales folder | 30 | US |
-> | Dallas Marketing Depot | Roll-up banner | 6 | US |
-> | Dallas Marketing Depot | Steel water bottle | 150 | US |
-> | Singapore APAC Depot | Steel water bottle | 80 | US |
-> | London EMEA Marketing Hub | Sticker pack | 600 | US |
-> | London EMEA Marketing Hub | Canvas tote bag | 200 | US |
+> | DisplayCo | Venue display stand (3) | $4,245.00 | 💰 cheapest that arrives on time |
+> | StyleWorks Apparel | Event hoodie (30) | $1,275.00 | 💰 cheapest that arrives on time |
+> | Threadly Apparel | Canvas tote bag (100) | $800.00 | 💰 cheapest that arrives on time |
+> | Inkwell Print | Name badge with lanyard (300) | $675.00 | 💰 cheapest that arrives on time |
+> | LuxPack Studio | Steel water bottle (70) | $672.00 | ⚡ cheaper vendors were too slow |
+> | PowerTech Accessories | Power adapter (30) | $285.00 | 💰 cheapest that arrives on time |
+> | EngraveWorks | Engraved name card (30) | $181.50 | 💰 cheapest that arrives on time |
+> | PrintCo | Product brochure (30) | $114.00 | 💰 cheapest that arrives on time |
 >
-> ❓ **Why so many orders?** One order per item per region: **11 + 7**, all placed together.
+> ♻️ **From our own warehouses** (5 moves): **London**: Black gift box 30, Canvas tote bag 200 · **Dallas**: Leather sales folder 30, Steel water bottle 150 · **Singapore**: Steel water bottle 80
+>
+> ❓ **Why so many orders?** One order per item per region: **11 + 5**, all placed together.
 >
 > 📧 The launch team got an email: team@example.com.
 
@@ -370,13 +334,12 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 **🤖 The assistant shows:**
 
 > ### 🧾 Step 1: Your shopping list (Bill of Materials)
-> Everything you need, worked out from what you told me.
 >
-> | 🎁 Bundle | 🧩 Item | Per bundle | Total needed | 🌍 Where it goes |
-> |---|---|---|---|---|
-> | **Single items** | Name badge with lanyard | - | **30** | US 30 |
+> | 🎁 What | 🔢 How many | 🧩 What is inside |
+> |---|---|---|
+> | Name badge with lanyard | **30** | - |
 >
-> 📦 **30 items in total**, in 1 order line (one per item and region).
+> 📦 **30 items** in total.
 >
 > ### 💡 Step 1b: Anything you may be missing?
 >
@@ -407,9 +370,9 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 >
 > ### 🏭 Who we bought from, and why
 >
-> | 🏭 Vendor | 🧩 What | 🧾 Orders | 📦 Items | 💵 Amount | 🧠 Why |
-> |---|---|---|---|---|---|
-> | Inkwell Print | Name badge with lanyard | 1 | 30 | $67.50 | 💰 lowest price that arrives on time |
+> | 🏭 Vendor | 🧩 What | 💵 Amount | 🧠 Why |
+> |---|---|---|---|
+> | Inkwell Print | Name badge with lanyard (30) | $67.50 | 💰 cheapest that arrives on time |
 >
 > 📧 The launch team got an email: team@example.com.
 
@@ -421,13 +384,12 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 **🤖 The assistant shows:**
 
 > ### 🧾 Step 1: Your shopping list (Bill of Materials)
-> Everything you need, worked out from what you told me.
 >
-> | 🎁 Bundle | 🧩 Item | Per bundle | Total needed | 🌍 Where it goes |
-> |---|---|---|---|---|
-> | **Single items** | Venue display stand | - | **6** | US 6 |
+> | 🎁 What | 🔢 How many | 🧩 What is inside |
+> |---|---|---|
+> | Venue display stand | **6** | - |
 >
-> 📦 **6 items in total**, in 1 order line (one per item and region).
+> 📦 **6 items** in total.
 >
 > ### 💡 Step 1b: Anything you may be missing?
 >

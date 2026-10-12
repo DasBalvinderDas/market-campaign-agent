@@ -44,7 +44,7 @@ def test_a_new_event_without_a_guest_list_uses_the_standard_mix(repo):
 def test_a_single_item_is_taken_as_it_is(repo):
     rid = brief_tools.register_launch_request("Quick purchase", "20 stands", _future(30))["request_id"]
     out = brief_tools.build_requirements(rid, items=[ItemRequest(item="venue display stands", quantity=3, region="US")])
-    assert out["status"] == "ok" and out["total_units"] == 3 and "Single items" in out["bom_markdown"]
+    assert out["status"] == "ok" and out["total_units"] == 3 and "| Venue display stand | **3** |" in out["bom_markdown"]
     plan = sourcing_tools.build_scenarios(rid)
     assert plan["status"] == "ok" and "buying selected items works fine" in plan["decision_card"]
 

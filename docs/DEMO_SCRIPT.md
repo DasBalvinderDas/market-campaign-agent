@@ -69,7 +69,7 @@ Say a number, or type your own:
 | Part | What it shows |
 |---|---|
 | 🎁 Ready-made packs | guest welcome kit, sales folder pack, venue display stand: what is inside, which parts we already have in stock, price per pack, *ready by*, 🟢 fits your date, **💡 for 300 people** (30 kits, 30 folders, 3 stands) |
-| 🧩 Single items | per item: ♻️ our stock and where (for example *150 Dallas, 80 Singapore* water bottles), 💰 best price and vendor **for your date**, 📅 ready by, ⚡ a faster option (for example RapidDisplay), 🌱 eco price, **💡 for 300 people** (300 badges, 300 totes, 300 bottles, 600 sticker packs, 6 banners) |
+| 🧩 Single items | per item: ♻️ our stock and where (for example *150 Dallas, 80 Singapore* water bottles), 💰 best price and vendor **for your date**, 📅 ready by, ⚡ a faster option (for example RapidDisplay), 🌱 eco price, **💡 for 300 people** (300 badges, 300 totes, 300 bottles) |
 
 Then: *Say **use the suggested plan**, or say how many.*
 
@@ -77,7 +77,7 @@ Then: *Say **use the suggested plan**, or say how many.*
 
 ### 4. Shopping list, and what you may be missing
 
-**🧾 Your shopping list (Bill of Materials)**: 1,689 items in 15 order lines (30 welcome kits broken into box, hoodie sizes, adapter and name card; folders; stands; and the single items).
+**🧾 Your shopping list (Bill of Materials)**: six short rows (30 welcome kits with what is inside, 30 folder packs, 3 stands, 300 badges, 300 bottles, 300 totes), **1,083 items** in total.
 **💡 Anything you may be missing?** *A few spares (5% extra: 2 kits, 2 folders, 1 stand).* (Say `Add the spares` to see the list update, or:)
 
 > Looks good
@@ -86,11 +86,11 @@ Then: *Say **use the suggested plan**, or say how many.*
 
 **You see, in this order:**
 
-1. 📌 **In short**: *Best choice: Option 2, Use our stock first, buy the rest. **$8,923.50** (save **$7,470.00**). 6 days to spare. OK from: **VP Product Marketing**.*
-   Our own stock covers **1,096 of 1,689 items** (65%) with a picture bar.
-2. ♻️ **What we already have in stock**: bottles in Dallas and Singapore, totes and stickers in London, folders and banners in Dallas, gift boxes in London.
-3. 🏭 **What vendors can do, and by when**: one row per vendor and item with price **for your date**, *ready by*, who was chosen and why.
-4. 🎯 **Your 3 choices**: **$16,393.50** (buy everything new) · **$8,923.50** (use our stock first) · **$18,862.50** (go green). All three need the VP Product Marketing.
+1. 📌 **In short**: *Best choice: Option 2, Use our stock first, buy the rest. **$8,863.50** (save **$6,666.00**). 6 days to spare. OK from: **VP Product Marketing**.*
+   Our own stock covers **490 of 1,083 items** (45%) with a picture bar.
+2. ♻️ **What we already have in stock**: one short row per item: bottles (Dallas, Singapore), totes (London), folders (Dallas), gift boxes (London), and how many we use.
+3. 🏭 **Vendors we compared**: **one row per item**: the chosen vendor, the price **for your date**, *ready by*, how many vendors were compared and the next best one. Items from our own stock say so.
+4. 🎯 **Your 3 choices**: **$15,529.50** (buy everything new) · **$8,863.50** (use our stock first) · **$17,854.50** (go green). All three need the VP Product Marketing.
 5. 📅 **Could another date save you money?** The same list on other dates:
 
 | 📅 In hand by | 🏷️ Price band | 💸 Compared with your date |
@@ -109,15 +109,15 @@ Then: *Say **use the suggested plan**, or say how many.*
 
 > Choose option 2
 
-**HUMAN APPROVAL REQUIRED**: *$8,923.50 is $5,000 to $50,000, so the **VP Product Marketing** has to say OK*, with the approval ladder and the 👈 *this order* marker, a four-step tracker and
+**HUMAN APPROVAL REQUIRED**: *$8,863.50 is $5,000 to $50,000, so the **VP Product Marketing** has to say OK*, with the approval ladder and the 👈 *this order* marker, a four-step tracker and
 *the stock is held for you*. **Open the email and click Approve.**
 
 ### 7. Procurement
 
 > What is the status of that request?
 
-**✅ Done! All your orders are placed**: **$8,923.50**, $7,470.00 saved, **11 purchase orders + 7 warehouse moves** (18 orders in one go), 1,096 items from our own stock, a vendor table
-with a *why* for each of the 8 vendors, the moves from our warehouses (including from London and Singapore into the USA), and a launch-team email.
+**✅ Done! All your orders are placed**: **$8,863.50**, $6,666.00 saved, **11 purchase orders + 5 warehouse moves** (16 orders in one go), 490 items from our own stock, one short vendor table
+with a *why* for each of the 8 vendors, **one line** for the warehouse moves, and a launch-team email.
 
 **Say:** *"One conversation. Our own stock first, eight vendors compared, the best date shown, the right approver, and every order placed together, with the reason for each."*
 
@@ -125,11 +125,11 @@ with a *why* for each of the 8 vendors, the moves from our warehouses (including
 
 | Say | You get |
 |---|---|
-| Place **London** | Option 2 **$8,720.00**, 3 days to spare; 10 POs + 9 warehouse moves |
-| Place **Singapore** | Option 2 **$10,023.50**, 5 days to spare; 11 POs + 9 warehouse moves |
+| Place **London** | Option 2 **$8,696.00**, 3 days to spare; 10 POs + 7 warehouse moves |
+| Place **Singapore** | Option 2 **$9,915.50**, 5 days to spare; 11 POs + 7 warehouse moves |
 | Place **Canada** | The same as the USA (served from the US) |
-| **1,000 people**, USA | Option 2 $41,637 (VP), but Option 1 $54,645 needs the **CMO** |
-| **2,000 people**, USA | Option 2 **$94,960**: needs the **CMO** (above $50,000); 15 POs + 8 warehouse moves |
+| **1,000 people**, USA | Option 2 $40,637 (VP), but Option 1 $51,765 needs the **CMO** |
+| **2,000 people**, USA | Option 2 **$91,830**: needs the **CMO** (above $50,000); 13 POs + 5 warehouse moves |
 
 ---
 

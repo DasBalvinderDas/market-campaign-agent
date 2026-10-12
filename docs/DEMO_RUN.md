@@ -56,7 +56,7 @@ Nothing is mocked and nothing is built by hand: re-running a script is safe.
 ## 5. Test prompts
 
 > **Two sets of numbers.** The new conversation asks *where* the campaign is (USA, Canada, London or Singapore) and sends every pick to that place, so its numbers are in [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md)
-> (for example $8,923.50 for 300 people in the USA). Cases 1 to 8 below use the original **three-region brief** (kits, folders and stands spread over the USA, Europe and Asia) and its numbers
+> (for example $8,863.50 for 300 people in the USA). Cases 1 to 8 below use the original **three-region brief** (kits, folders and stands spread over the USA, Europe and Asia) and its numbers
 > ($37,399.50 and so on); they show the same behaviours.
 
 Use a **new chat** for each case, after `--reset-demo`. Numbers below are for the unchanged demo data. A full request takes about a minute

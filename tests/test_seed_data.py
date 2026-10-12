@@ -50,5 +50,5 @@ def test_date_pricing_covers_every_day_count_and_is_standard_for_the_demo_window
 
 def test_suggested_amounts_per_person_exist_for_the_campaign_extras():
     ratios = {a["sku"]: a.get("suggested_per_person") for a in SEED["assets"]}
-    assert ratios["BADGE-LANYARD"] == 1.0 and ratios["BANNER-ROLLUP"] == 0.02 and ratios["GIFT-BOX-BLACK"] is None
+    assert ratios["BADGE-LANYARD"] == 1.0 and ratios["BANNER-ROLLUP"] is None and ratios["GIFT-BOX-BLACK"] is None
     assert {b["bundle_type"] for b in SEED["bundle_templates"] if b.get("suggested_per_person")} == {"GUEST_KIT", "VENUE_DISPLAY", "SALES_PACK"}

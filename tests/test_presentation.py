@@ -21,11 +21,13 @@ def test_greeting_card_invites_a_natural_conversation():
     assert "how many people, and on which date?" in card
 
 
-def test_bom_lists_every_item_with_totals(repo, aurora):
+def test_bom_is_short_one_row_per_pack_with_what_is_inside(repo, aurora):
     md = presentation.bom_markdown(repo, aurora)
-    assert "Bill of Materials" in md and "VIP guest welcome kit" in md and "(150 kits)" in md
-    assert "| Event hoodie | 1 | **150** | L 60 · M 45 · S 20 · XL 25 |" in md
-    assert "1,210 items in total" in md
+    assert "Bill of Materials" in md
+    assert "| **VIP guest welcome kit** | **150 kits** | Black gift box · Event hoodie (4 sizes) · Power adapter (5 plug types) · Engraved name card |" in md
+    assert "| **Sales team folder pack** | **300 folders** | Leather sales folder · Product brochure |" in md
+    assert "| **Venue display stand** | **10 stands** |" in md and "1,210 items** in total" in md
+    assert md.count("\n|") <= 7                                    # header, separator and three packs: short for a demo
 
 
 def test_build_requirements_returns_the_bom_for_the_chat(repo):
@@ -36,17 +38,16 @@ def test_build_requirements_returns_the_bom_for_the_chat(repo):
 
 def test_vendor_report_shows_vendors_compared_and_why_the_faster_one_was_used(repo, aurora):
     md = presentation.vendor_report(repo, aurora)
-    assert "12 vendors" in md and "38 price offers" in md
-    assert "DisplayCo" in md and "RapidDisplay" in md and "✅ Chosen" in md
-    assert "even though DisplayCo is cheaper" in md
-    assert "Ready by" in md and "🔴" not in md
+    assert "12 vendors" in md and "38 price offers" in md and "Chosen vendor" in md and "Next best" in md
+    assert "| Venue display stand | **DisplayCo + RapidDisplay** | $1,400.00 |" in md and "StagePro Displays $1,760.00" in md
+    assert "Ready by" in md and "🔴" not in md and md.count("\n|") <= 12      # one short row per item
 
 
 def test_build_scenarios_returns_the_vendor_report_and_a_table_card(repo):
     rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
     brief_tools.build_requirements(rid, [brief_tools.BundleRequest(bundle_type="VENUE_DISPLAY", quantity=10)])
     out = sourcing_tools.build_scenarios(rid)
-    assert "What vendors can do" in out["vendor_report"] and "What we already have in stock" in out["stock_report"]
+    assert "Vendors we compared" in out["vendor_report"] and "What we already have in stock" in out["stock_report"]
     assert "| 💰 Total price |" in out["decision_card"] and "Does this plan feel good?" in out["decision_card"]
     assert "Buy everything new" in out["decision_card"] and "Who has to say OK" in out["decision_card"]
 
@@ -75,7 +76,8 @@ def test_order_summary_explains_vendors_and_why_so_many_orders(repo, aurora):
     md = out["display_markdown"]
     assert "Done! All your orders are placed" in md and "What we did, in 4 lines" in md
     assert "27 purchase orders + 7 warehouse moves" in md and "Why so many orders" in md
-    assert "RapidDisplay" in md and "a cheaper vendor was too slow" in md
+    assert "RapidDisplay" in md and "cheaper vendors were too slow" in md
+    assert "♻️ **From our own warehouses** (7 moves): **London**: Black gift box 60" in md and "**Dallas**: Leather sales folder 120" in md
     assert "is $5,000.00 to $50,000.00, so **VP Product Marketing** approved it" in md and "🟩" in md
 
 
@@ -98,7 +100,7 @@ def test_status_and_board_are_tables(repo, aurora):
 
 def test_stock_report_lists_what_we_own_and_what_the_best_plan_uses(repo, aurora):
     md = presentation.stock_report(repo, aurora)
-    assert "What we already have in stock" in md and "| Leather sales folder | Dallas Marketing Depot | 120 | 120 |" in md
+    assert "What we already have in stock" in md and "| Leather sales folder | 120 | Dallas 120 | **120** |" in md
 
 
 def test_stock_report_says_so_when_we_own_nothing(repo):
@@ -166,7 +168,7 @@ def test_the_offer_shows_a_suggested_plan_for_the_headcount():
                                            {"bundle_type": "SALES_PACK", "quantity": 30, "region": "US"},
                                            {"bundle_type": "VENUE_DISPLAY", "quantity": 3, "region": "US"}]
     assert {"item": "Name badge with lanyard", "quantity": 300, "region": "US"} in out["suggested"]["items"]
-    assert {"item": "Roll-up banner", "quantity": 6, "region": "US"} in out["suggested"]["items"]
+    assert len(out["suggested"]["items"]) == 3                       # three things on top of the packs: short for a demo
 
 
 def test_the_offer_shows_stock_in_every_warehouse_because_it_can_be_moved():
