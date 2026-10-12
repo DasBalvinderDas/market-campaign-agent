@@ -56,3 +56,15 @@ def get_vendor_report(request_id: str) -> dict:
         return {"status": "error", "message": "No options exist for this request yet: plan it first."}
     return {"status": "ok", "display_markdown": presentation.stock_report(repo, request_id) + "\n\n"
             + presentation.vendor_report(repo, request_id)}
+
+
+def show_checklist(event: str = "", date: str = "", needs: str = "") -> dict:
+    """Show the three things to close on (event, date, what is needed) with what we know so far and the next question.
+    Call it on every question turn, passing what the user has told you so far (leave the rest empty).
+
+    Args:
+        event: The event name the user gave, if any.
+        date: The date everything must be in hand, as the user said it or as a full date, if any.
+        needs: A short summary of what they need and how many, if any.
+    """
+    return {"status": "ok", "display_markdown": presentation.intake_checklist(event, date, needs)}

@@ -16,9 +16,9 @@ def _approved(repo, aurora, option="2"):
 
 def test_greeting_card_says_what_it_does_and_what_it_needs():
     card = orchestration_tools.show_capabilities()["display_markdown"]
-    assert "What I can do" in card and "I will ask you, one question at a time" in card and "Bill of Materials" in card
+    assert "I can" in card and "Let's close on 3 things" in card and "Shopping list" in card or "shopping list" in card
     assert "What is the event?" in card and "single item" in card.lower() and "whole event" in card
-    assert "Compare vendors" in card
+    assert "Compare **vendors**" in card and "what you may be missing" in card
 
 
 def test_bom_lists_every_item_with_totals(repo, aurora):
@@ -73,10 +73,10 @@ def test_order_summary_explains_vendors_and_why_so_many_orders(repo, aurora):
     ex = _approved(repo, aurora)
     out = execution.execute_plan(repo, ex, aurora)
     md = out["display_markdown"]
-    assert "Your orders are placed" in md and "The story in 4 lines" in md
-    assert "27 purchase orders" in md and "7 warehouse moves" in md and "Why so many orders" in md
+    assert "Done! All your orders are placed" in md and "What we did, in 4 lines" in md
+    assert "27 purchase orders + 7 warehouse moves" in md and "Why so many orders" in md
     assert "RapidDisplay" in md and "a cheaper vendor was too slow" in md
-    assert "How the approval worked" in md and "👈 **this order**" in md
+    assert "is $5,000.00 to $50,000.00, so **VP Product Marketing** approved it" in md and "🟩" in md
 
 
 def test_launch_team_update_is_a_formatted_html_email(repo, aurora):
@@ -106,3 +106,28 @@ def test_stock_report_says_so_when_we_own_nothing(repo):
     brief_tools.build_requirements(rid, [brief_tools.BundleRequest(bundle_type="VENUE_DISPLAY", quantity=2)])
     sourcing_tools.build_scenarios(rid)
     assert "none of these items" in presentation.stock_report(repo, rid)
+
+
+def test_checklist_closes_one_thing_at_a_time():
+    c0 = orchestration_tools.show_checklist()["display_markdown"]
+    assert c0.count("⬜") == 3 and "What is the event?" in c0
+    c1 = orchestration_tools.show_checklist("Spring Product Launch Event")["display_markdown"]
+    assert c1.count("✅") == 1 and "By what date" in c1
+    c2 = orchestration_tools.show_checklist("Spring Product Launch Event", "6 Nov 2026")["display_markdown"]
+    assert "What do you need, and how many?" in c2 and "whole event" in c2
+    c3 = orchestration_tools.show_checklist("E", "d", "150 kits")["display_markdown"]
+    assert c3.count("✅") == 4 and "All 3 closed" in c3
+
+
+def test_the_plan_starts_with_an_in_short_box(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
+    brief_tools.build_requirements(rid, [brief_tools.BundleRequest(bundle_type="SALES_PACK", quantity=300),
+                                         brief_tools.BundleRequest(bundle_type="GUEST_KIT", quantity=150),
+                                         brief_tools.BundleRequest(bundle_type="VENUE_DISPLAY", quantity=10)])
+    box = sourcing_tools.build_scenarios(rid)["tldr"]
+    assert "In short" in box and "Best choice: Option 2" in box and "$37,399.50" in box and "VP Product Marketing" in box
+    assert "stock covers" in box and "🟩" in box
+
+
+def test_bar_is_a_tiny_picture():
+    assert presentation.bar(50) == "🟩🟩🟩🟩🟩⬜⬜⬜⬜⬜" and presentation.bar(0) == "⬜" * 10 and presentation.bar(100) == "🟩" * 10

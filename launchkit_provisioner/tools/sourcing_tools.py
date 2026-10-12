@@ -49,6 +49,7 @@ def build_scenarios(request_id: str) -> dict:
             "decision_card": planner.decision_card(
                 request_id, launch, stored, policies, repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24),
                 single_item=all(ln["bundle_type"] == "SINGLE_ITEM" for ln in repo.get_requirement_lines(request_id))),
+            "tldr": presentation.tldr(repo, request_id, stored, policies),
             "stock_report": presentation.stock_report(repo, request_id),
             "vendor_report": presentation.vendor_report(repo, request_id)}
 

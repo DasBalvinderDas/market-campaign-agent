@@ -145,6 +145,8 @@ SEED = {
         {"rule_key": "TARGET_BUFFER_HOURS", "rule_value": 48.0,
          "description": "The planner prefers vendor offers that keep at least this buffer before the in-hand date"},
         {"rule_key": "DEPOT_HANDLING_DAYS", "rule_value": 1.0, "description": "Pick, pack and release at a depot"},
+        {"rule_key": "SPARE_PERCENT", "rule_value": 5.0,
+         "description": "Extra units the assistant suggests ordering for late additions, damage and loss"},
         {"rule_key": "TRANSFER_CARBON_KG_PER_FACTOR", "rule_value": 0.4,
          "description": "kg CO2e per ship_factor unit moved between regions"},
     ],

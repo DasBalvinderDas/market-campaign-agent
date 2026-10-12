@@ -33,37 +33,56 @@ def spare(hours, min_buffer=24) -> str:
 # ---------------------------------------------------------------------------- the first hello
 def capabilities_card() -> str:
     return """## 👋 Hi! I am your Event Procurement Assistant
+> I plan and buy **everything for an event in one go**, and I only place orders when you are happy.
 
-I help you **buy everything for a whole event in one go**, not one item at a time. I ask you a few easy questions, show you what we
-already have and what vendors can do, and only place the orders when you are happy with the plan.
-
-### ✅ What I can do
-| | What | In simple words |
+| | I can | In simple words |
 |---|---|---|
-| 🧾 | **Make the shopping list** (Bill of Materials) | Turn your event plan into exact items and amounts for each region |
-| ♻️ | **Check our stock** | Take items from our warehouses first, so we do not buy twice |
-| 🏭 | **Compare vendors** | Prices, when each vendor can be ready, and if any is running late |
-| 🎯 | **Give you 3 clear choices** | Buy new, use our stock first, or go green, with price, delivery date and spare time |
-| ✍️ | **Get the right OK** | Small orders are approved automatically. Bigger ones need a manager, and the biggest need the CMO |
-| 📦 | **Place all the orders** | Purchase orders to vendors and moves between our warehouses, all at once |
-| 🔁 | **Re-plan** | Vendor late? Need more or less? Tell me and I work it out again |
-| 🛍️ | **Buy a single item** | Just need one thing? I can do a simple purchase order with approval if needed |
+| 🧾 | Make your **shopping list** | Exact items, amounts and places |
+| 💡 | Spot **what you may be missing** | Spares, extra items, dates that are too tight |
+| ♻️ | Check **our stock** | Use what we own before buying |
+| 🏭 | Compare **vendors** | Prices, ready-by dates, late vendors |
+| 🎯 | Give you **3 choices** | Price, arrival date, spare time |
+| ✍️ | Get the **right OK** | Small = automatic · bigger = manager · biggest = CMO |
+| 📦 | **Place all the orders** | At once, with a clear summary |
+| 🛍️ | Buy **one single item** | A simple purchase order |
 
-### 💡 The best way to use me
-**Tell me about the whole event.** The more you put in one plan, the more we can reuse from our own stock, the more vendors I can
-compare, and the stronger our case for better rates. One item at a time works too, but it gives us less to work with.
+**💡 Best way to use me:** tell me the **whole event**. More in one plan means more stock to reuse, more vendors to compare, and a stronger case for better rates.
 
-### 📝 I will ask you, one question at a time
-1. 🎪 **What is the event?**
-2. 📅 **By what date must everything be in hand?**
-3. 🎁 **What do you need and how many?** (guests, venues, sales team... or a single item)
+### 📝 Let's close on 3 things
+| | What | Your answer |
+|---|---|---|
+| ⬜ | 🎪 The event | |
+| ⬜ | 📅 The date it must be in hand | |
+| ⬜ | 🎁 What you need and how many | |
 
-Then I show you: 🧾 the shopping list → ♻️ what we already have → 🏭 what vendors can deliver and by when → 🎯 your 3 choices.
-When the plan feels good to you, I get the OK and place the orders.
-
-### 👉 Let's start
-**What is the event?** (The data has the *Spring Product Launch Event*, or tell me a new one.)
+### 👉 First question
+**What is the event?** *(I know the Spring Product Launch Event, or tell me a new one.)*
 """
+
+
+def intake_checklist(event: str = "", date_text: str = "", needs: str = "") -> str:
+    """The three things to close on, with what we have so far and the one next question."""
+    rows = [("🎪 The event", event), ("📅 The date it must be in hand", date_text), ("🎁 What you need and how many", needs)]
+    out = ["### 📝 Let's close on 3 things", "", "| | What | Your answer |", "|---|---|---|"]
+    out += [f"| {'✅' if v else '⬜'} | {k} | {v or ''} |" for k, v in rows]
+    ask = ("**What is the event?** *(I know the Spring Product Launch Event, or tell me a new one.)*" if not event else
+           "**By what date must everything be in hand?** *(Please give day, month and year.)*" if not date_text else
+           "**What do you need, and how many?**\n\n💡 Tell me the **whole event**, for example *150 guest welcome kits, 10 venue display "
+           "stands and 300 sales folders*. More in one plan means more stock to reuse, more vendors to compare and a stronger case "
+           "for better rates. Just one thing? That works too: tell me the item, how many and the region (US, EMEA or APAC)."
+           if not needs else "")
+    out += ["", "### 👉 Next question" if ask else "### ✅ All 3 closed. Let me look at your list.", ask]
+    return "\n".join(out).rstrip()
+
+
+def advice_markdown(items: list[dict]) -> str:
+    if not items:
+        return ""
+    out = ["### 💡 Step 1b: Anything you may be missing?", "",
+           "| | What | Why it matters | To add it, say |", "|---|---|---|---|"]
+    out += [f"| {i['icon']} | **{i['what']}** | {i['why']} | *{i['say']}* |" for i in items]
+    out += ["", "👉 Want any of these? **Tell me.** Happy as it is? Say **Looks good** and I will check our stock and the vendors."]
+    return "\n".join(out)
 
 
 # ---------------------------------------------------------------------------- the shopping list (BOM)
@@ -121,7 +140,7 @@ def bom_markdown(repo, request_id: str) -> str:
             idx = next(i for i in range(len(rows) - 1, -1, -1) if rows[i][0])
             rows[idx] = (f"**{rows[idx][0]}** ({count} {_UNITS.get(btype, 'bundles')})",) + rows[idx][1:]
     out = ["### 🧾 Step 1: Your shopping list (Bill of Materials)",
-           "This is everything you need, worked out from what you told me. Tell me if anything is missing or wrong.", "",
+           "Everything you need, worked out from what you told me.", "",
            "| 🎁 Bundle | 🧩 Item | Per bundle | Total needed | 🌍 Where it goes |", "|---|---|---|---|---|"]
     out += [f"| {b} | {i} | {p} | **{q:,}** | {s} |" for b, i, p, q, s in rows]
     out += ["", f"📦 **{total_items:,} items in total**, in {len(lines)} separate order lines (one per item and region)."]
@@ -318,6 +337,39 @@ def _why(ln: dict, offers: list[dict], eco_plan: bool) -> str:
     return "💰 lowest price that arrives on time"
 
 
+def bar(pct: float, width: int = 10) -> str:
+    """A tiny picture of a percentage: 🟩🟩🟩⬜⬜..."""
+    filled = max(0, min(width, round(width * pct / 100)))
+    return "🟩" * filled + "⬜" * (width - filled)
+
+
+def _band(policies: list[dict], amount: float) -> str:
+    p = next((p for p in policies if p["min_amount"] < amount <= p["max_amount"]), policies[0])
+    top = "no limit" if p["max_amount"] >= 1e9 else money(p["max_amount"])
+    rng = f"up to {top}" if p["min_amount"] <= 0 else (f"over {money(p['min_amount'])}" if p["max_amount"] >= 1e9
+                                                          else f"{money(p['min_amount'])} to {top}")
+    return rng, (None if not p["requires_human"] else p["approver_role"])
+
+
+def tldr(repo, request_id: str, scenarios: list[dict], policies: list[dict]) -> str:
+    """One box at the top of the plan: the best choice in a few words."""
+    best = next((s for s in scenarios if s["recommended"]), scenarios[0])
+    idx = scenarios.index(best) + 1
+    lines = repo.get_scenario_lines(best["scenario_id"])
+    items = sum(ln["quantity"] for ln in lines)
+    own = sum(ln["quantity"] for ln in lines if ln["source_type"] == "DEPOT")
+    _rng, who = _band(policies, float(best["total_cost"]))
+    save = (f" (save **{money(best['savings_usd'])}**)" if best["savings_usd"] > 0 else "")
+    out = ["### 📌 In short",
+           f"> 🎯 **Best choice: Option {idx}, {best['option_name']}**  ",
+           f"> 💰 **{money(best['total_cost'])}**{save}  ",
+           f"> 📅 Arrives **{day(best['delivery_date'])}**, {spare(best['buffer_hours'])[2:]}  ",
+           f"> ✍️ OK from: **{who or 'nobody, it is automatic ✅'}**"]
+    if own:
+        out.append(f"\n♻️ Our own stock covers **{own:,} of {items:,} items** ({round(100 * own / items)}%) {bar(100 * own / items)}")
+    return "\n".join(out)
+
+
 def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_sent_to: list, failed: list) -> str:
     lines = repo.get_scenario_lines(scenario["scenario_id"])
     offers = repo.list_vendor_offers_all()
@@ -329,6 +381,7 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
     vlines = [ln for ln in lines if ln["source_type"] == "VENDOR"]
     dlines = [ln for ln in lines if ln["source_type"] == "DEPOT"]
     items = sum(ln["quantity"] for ln in lines)
+    own = sum(ln["quantity"] for ln in dlines)
     eco_plan = scenario["option_code"] == "ECO"
 
     by_vendor: dict = {}
@@ -343,44 +396,43 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
     def item_names(skus):
         names = []
         for sku in sorted(skus):
-            n = assets[sku]["name"]
-            n = n.rsplit(" ", 1)[0] if sku.startswith("HOODIE-") else (n.split(",")[0] if sku.startswith("PWR-") else n)
+            n = _item_label(assets, sku)
             if n not in names:
                 names.append(n)
         return ", ".join(names)
 
-    out = [f"## ✅ All done! Your orders are placed",
-           f"🎪 **{launch['launch_name']}** · {scenario['option_name']} · request `{request_id}`", "",
-           "### 📖 The story in 4 lines",
-           f"1. 🎪 We planned **one whole event**: **{items:,} items** across {len(item_names({ln['sku'] for ln in lines}).split(', '))} different products and 3 regions.",
-           f"2. 🏭 We compared vendors and bought from **{len(by_vendor)} vendors** ({len(vlines)} purchase orders).",
-           f"3. ♻️ We took **{sum(ln['quantity'] for ln in dlines):,} items from our own warehouses** ({len(dlines)} transfers) instead of buying them again.",
-           f"4. ✍️ The order value was **{money(scenario['total_cost'])}**, so **{decision['approver_role']}** "
-           f"{'approved it' if decision['status'] == 'APPROVED' and decision.get('decided_by') != 'autopilot' else 'was not needed (automatic)'}.",
-           "", "### 🏭 Who we bought from, and why", "",
-           "| 🏭 Vendor | 🧩 What we bought | 🧾 Orders | 📦 Items | 💵 Amount | 🧠 Why this vendor |", "|---|---|---|---|---|---|"]
+    total = float(scenario["total_cost"])
+    rng, who = _band(policies, total)
+    approval = (f"{money(total)} is {rng}, so **{decision['approver_role']}** approved it ✅"
+                if who and decision.get("decided_by") != "autopilot" else f"{money(total)} is {rng}, so **no approval was needed** ✅")
+    saved = (f"**{money(scenario['savings_usd'])}** saved" if scenario["savings_usd"] > 0
+             else f"{money(-scenario['savings_usd'])} more" if scenario["savings_usd"] < 0 else "same")
+    out = [f"## ✅ Done! All your orders are placed",
+           f"> 🎪 **{launch['launch_name']}** · {scenario['option_name']} · `{request_id}`", "",
+           "| 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 Pollution |", "|---|---|---|---|---|",
+           f"| **{money(total)}** | {saved} | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) | "
+           f"{len(vlines)} purchase orders + {len(dlines)} warehouse moves | {scenario['carbon_kg']:,.0f} kg |",
+           "", "### 📖 What we did, in 4 lines",
+           f"1. 🎪 We planned **one whole event**: **{items:,} items**, {len(item_names({ln['sku'] for ln in lines}).split(', '))} different products, 3 regions.",
+           f"2. 🏭 We compared vendors and bought from **{len(by_vendor)}** of them.",
+           f"3. ♻️ We took **{own:,} items from our own stock** {bar(100 * own / items) if items else ''}, so we did not buy them twice.",
+           f"4. ✍️ {approval}", "", "### 🏭 Who we bought from, and why", "",
+           "| 🏭 Vendor | 🧩 What | 🧾 Orders | 📦 Items | 💵 Amount | 🧠 Why |", "|---|---|---|---|---|---|"]
     for vid, v in sorted(by_vendor.items(), key=lambda kv: -kv[1]["amount"]):
         out.append(f"| {vendors.get(vid, vid)} | {item_names(v['skus'])} | {v['orders']} | {v['units']:,} | "
                    f"{money(v['amount'])} | {' · '.join(sorted(v['why']))} |")
     if dlines:
-        out += ["", "### ♻️ What we moved from our own warehouses", "",
-                "| 🏢 From | 🧩 Item | 📦 Items | 🌍 Going to | 💵 Shipping |", "|---|---|---|---|---|"]
-        out += [f"| {depots.get(ln['source_id'], ln['source_id'])} | {item_names({ln['sku']})} | {ln['quantity']} | "
-                f"{ln['region']} | {money(ln['line_total'])} |" for ln in dlines]
-    out += ["", "### ❓ Why so many orders?",
-            f"A vendor sells different things, and each region needs its own delivery. So **one order per item per region** "
-            f"adds up: **{len(vlines)} purchase orders** + **{len(dlines)} warehouse moves**. All of them were placed together, in one go.",
-            "", "### ✍️ How the approval worked", "", approval_ladder(policies, float(scenario["total_cost"])), "",
-            "### 💰 The numbers", "",
-            "| | |", "|---|---|",
-            f"| 💵 Total | **{money(scenario['total_cost'])}** |",
-            f"| 💸 Compared with buying everything new | {'Saved **' + money(scenario['savings_usd']) + '**' if scenario['savings_usd'] > 0 else 'Paid ' + money(-scenario['savings_usd']) + ' more'} |",
-            f"| 📅 Everything arrives | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])}) |",
-            f"| 🌍 Pollution (CO₂) | {scenario['carbon_kg']:,.0f} kg |"]
+        agg: dict = {}
+        for ln in dlines:
+            k = (depots.get(ln["source_id"], ln["source_id"]), _item_label(assets, ln["sku"]), ln["region"])
+            agg[k] = agg.get(k, 0) + ln["quantity"]
+        out += ["", "### ♻️ From our own warehouses", "", "| 🏢 From | 🧩 What | 📦 Items | 🌍 To |", "|---|---|---|---|"]
+        out += [f"| {w} | {i} | {q} | {r} |" for (w, i, r), q in agg.items()]
+    out += ["", f"❓ **Why so many orders?** One order per item per region: **{len(vlines)} + {len(dlines)}**, all placed together."]
     if update_sent_to:
-        out += ["", f"📧 The launch team was told by email: {', '.join(update_sent_to)}."]
+        out += ["", f"📧 The launch team got an email: {', '.join(update_sent_to)}."]
     if failed:
-        out += ["", f"⚠️ **{len(failed)} order lines failed** and were not retried. Ask me for the status to see them."]
+        out += ["", f"⚠️ **{len(failed)} order lines failed** and were not retried. Ask me for the status."]
     return "\n".join(out)
 
 
