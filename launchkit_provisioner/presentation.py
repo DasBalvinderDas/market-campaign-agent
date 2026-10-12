@@ -32,8 +32,8 @@ def spare(hours, min_buffer=24) -> str:
 
 # ---------------------------------------------------------------------------- the first hello
 def capabilities_card() -> str:
-    return """## 👋 Hi! I am your Event Procurement Assistant
-> I plan and buy **everything for an event in one go**, and I only place orders when you are happy.
+    return """## 👋 Hi! I am your Campaign Procurement Assistant
+> I help you **set up a campaign and buy everything it needs**, and I only place orders when you are happy.
 
 | | I can | In simple words |
 |---|---|---|
@@ -44,34 +44,49 @@ def capabilities_card() -> str:
 | 🎯 | Give you **3 choices** | Price, arrival date, spare time |
 | ✍️ | Get the **right OK** | Small = automatic · bigger = manager · biggest = CMO |
 | 📦 | **Place all the orders** | At once, with a clear summary |
-| 🛍️ | Buy **one single item** | A simple purchase order |
 
-**💡 Best way to use me:** tell me the **whole event**. More in one plan means more stock to reuse, more vendors to compare, and a stronger case for better rates.
-
-### 📝 Let's close on 3 things
-| | What | Your answer |
+### 🧭 Two ways to start
+| | You want to... | Good to know |
 |---|---|---|
-| ⬜ | 🎪 The event | |
-| ⬜ | 📅 The date it must be in hand | |
-| ⬜ | 🎁 What you need and how many | |
+| 🅰️ | **Plan a whole campaign** ⭐ | Best: more stock to reuse, more vendors to compare, a stronger case for better rates |
+| 🅱️ | **Buy selected items** | Works too: for a campaign, or just a quick purchase |
 
 ### 👉 First question
-**What is the event?** *(I know the Spring Product Launch Event, or tell me a new one.)*
+**Do you want to plan a whole campaign, or buy selected items?**
 """
 
 
-def intake_checklist(event: str = "", date_text: str = "", needs: str = "") -> str:
-    """The three things to close on, with what we have so far and the one next question."""
-    rows = [("🎪 The event", event), ("📅 The date it must be in hand", date_text), ("🎁 What you need and how many", needs)]
-    out = ["### 📝 Let's close on 3 things", "", "| | What | Your answer |", "|---|---|---|"]
+_ITEMS_TIP = ("💡 **Good to know:** planning the **whole campaign** is better. More stock to reuse, more vendors to compare, a "
+              "stronger case for better rates. Want that instead? Say *plan the whole campaign*. Otherwise we carry on with your items.")
+
+
+def intake_checklist(mode: str = "", campaign: str = "", date_text: str = "", needs: str = "") -> str:
+    """The four things to close on, with what we have so far and the ONE next question."""
+    m = (mode or "").lower()
+    kind = "items" if any(w in m for w in ("item", "select", "single", "few", "just")) else (
+        "campaign" if any(w in m for w in ("campaign", "whole", "plan", "event", "full")) else "")
+    quick = (campaign or "").strip().lower() in ("quick purchase", "no campaign", "none")
+    rows = [("🧭 What you want to do", {"campaign": "Plan a whole campaign ⭐", "items": "Buy selected items"}.get(kind, "")),
+            ("🎪 Campaign name", "No campaign (quick purchase)" if quick else campaign),
+            ("📅 Date it must be in hand", date_text), ("🎁 What you need and how many", needs)]
+    out = ["### 📝 Let's close on 4 things", "", "| | What | Your answer |", "|---|---|---|"]
     out += [f"| {'✅' if v else '⬜'} | {k} | {v or ''} |" for k, v in rows]
-    ask = ("**What is the event?** *(I know the Spring Product Launch Event, or tell me a new one.)*" if not event else
-           "**By what date must everything be in hand?** *(Please give day, month and year.)*" if not date_text else
-           "**What do you need, and how many?**\n\n💡 Tell me the **whole event**, for example *150 guest welcome kits, 10 venue display "
-           "stands and 300 sales folders*. More in one plan means more stock to reuse, more vendors to compare and a stronger case "
-           "for better rates. Just one thing? That works too: tell me the item, how many and the region (US, EMEA or APAC)."
-           if not needs else "")
-    out += ["", "### 👉 Next question" if ask else "### ✅ All 3 closed. Let me look at your list.", ask]
+    if not kind:
+        ask = ("**Do you want to plan a whole campaign, or buy selected items?**\n\n"
+               "🅰️ **Whole campaign** ⭐ best: I help you set it up.\n\n🅱️ **Selected items**: for a campaign or just a quick purchase.")
+    elif not campaign:
+        ask = ("**What is your campaign called?**" if kind == "campaign" else
+               "**Is this for a campaign?** Tell me its name, or say *no campaign*.\n\n" + _ITEMS_TIP)
+    elif not date_text:
+        ask = "**By what date must everything be in hand?** *(Please give day, month and year.)*"
+    elif not needs:
+        ask = ("**What does your campaign need, and how many?**\n\n💡 Tell me everything, for example *150 guest welcome kits, "
+               "10 venue display stands and 300 sales folders*. I will check what you may be missing."
+               if kind == "campaign" else
+               "**Which items, how many, and for which region?** *(US, EMEA or APAC)*\n\nFor example *5 venue display stands for the US*.")
+    else:
+        ask = ""
+    out += ["", "### 👉 Next question" if ask else "### ✅ All 4 closed. Let me look at your list.", ask]
     return "\n".join(out).rstrip()
 
 
@@ -190,8 +205,8 @@ def decision_card(request_id: str, launch: dict, scenarios: list[dict], policies
             "👉 **Does this plan feel good?** Say **Choose option 2** (or 1, or 3). Want something different? Tell me what to change, "
             "for example *make it 200 kits*, *add 50 brochures* or *we need it a week earlier*."]
     if single_item:
-        out += ["", "💡 **Tip:** this is a single-item purchase, and that works fine. But if you tell me your **whole event plan**, "
-                "I can reuse more of our own stock, compare more vendors for you, and we have a stronger case for better rates."]
+        out += ["", "💡 **Tip:** buying selected items works fine. But if you plan the **whole campaign** with me, "
+                "I can reuse more of our own stock, compare more vendors, and we have a stronger case for better rates."]
     return "\n".join(out)
 
 
@@ -413,7 +428,7 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
            f"| **{money(total)}** | {saved} | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) | "
            f"{len(vlines)} purchase orders + {len(dlines)} warehouse moves | {scenario['carbon_kg']:,.0f} kg |",
            "", "### 📖 What we did, in 4 lines",
-           f"1. 🎪 We planned **one whole event**: **{items:,} items**, {len(item_names({ln['sku'] for ln in lines}).split(', '))} different products, 3 regions.",
+           f"1. 🎪 We planned **one whole campaign**: **{items:,} items**, {len(item_names({ln['sku'] for ln in lines}).split(', '))} different products, 3 regions.",
            f"2. 🏭 We compared vendors and bought from **{len(by_vendor)}** of them.",
            f"3. ♻️ We took **{own:,} items from our own stock** {bar(100 * own / items) if items else ''}, so we did not buy them twice.",
            f"4. ✍️ {approval}", "", "### 🏭 Who we bought from, and why", "",
@@ -463,7 +478,7 @@ def board_markdown(requests: list[dict], depot: list[dict], assets: dict) -> str
                        f"{r.get('decision_status') or '-'} | {day(r['delivery_date']) if r.get('delivery_date') else '-'} | "
                        f"{light.get(r['readiness'], r['readiness'])} | {r['lines_executed']} of {r['lines_total']} |")
     else:
-        out.append("No requests yet. Tell me about your event to start.")
+        out.append("No requests yet. Tell me about your campaign to start.")
     out += ["", "### ♻️ Stock we already own", "", "| 🏢 Warehouse | 🌍 Region | 🧩 Item | Free units |", "|---|---|---|---|"]
     out += [f"| {d['depot_name']} | {d['region']} | {assets.get(d['sku'], {}).get('name', d['sku'])} | {int(d['free'])} |"
             for d in depot if int(d["free"]) > 0]

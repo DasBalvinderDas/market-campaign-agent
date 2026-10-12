@@ -14,11 +14,11 @@ def _approved(repo, aurora, option="2"):
     return ex
 
 
-def test_greeting_card_says_what_it_does_and_what_it_needs():
+def test_greeting_card_offers_both_ways_to_start():
     card = orchestration_tools.show_capabilities()["display_markdown"]
-    assert "I can" in card and "Let's close on 3 things" in card and "Shopping list" in card or "shopping list" in card
-    assert "What is the event?" in card and "single item" in card.lower() and "whole event" in card
-    assert "Compare **vendors**" in card and "what you may be missing" in card
+    assert "Campaign Procurement Assistant" in card and "Two ways to start" in card
+    assert "Plan a whole campaign" in card and "Buy selected items" in card and "Compare **vendors**" in card
+    assert "Do you want to plan a whole campaign, or buy selected items?" in card
 
 
 def test_bom_lists_every_item_with_totals(repo, aurora):
@@ -108,15 +108,26 @@ def test_stock_report_says_so_when_we_own_nothing(repo):
     assert "none of these items" in presentation.stock_report(repo, rid)
 
 
-def test_checklist_closes_one_thing_at_a_time():
+def test_checklist_closes_one_thing_at_a_time_starting_with_campaign_or_items():
     c0 = orchestration_tools.show_checklist()["display_markdown"]
-    assert c0.count("⬜") == 3 and "What is the event?" in c0
-    c1 = orchestration_tools.show_checklist("Spring Product Launch Event")["display_markdown"]
-    assert c1.count("✅") == 1 and "By what date" in c1
-    c2 = orchestration_tools.show_checklist("Spring Product Launch Event", "6 Nov 2026")["display_markdown"]
-    assert "What do you need, and how many?" in c2 and "whole event" in c2
-    c3 = orchestration_tools.show_checklist("E", "d", "150 kits")["display_markdown"]
-    assert c3.count("✅") == 4 and "All 3 closed" in c3
+    assert c0.count("⬜") == 4 and "plan a whole campaign, or buy selected items?" in c0
+    c1 = orchestration_tools.show_checklist("campaign")["display_markdown"]
+    assert c1.count("✅") == 1 and "What is your campaign called?" in c1 and "Plan a whole campaign ⭐" in c1
+    c2 = orchestration_tools.show_checklist("campaign", "Summer Sale")["display_markdown"]
+    assert c2.count("✅") == 2 and "By what date" in c2
+    c3 = orchestration_tools.show_checklist("campaign", "Summer Sale", "6 Nov 2026")["display_markdown"]
+    assert "What does your campaign need, and how many?" in c3 and "what you may be missing" in c3
+    c4 = orchestration_tools.show_checklist("campaign", "Summer Sale", "6 Nov 2026", "150 kits")["display_markdown"]
+    assert c4.count("✅") == 5 and "All 4 closed" in c4
+
+
+def test_selected_items_are_allowed_with_a_gentle_nudge_and_a_campaign_or_not():
+    c = orchestration_tools.show_checklist("selected items")["display_markdown"]
+    assert "Buy selected items" in c and "Is this for a campaign?" in c and "plan the whole campaign" in c.lower()
+    q = orchestration_tools.show_checklist("items", "Quick purchase")["display_markdown"]
+    assert "No campaign (quick purchase)" in q and "By what date" in q
+    n = orchestration_tools.show_checklist("items", "Quick purchase", "6 Nov 2026")["display_markdown"]
+    assert "Which items, how many, and for which region?" in n
 
 
 def test_the_plan_starts_with_an_in_short_box(repo):

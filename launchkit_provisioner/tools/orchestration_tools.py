@@ -34,7 +34,7 @@ def get_audit_trail(request_id: str = "") -> dict:
 
 def show_capabilities() -> dict:
     """What this assistant can do and what it needs from the user. Call it when the user greets (hi, hello), asks what
-    you can do, or sends a first message that is not an event brief."""
+    you can do, or sends a first message that is not a request to plan or buy."""
     return {"status": "ok", "display_markdown": presentation.capabilities_card()}
 
 
@@ -58,13 +58,15 @@ def get_vendor_report(request_id: str) -> dict:
             + presentation.vendor_report(repo, request_id)}
 
 
-def show_checklist(event: str = "", date: str = "", needs: str = "") -> dict:
-    """Show the three things to close on (event, date, what is needed) with what we know so far and the next question.
-    Call it on every question turn, passing what the user has told you so far (leave the rest empty).
+def show_checklist(mode: str = "", campaign: str = "", date: str = "", needs: str = "") -> dict:
+    """Show the four things to close on (what the user wants to do, the campaign name, the date, what is needed) with what
+    we know so far and the ONE next question. Call it on every question turn, passing what the user has told you so far
+    (leave the rest empty).
 
     Args:
-        event: The event name the user gave, if any.
-        date: The date everything must be in hand, as the user said it or as a full date, if any.
-        needs: A short summary of what they need and how many, if any.
+        mode: "campaign" if they want to plan a whole campaign, "items" if they want to buy selected items.
+        campaign: The campaign name the user chose. "Quick purchase" if the items are not for a campaign.
+        date: The date everything must be in hand, as the user said it or as a full date.
+        needs: A short summary of what they need and how many.
     """
-    return {"status": "ok", "display_markdown": presentation.intake_checklist(event, date, needs)}
+    return {"status": "ok", "display_markdown": presentation.intake_checklist(mode, campaign, date, needs)}

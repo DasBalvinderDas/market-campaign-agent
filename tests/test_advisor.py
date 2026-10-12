@@ -26,7 +26,8 @@ def test_a_missing_kind_of_bundle_is_called_out(repo):
 def test_a_single_item_gets_the_rest_of_its_bundle(repo):
     rid = repo.create_request("LAUNCH-SPRING", "x")
     repo.replace_requirement_lines(rid, planner.expand_items(repo, [{"item": "hoodie size M", "quantity": 5, "region": "US"}]))
-    tip = advisor.suggestions(repo, rid)[0]
+    assert any(t["what"] == "Plan the whole campaign" for t in advisor.suggestions(repo, rid))
+    tip = next(t for t in advisor.suggestions(repo, rid) if t["icon"] == "🧩")
     assert tip["what"] == "The rest of the VIP guest welcome kit" and "Black gift box" in tip["why"] and "Power adapter" in tip["why"]
 
 

@@ -41,7 +41,7 @@ def _update_email(launch, scenario, pos, transfers, saved, request_id) -> tuple[
         f'<div style="background:#0f766e;color:#ffffff;padding:20px 24px"><div style="font-size:13px;opacity:.85">'
         f'ORDERS PLACED</div><div style="font-size:22px;font-weight:700">{launch["launch_name"]}</div></div>'
         '<div style="padding:20px 24px;color:#111827;font-size:15px;line-height:1.5">'
-        f'<p style="margin-top:0">Good news! All orders for this event have been placed. Here is the summary.</p>'
+        f'<p style="margin-top:0">Good news! All orders for this campaign have been placed. Here is the summary.</p>'
         f'<table style="width:100%;border-collapse:collapse;font-size:14px">{cells}</table>'
         f'<p style="margin-bottom:0;color:#6b7280;font-size:13px">Request {request_id}. To see the full list of vendors and '
         f'orders, ask the assistant: <em>What is the status of {request_id}?</em></p></div></div>')

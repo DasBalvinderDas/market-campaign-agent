@@ -42,7 +42,7 @@ def _scale(counts: dict, total: int) -> dict:
 
 
 def _standard_guest_mix(repo: Repository) -> list[dict]:
-    """A new event has no guest list yet: use the guest mix (sizes, regions, plugs) of the first event that has one."""
+    """A new campaign has no guest list yet: use the guest mix (sizes, regions, plugs) of the first event that has one."""
     for launch in repo.list_launches():
         mix = repo.guest_mix(launch["launch_id"])
         if mix:

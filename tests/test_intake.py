@@ -12,12 +12,12 @@ def _future(days):
 
 def test_event_is_found_by_name_and_keeps_the_date_on_file(repo):
     out = brief_tools.register_launch_request("spring product launch event", "kits")
-    assert out["status"] == "ok" and out["event"] == "found" and out["launch_name"] == "Spring Product Launch Event"
+    assert out["status"] == "ok" and out["campaign_status"] == "found" and out["launch_name"] == "Spring Product Launch Event"
 
 
 def test_a_different_date_updates_the_event(repo):
     out = brief_tools.register_launch_request("Spring Product Launch Event", "x", _future(40))
-    assert out["event"] == "date_updated" and out["in_hand_by"] == _future(40)
+    assert out["campaign_status"] == "date_updated" and out["in_hand_by"] == _future(40)
     assert repo.get_launch("LAUNCH-SPRING")["in_hand_by"] == date.today() + timedelta(days=40)
     assert any(a["action"] == "event_date_updated" for a in repo.list_audit())
 
@@ -26,7 +26,7 @@ def test_a_new_event_needs_a_date_and_is_created_with_it(repo):
     asked = brief_tools.register_launch_request("Autumn Roadshow", "x")
     assert asked["status"] == "error" and "date" in asked["message"]
     out = brief_tools.register_launch_request("Autumn Roadshow", "x", _future(30))
-    assert out["status"] == "ok" and out["event"] == "created"
+    assert out["status"] == "ok" and out["campaign_status"] == "created"
     assert repo.get_launch("EVT-AUTUMN-ROADSHOW")["in_hand_by"] == date.today() + timedelta(days=30)
 
 
@@ -46,12 +46,12 @@ def test_a_single_item_is_taken_as_it_is(repo):
     out = brief_tools.build_requirements(rid, items=[ItemRequest(item="venue display stands", quantity=3, region="US")])
     assert out["status"] == "ok" and out["total_units"] == 3 and "Single items" in out["bom_markdown"]
     plan = sourcing_tools.build_scenarios(rid)
-    assert plan["status"] == "ok" and "single-item purchase" in plan["decision_card"]
+    assert plan["status"] == "ok" and "buying selected items works fine" in plan["decision_card"]
 
 
 def test_a_whole_event_plan_has_no_single_item_tip(repo, aurora):
     card = planner.decision_card(aurora, repo.get_launch("LAUNCH-SPRING"), repo.get_scenarios(aurora), repo.list_policies())
-    assert "single-item purchase" not in card
+    assert "buying selected items works fine" not in card
 
 
 def test_items_are_matched_by_words_and_unclear_ones_ask_which(repo):

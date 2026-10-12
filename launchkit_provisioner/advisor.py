@@ -2,7 +2,7 @@
 
 Plain rules over stored data (no model involved), so the advice is the same every time:
   SPARES      a few extra units for late additions, damage and loss (SPARE_PERCENT in planning_rules, default 5)
-  MISSING     a whole kind of bundle the event plan does not have (guest kits, venue stands, sales folders)
+  MISSING     a whole kind of bundle the campaign plan does not have (guest kits, venue stands, sales folders)
   COMPANIONS  a single item that is normally part of a bundle: the rest of that bundle
   DEADLINE    an item no vendor can have ready in time (and no stock covers), or only just
 """
@@ -81,6 +81,11 @@ def suggestions(repo, request_id: str, today: date | None = None) -> list[dict]:
                 out.append({"icon": "🧩", "what": f"The rest of the {desc}",
                             "why": f"This item is normally part of it, with: {', '.join(others)}. A whole bundle means more stock "
                                    "to reuse and more vendors to compare.", "say": f"Plan the whole {desc}"})
+
+    if any(x["bundle_type"] == "SINGLE_ITEM" for x in lines):
+        out.append({"icon": "📣", "what": "Plan the whole campaign",
+                    "why": "With only selected items I cannot spot spares, missing items or date risks across your campaign.",
+                    "say": "Plan the whole campaign (tell me what else it needs)"})
 
     window = (deadline - today).days
     free = {}
