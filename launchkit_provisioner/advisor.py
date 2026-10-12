@@ -82,7 +82,7 @@ def suggestions(repo, request_id: str, today: date | None = None) -> list[dict]:
                             "why": f"This item is normally part of it, with: {', '.join(others)}. A whole bundle means more stock "
                                    "to reuse and more vendors to compare.", "say": f"Plan the whole {desc}"})
 
-    if any(x["bundle_type"] == "SINGLE_ITEM" for x in lines):
+    if lines and all(x["bundle_type"] == "SINGLE_ITEM" for x in lines):
         out.append({"icon": "📣", "what": "Plan the whole campaign",
                     "why": "With only selected items I cannot spot spares, missing items or date risks across your campaign.",
                     "say": "Plan the whole campaign (tell me what else it needs)"})

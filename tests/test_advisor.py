@@ -55,3 +55,10 @@ def test_build_requirements_returns_the_advice_for_the_chat(repo):
     assert "Looks good" in out["advice_markdown"]
     item = brief_tools.build_requirements(rid, items=[ItemRequest(item="gift box", quantity=5, region="US")])
     assert "The rest of the VIP guest welcome kit" in item["advice_markdown"]
+
+
+def test_plan_the_whole_campaign_is_only_suggested_for_items_only_requests(repo):
+    rid = repo.create_request("LAUNCH-SPRING", "x")
+    repo.replace_requirement_lines(rid, planner.expand_bundles(repo, "LAUNCH-SPRING", [BRIEF[1]])
+                                   + planner.expand_items(repo, [{"item": "tote bag", "quantity": 10, "region": "EMEA"}]))
+    assert "Plan the whole campaign" not in _what(repo, rid)

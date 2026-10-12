@@ -1,6 +1,6 @@
 # Demo run: setup, test prompts and what to expect
 
-This is the guide for running and presenting the LaunchKit Provisioner. Setup and reset commands are in
+This is the guide for running and presenting the LaunchKit Provisioner. **For a ready-to-copy demo of the full cycle (one item, then a campaign), use [`DEMO_SCRIPT.md`](DEMO_SCRIPT.md).** Setup and reset commands are in
 [`FRESH_SETUP.md`](FRESH_SETUP.md); the design is in [`SOLUTION.md`](SOLUTION.md).
 
 ## 1. At a glance

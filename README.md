@@ -60,6 +60,7 @@ Say **Hi** and the agent introduces itself and asks the first question: what it 
 | File | Contents |
 |---|---|
 | [docs/FRESH_SETUP.md](docs/FRESH_SETUP.md) | Cheat sheet: fresh setup, reset demo data, rebuild, update after new code, load the latest items and vendors, change approver emails, test and debug the sign-off |
+| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | **Copy-paste demo of the full cycle**: one item (inside the limit, above it approved, above it declined) and a whole campaign (picks, vendors, approval, orders), with exact prompts and numbers |
 | [docs/DEMO_RUN.md](docs/DEMO_RUN.md) | How to run it and the test prompts (autopilot, choose, executive sign-off, rejection, vendor delay, tier change) |
 | [docs/SOLUTION.md](docs/SOLUTION.md) | The problem, design, scenario engine, data model, what makes it different, assumptions and limitations |
 | [integration/README.md](integration/README.md) | The four Application Integration workflows: variables, tasks and how they are created |
