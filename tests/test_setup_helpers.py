@@ -159,3 +159,54 @@ def test_refresh_reference_reloads_catalog_tables_only():
     assert set(tables) == set(sb.REFERENCE_TABLES) and all(w == "WRITE_TRUNCATE" for _, _, w in c.loads)
     assert tables["vendor_offers"] == len(SEED["vendor_offers"]) and tables["assets"] == len(SEED["assets"])
     assert "approvers" not in tables and "guests" not in tables and "launches" not in tables
+
+
+def _fake_bq(existing_launches, guests_for_seed):
+    class Job:
+        def __init__(self, rows=None):
+            self.rows = rows or []
+
+        def result(self):
+            return self.rows
+
+    class Client:
+        def __init__(self):
+            self.queries, self.loads = [], []
+
+        def query(self, sql):
+            self.queries.append(sql)
+            if "SELECT launch_id" in sql:
+                return Job([{"launch_id": i} for i in existing_launches])
+            if "COUNT(*)" in sql:
+                return Job([{"n": guests_for_seed}])
+            return Job()
+
+        def load_table_from_json(self, rows, table, job_config=None):
+            self.loads.append((table.split(".")[-1], len(rows), job_config.write_disposition))
+            return Job()
+
+    class BQ:
+        class LoadJobConfig:
+            def __init__(self, schema=None, write_disposition=None):
+                self.write_disposition = write_disposition
+
+        class SchemaField:
+            def __init__(self, *a, **k):
+                pass
+
+    return Client(), BQ
+
+
+def test_a_reset_puts_the_demo_campaign_back_when_an_old_seed_id_was_deleted():
+    import setup_bigquery as sb
+    c, BQ = _fake_bq(existing_launches=[], guests_for_seed=0)          # the old id was removed by the delete
+    sb.ensure_seed_campaigns(c, "p.d", BQ)
+    assert any("DELETE FROM `p.d.launches` WHERE launch_id NOT IN ('LAUNCH-SPRING')" in q for q in c.queries)
+    assert ("launches", 1, "WRITE_APPEND") in c.loads and ("guests", 150, "WRITE_TRUNCATE") in c.loads
+
+
+def test_a_reset_leaves_a_healthy_demo_campaign_alone():
+    import setup_bigquery as sb
+    c, BQ = _fake_bq(existing_launches=["LAUNCH-SPRING"], guests_for_seed=150)
+    sb.ensure_seed_campaigns(c, "p.d", BQ)
+    assert c.loads == []

@@ -115,6 +115,32 @@ def refresh_reference(client, ds, bigquery):
         print(f"  reloaded {len(SEED[name]):>3} rows into {name}")
 
 
+def ensure_seed_campaigns(client, ds, bigquery):
+    """Keep the demo campaign and its guest list in place after a reset: remove campaigns made in chat, put back the
+    seed campaign if it is missing (for example after the seed id was renamed), and reload the guest list if it has no
+    guests for the seed campaign."""
+    ids = [x["launch_id"] for x in SEED["launches"]]
+    in_list = ", ".join(f"'{i}'" for i in ids)
+    client.query(f"DELETE FROM `{ds}.launches` WHERE launch_id NOT IN ({in_list})").result()
+    have = {r["launch_id"] for r in client.query(f"SELECT launch_id FROM `{ds}.launches`").result()}
+    missing = [r for r in SEED["launches"] if r["launch_id"] not in have]
+    if missing:
+        t = TABLES["launches"]
+        cfg = bigquery.LoadJobConfig(
+            schema=[bigquery.SchemaField(c, typ, mode=mode) for c, typ, mode, _ in t["columns"]],
+            write_disposition="WRITE_APPEND")
+        client.load_table_from_json(_json_rows(missing), f"{ds}.launches", job_config=cfg).result()
+        print(f"  put back the demo campaign: {', '.join(r['launch_id'] for r in missing)}")
+    n = next(iter(client.query(f"SELECT COUNT(*) n FROM `{ds}.guests` WHERE launch_id IN ({in_list})").result()))["n"]
+    if not n:
+        t = TABLES["guests"]
+        cfg = bigquery.LoadJobConfig(
+            schema=[bigquery.SchemaField(c, typ, mode=mode) for c, typ, mode, _ in t["columns"]],
+            write_disposition="WRITE_TRUNCATE")
+        client.load_table_from_json(_json_rows(SEED["guests"]), f"{ds}.guests", job_config=cfg).result()
+        print(f"  reloaded {len(SEED['guests'])} guests for the demo campaign")
+
+
 @guarded
 def run(args, project=""):
     from google.cloud import bigquery
@@ -133,8 +159,7 @@ def run(args, project=""):
         client.query(ddl(ds)).result()  # creates any table or view added since the dataset was first built
         for t in TRANSACTION_TABLES:
             client.query(f"TRUNCATE TABLE `{ds}.{t}`").result()
-        seed_ids = ", ".join(f"'{x['launch_id']}'" for x in SEED["launches"])
-        client.query(f"DELETE FROM `{ds}.launches` WHERE launch_id NOT IN ({seed_ids})").result()  # events made in chat
+        ensure_seed_campaigns(client, ds, bigquery)
         client.query(f"UPDATE `{ds}.launches` SET in_hand_by = DATE_ADD(CURRENT_DATE(), INTERVAL {IN_HAND_DAYS} DAY), "
                      f"embargo_date = DATE_ADD(CURRENT_DATE(), INTERVAL {EMBARGO_DAYS} DAY) WHERE TRUE").result()
         print(f"Demo transactions cleared in {ds}. Launch dates moved to today (in-hand +{IN_HAND_DAYS} days, "

@@ -93,7 +93,7 @@ python scripts/setup_bigquery.py --refresh-reference     # reload items, vendors
 python scripts/verify_setup.py                           # prints the counts: 19 items (SKUs), 12 vendors, 51 price offers, and the venues (USA, Canada, London, Singapore) with 11 date-pricing rows
 ```
 
-It keeps the approver emails, the guest list and the campaigns, and clears the demo transactions (old plans and orders). **Run it before you deploy** a new version: the agent reads new tables (`venues`, `vendor_date_pricing`) and new columns (`suggested_per_person`), and the refresh adds them. If it ever reports a schema problem, `python scripts/setup_bigquery.py --reset --approver-email "..."` rebuilds everything.
+It keeps the approver emails, and clears the demo transactions (old plans and orders) and any campaigns made in chat. It also puts the demo campaign and its guest list back if they are missing. **Run it before you deploy** a new version: the agent reads new tables (`venues`, `vendor_date_pricing`) and new columns (`suggested_per_person`), and the refresh adds them. If it ever reports a schema problem, `python scripts/setup_bigquery.py --reset --approver-email "..."` rebuilds everything.
 
 To change a single price or stock number yourself, edit the table in BigQuery; the next answer uses it:
 
