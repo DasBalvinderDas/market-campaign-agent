@@ -18,6 +18,8 @@ class Repository:
     # ---- launches and requests
     def list_launches(self) -> list[dict]: raise NotImplementedError
     def get_launch(self, launch_id: str) -> dict | None: raise NotImplementedError
+    def create_launch(self, launch: dict) -> None: raise NotImplementedError                 # a new event
+    def update_launch_dates(self, launch_id: str, in_hand_by, embargo_date) -> None: raise NotImplementedError
     def create_request(self, launch_id: str, summary: str) -> str: raise NotImplementedError
     def get_request(self, request_id: str) -> dict | None: raise NotImplementedError
 

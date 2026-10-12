@@ -16,7 +16,7 @@ def test_register_validates_the_launch(repo):
     out = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")
     assert out["status"] == "ok" and out["request_id"].startswith("REQ-") and out["launch_name"].startswith("Spring Product Launch Event")
     bad = brief_tools.register_launch_request("LAUNCH-NOPE", "x")
-    assert bad["status"] == "error" and "LAUNCH-SPRING" in bad["message"]
+    assert bad["status"] == "error" and "Spring Product Launch Event" in bad["message"]
 
 
 def test_build_requirements_in_one_call_with_a_guest_breakdown(repo):

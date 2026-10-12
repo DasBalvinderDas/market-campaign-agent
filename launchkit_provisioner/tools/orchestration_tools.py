@@ -54,4 +54,5 @@ def get_vendor_report(request_id: str) -> dict:
     repo = get_repo()
     if not repo.get_scenarios(request_id):
         return {"status": "error", "message": "No options exist for this request yet: plan it first."}
-    return {"status": "ok", "display_markdown": presentation.vendor_report(repo, request_id)}
+    return {"status": "ok", "display_markdown": presentation.stock_report(repo, request_id) + "\n\n"
+            + presentation.vendor_report(repo, request_id)}

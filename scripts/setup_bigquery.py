@@ -109,6 +109,8 @@ def run(args, project=""):
         client.query(ddl(ds)).result()  # creates any table or view added since the dataset was first built
         for t in TRANSACTION_TABLES:
             client.query(f"TRUNCATE TABLE `{ds}.{t}`").result()
+        seed_ids = ", ".join(f"'{x['launch_id']}'" for x in SEED["launches"])
+        client.query(f"DELETE FROM `{ds}.launches` WHERE launch_id NOT IN ({seed_ids})").result()  # events made in chat
         client.query(f"UPDATE `{ds}.launches` SET in_hand_by = DATE_ADD(CURRENT_DATE(), INTERVAL {IN_HAND_DAYS} DAY), "
                      f"embargo_date = DATE_ADD(CURRENT_DATE(), INTERVAL {EMBARGO_DAYS} DAY) WHERE TRUE").result()
         print(f"Demo transactions cleared in {ds}. Launch dates moved to today (in-hand +{IN_HAND_DAYS} days, "

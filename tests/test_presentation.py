@@ -16,8 +16,9 @@ def _approved(repo, aurora, option="2"):
 
 def test_greeting_card_says_what_it_does_and_what_it_needs():
     card = orchestration_tools.show_capabilities()["display_markdown"]
-    assert "What I can do" in card and "What I need from you" in card and "Bill of Materials" in card
-    assert "Compare vendors" in card and "Who has to approve what?" in card
+    assert "What I can do" in card and "I will ask you, one question at a time" in card and "Bill of Materials" in card
+    assert "What is the event?" in card and "single item" in card.lower() and "whole event" in card
+    assert "Compare vendors" in card
 
 
 def test_bom_lists_every_item_with_totals(repo, aurora):
@@ -38,14 +39,15 @@ def test_vendor_report_shows_vendors_compared_and_why_the_faster_one_was_used(re
     assert "7 vendors" in md and "24 price offers" in md
     assert "DisplayCo" in md and "RapidDisplay" in md and "✅ Chosen" in md
     assert "even though DisplayCo is cheaper" in md
-    assert "Stock we already own" in md
+    assert "Ready by" in md and "🔴" not in md
 
 
 def test_build_scenarios_returns_the_vendor_report_and_a_table_card(repo):
     rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
     brief_tools.build_requirements(rid, [brief_tools.BundleRequest(bundle_type="VENUE_DISPLAY", quantity=10)])
     out = sourcing_tools.build_scenarios(rid)
-    assert "Vendors we compared" in out["vendor_report"] and "| 💰 Total price |" in out["decision_card"]
+    assert "What vendors can do" in out["vendor_report"] and "What we already have in stock" in out["stock_report"]
+    assert "| 💰 Total price |" in out["decision_card"] and "Does this plan feel good?" in out["decision_card"]
     assert "Buy everything new" in out["decision_card"] and "Who has to say OK" in out["decision_card"]
 
 
@@ -92,3 +94,15 @@ def test_status_and_board_are_tables(repo, aurora):
     board = orchestration_tools.get_launch_overview()["display_markdown"]
     assert "Event status board" in board and "Stock we already own" in board
     assert "What happened" in orchestration_tools.get_audit_trail()["display_markdown"]
+
+
+def test_stock_report_lists_what_we_own_and_what_the_best_plan_uses(repo, aurora):
+    md = presentation.stock_report(repo, aurora)
+    assert "What we already have in stock" in md and "| Leather sales folder | Dallas Marketing Depot | 120 | 120 |" in md
+
+
+def test_stock_report_says_so_when_we_own_nothing(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
+    brief_tools.build_requirements(rid, [brief_tools.BundleRequest(bundle_type="VENUE_DISPLAY", quantity=2)])
+    sourcing_tools.build_scenarios(rid)
+    assert "none of these items" in presentation.stock_report(repo, rid)

@@ -14,8 +14,8 @@ sourcing_planner_agent = LlmAgent(
         "You are the Sourcing Planner. Do not write commentary between tool calls. Call build_scenarios ONCE with the "
         "request_id. If the request says a vendor is late (for example 'RapidDisplay is 5 days late'), call "
         "report_vendor_delay first with the vendor and the days, then build_scenarios only if it tells you to. Reply "
-        "with the tool's vendor_report text EXACTLY as returned, then the decision_card text EXACTLY as returned, then on a "
-        "new line: decision_mode and the recommended option. Never change or recompute any number. If a tool returns an error, report it and stop."
+        "with the tool's stock_report text EXACTLY as returned, then the vendor_report text EXACTLY as returned, then the "
+        "decision_card text EXACTLY as returned, then on a new line: decision_mode and the recommended option. Never change or recompute any number. If a tool returns an error, report it and stop."
     ),
     tools=[build_scenarios, report_vendor_delay],
     on_tool_error_callback=on_tool_error,

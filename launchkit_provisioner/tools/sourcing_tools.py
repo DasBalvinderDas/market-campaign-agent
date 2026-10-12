@@ -46,8 +46,10 @@ def build_scenarios(request_id: str) -> dict:
                          "carbon_kg": s["carbon_kg"], "feasible": s["feasible"], "recommended": s["recommended"]}
                         for i, s in enumerate(stored, start=1)],
             "active_vendor_delays": repo.list_disruptions(),
-            "decision_card": planner.decision_card(request_id, launch, stored, policies,
-                                                   repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24)),
+            "decision_card": planner.decision_card(
+                request_id, launch, stored, policies, repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24),
+                single_item=all(ln["bundle_type"] == "SINGLE_ITEM" for ln in repo.get_requirement_lines(request_id))),
+            "stock_report": presentation.stock_report(repo, request_id),
             "vendor_report": presentation.vendor_report(repo, request_id)}
 
 

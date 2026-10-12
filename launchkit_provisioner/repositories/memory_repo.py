@@ -23,6 +23,14 @@ class MemoryRepository(Repository):
     def get_launch(self, launch_id):
         return next((dict(x) for x in self.t["launches"] if x["launch_id"] == launch_id), None)
 
+    def create_launch(self, launch):
+        self.t["launches"].append(dict(launch))
+
+    def update_launch_dates(self, launch_id, in_hand_by, embargo_date):
+        for x in self.t["launches"]:
+            if x["launch_id"] == launch_id:
+                x["in_hand_by"], x["embargo_date"] = in_hand_by, embargo_date
+
     def create_request(self, launch_id, summary):
         rid = f"REQ-{len(self.t['launch_requests']) + 1:03d}"
         self.t["launch_requests"].append({"request_id": rid, "launch_id": launch_id, "summary": summary,

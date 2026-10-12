@@ -132,7 +132,7 @@ class ScriptedLlm(BaseLlm):
             return text("**" + r.get("announce", r.get("message", "")) + "**")
         # a new brief
         if "register_launch_request" not in names:
-            return fc("register_launch_request", launch_id="LAUNCH-SPRING", summary=_user_text(contents)[:60])
+            return fc("register_launch_request", event="LAUNCH-SPRING", summary=_user_text(contents)[:60])
         if "brief_analyst_agent" not in names:
             return fc("brief_analyst_agent", request=f"{rid}: {STATE['brief']}")
         if "sourcing_planner_agent" not in names:

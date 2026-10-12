@@ -70,6 +70,13 @@ class BigQueryRepository(Repository):
                          "FROM `{ds}.launches` WHERE launch_id = @lid", lid=launch_id)
         return rows[0] if rows else None
 
+    def create_launch(self, launch):
+        self._insert("launches", [launch])
+
+    def update_launch_dates(self, launch_id, in_hand_by, embargo_date):
+        self._dml("UPDATE `{ds}.launches` SET in_hand_by = @d, embargo_date = @e WHERE launch_id = @lid",
+                  d=in_hand_by, e=embargo_date, lid=launch_id)
+
     def create_request(self, launch_id, summary):
         rid = new_id("REQ")
         self._insert("launch_requests", [{"request_id": rid, "launch_id": launch_id, "summary": summary,

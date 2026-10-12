@@ -13,6 +13,7 @@ Every scenario reports cost, delivery date, safety buffer in hours, savings vers
 recommendation is the cheapest scenario that keeps at least the minimum buffer.
 """
 import math
+import re
 from datetime import date, timedelta
 
 from .repositories.base import Repository
@@ -20,7 +21,7 @@ from .repositories.base import Repository
 OPTIONS = [("FULL_NEW", "FN", "Buy everything new"),
            ("REBALANCE", "RB", "Use our stock first, buy the rest"),
            ("ECO", "EC", "Go green with eco-friendly materials")]
-CHANNEL = {"GUEST_KIT": "GUESTS", "VENUE_DISPLAY": "VENUES", "SALES_PACK": "SALES"}
+CHANNEL = {"GUEST_KIT": "GUESTS", "VENUE_DISPLAY": "VENUES", "SALES_PACK": "SALES", "SINGLE_ITEM": "ITEMS"}
 
 
 class PlanError(ValueError):
@@ -40,6 +41,59 @@ def _scale(counts: dict, total: int) -> dict:
     return {k: v for k, v in out.items() if v}
 
 
+def _standard_guest_mix(repo: Repository) -> list[dict]:
+    """A new event has no guest list yet: use the guest mix (sizes, regions, plugs) of the first event that has one."""
+    for launch in repo.list_launches():
+        mix = repo.guest_mix(launch["launch_id"])
+        if mix:
+            return mix
+    return []
+
+
+_STOP = {"a", "an", "the", "of", "for", "size", "type", "pcs", "units", "unit", "item", "items"}
+
+
+def _tokens(text: str) -> set:
+    out = set()
+    for w in re.split(r"[^a-z0-9]+", (text or "").lower()):
+        if w and w not in _STOP:
+            out.add(w[:-1] if len(w) > 3 and w.endswith("s") else w)
+    return out
+
+
+def resolve_item(assets: list[dict], text: str) -> dict:
+    """The asset a user means by 'display stand', 'hoodie size M', 'HOODIE-EVENT-M'. Raises PlanError with the choices
+    when it is unclear."""
+    t = (text or "").strip()
+    for a in assets:
+        if t.lower() in (a["sku"].lower(), a["name"].lower()):
+            return a
+    want = _tokens(t)
+    hits = [a for a in assets if want and want <= _tokens(a["name"]) | _tokens(a["sku"])]
+    if len(hits) == 1:
+        return hits[0]
+    if hits:
+        raise PlanError(f"'{text}' could mean: " + "; ".join(a["name"] for a in hits) + ". Ask the user which one.")
+    raise PlanError(f"No item called '{text}'. Items we can buy: " + "; ".join(sorted(a["name"] for a in assets)) + ".")
+
+
+def expand_items(repo: Repository, items: list[dict]) -> list[dict]:
+    """Single items as they are: [{item, quantity, region}] -> requirement lines (no bundle, no split)."""
+    assets = repo.list_assets()
+    merged: dict = {}
+    for it in items:
+        qty, region = int(it["quantity"]), (it.get("region") or "").upper()
+        if qty <= 0:
+            raise PlanError(f"The quantity for '{it['item']}' must be positive.")
+        if region not in ("US", "EMEA", "APAC"):
+            raise PlanError(f"Which region should '{it['item']}' be delivered to (US, EMEA or APAC)? Ask the user.")
+        a = resolve_item(assets, it["item"])
+        key = ("SINGLE_ITEM", a["sku"], region)
+        merged[key] = merged.get(key, 0) + qty
+    return [{"bundle_type": k[0], "channel": CHANNEL["SINGLE_ITEM"], "sku": k[1], "region": k[2], "quantity": q}
+            for k, q in sorted(merged.items())]
+
+
 def expand_bundles(repo: Repository, launch_id: str, bundles: list[dict]) -> list[dict]:
     """bundles: [{bundle_type, quantity, region (optional)}] -> merged lines {bundle_type, channel, sku, region, quantity}."""
     merged: dict = {}
@@ -52,7 +106,7 @@ def expand_bundles(repo: Repository, launch_id: str, bundles: list[dict]) -> lis
             raise PlanError(f"The quantity for {btype} must be positive.")
         templates = repo.get_bundle_templates(btype)
         if btype == "GUEST_KIT":
-            mix = [m for m in repo.guest_mix(launch_id) if not only_region or m["region"] == only_region]
+            mix = [m for m in (repo.guest_mix(launch_id) or _standard_guest_mix(repo)) if not only_region or m["region"] == only_region]
             if not mix:
                 raise PlanError(f"No guests on the list for launch {launch_id}" + (f" in {only_region}." if only_region else "."))
             kits = _scale({(m["size"], m["region"], m["plug_type"]): m["n"] for m in mix}, qty)
@@ -263,10 +317,11 @@ def _summary(code: str, lines: list[dict]) -> str:
 
 
 # ---------------------------------------------------------------------------- presentation
-def decision_card(request_id: str, launch: dict, scenarios: list[dict], policies: list[dict], min_buffer: float = 24) -> str:
+def decision_card(request_id: str, launch: dict, scenarios: list[dict], policies: list[dict], min_buffer: float = 24,
+                  single_item: bool = False) -> str:
     """The three choices as a table (see presentation.py), computed from the stored scenarios."""
     from . import presentation
-    return presentation.decision_card(request_id, launch, scenarios, policies, min_buffer)
+    return presentation.decision_card(request_id, launch, scenarios, policies, min_buffer, single_item)
 
 
 # ---------------------------------------------------------------------------- vendor delays
