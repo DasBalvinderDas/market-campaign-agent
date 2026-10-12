@@ -42,7 +42,7 @@ tables, views and demo data and the Application Integration workflows. Full step
 
 ## How a request flows
 
-1. **Brief** (chat): the manager describes what the launch needs.
+1. **Questions** (chat): the assistant asks, one at a time, *what is the event*, *by what date*, *what do you need and how many* (a whole event plan is encouraged; a single item works too). It looks up stock and vendors itself.
 2. **Plan**: the Brief Analyst and the Sourcing Planner compute the requirement lines and three options from BigQuery. One reply,
    in simple words with tables and icons: the **shopping list (BOM)**, the **vendor comparison**, and a **3-choices table** (price, saving,
    arrival date, spare time, pollution, who has to say OK).
@@ -53,7 +53,7 @@ tables, views and demo data and the Application Integration workflows. Full step
    team gets a formatted HTML tracking update. The reply is a short story: what we planned, which vendors and why, why so many orders, how
    the approval worked. A rejection releases the held stock.
 
-Say **Hi** and the agent introduces itself: what it can do and what it needs. Ask *Who has to approve what?* for the approval levels.
+Say **Hi** and the agent introduces itself and asks the first question: what it can do and what it needs. Ask *Who has to approve what?* for the approval levels.
 
 ## Documents
 

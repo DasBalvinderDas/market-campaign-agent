@@ -56,30 +56,39 @@ Nothing is mocked and nothing is built by hand: re-running a script is safe.
 ## 5. Test prompts
 
 Use a **new chat** for each case, after `--reset-demo`. Numbers below are for the unchanged demo data. A full request takes about a minute
-in Gemini Enterprise. Every answer is written in simple words, with tables and icons.
+in Gemini Enterprise. Every answer is written in simple words, with tables and icons. The assistant asks a few easy questions first.
 
 **The idea to say first:** underneath it is still a purchase order, procurement and approval system. But instead of asking for one item at a
 time, you give it a **whole event**, and it deals with **many vendors at once**: shopping list, vendor comparison, three choices, the right
 approver, then all the orders together.
 
-### Case 0: say hello (what can you do, and what do you need)
+### Case 0: say hello, then answer three easy questions
 
 > Hi
 
-**Expected:** a friendly card: **What I can do** (shopping list, compare vendors, use stock we already own, three choices, get the right
-OK, place all the orders, re-plan when a vendor is late) and **What I need from you** (which event, what and how many, a region only if you
-want one), plus a sample prompt. No tools besides the card are called.
+**Expected:** a friendly card: **What I can do** (shopping list, check our stock, compare vendors, three choices, the right OK, place all the
+orders, re-plan, buy a single item), **The best way to use me** (tell me the whole event: more stock reuse, more vendors, a stronger case
+for better rates) and **I will ask you, one question at a time**. It ends with the first question: **What is the event?**
 
-### Case 1: plan the whole event (shopping list, vendors, three choices)
+The assistant then asks, one at a time (it skips anything you already said):
 
-> Plan our Spring Product Launch Event. We need 150 VIP guest welcome kits, 10 venue display stands and 300 sales folders for the sales team. Everything must arrive before the deadline.
+| It asks | You say |
+|---|---|
+| 🎪 What is the event? | `The Spring Product Launch Event` |
+| 📅 By what date must everything be in hand? (it tells you the date on file and asks only if you want to change it) | `The date on file is fine` (or a full date, such as `20 December 2026`) |
+| 🎁 What do you need and how many? (it encourages the whole event plan, or a single item) | `150 VIP guest welcome kits, 10 venue display stands and 300 sales folders` |
+
+You do not have to wait for the questions: `Plan our Spring Product Launch Event. We need 150 VIP guest welcome kits, 10 venue display stands and 300 sales folders for the sales team. Everything must arrive before the deadline.` answers all three at once.
+
+### Case 1: the plan (shopping list, stock, vendors, three choices)
 
 **Expected:** one message, in this order, and nothing is ordered:
 
 1. **🧾 Step 1: Your shopping list (Bill of Materials)**: what is in each bundle and how many in total (1,210 items in 31 order lines).
-2. **🏭 Step 2: Vendors we compared**: 7 vendors and 24 price offers, one row per vendor and item with price and days to make, who was chosen,
-   the stock we already own, and the note why RapidDisplay was used even though DisplayCo is cheaper.
-3. **🎯 Step 3: Your 3 choices**, as one table:
+2. **♻️ Step 2: What we already have in stock**: free units per warehouse and how many the best choice uses (for example 120 folders in Dallas, 60 gift boxes in London).
+3. **🏭 Step 3: What vendors can do, and by when**: 7 vendors and 24 price offers, one row per vendor and item with price and *ready by* date, who was chosen, late vendors marked,
+   and the note why RapidDisplay was used even though DisplayCo is cheaper.
+4. **🎯 Step 4: Your 3 choices**, as one table:
 
 | | Option 1: Buy everything new | Option 2: Use our stock first, buy the rest ⭐ | Option 3: Go green with eco-friendly materials |
 |---|---|---|---|
@@ -90,7 +99,19 @@ want one), plus a sample prompt. No tools besides the card are called.
 | 🌍 Pollution (CO₂) | 4,200 kg | 3,702 kg | 2,378 kg |
 | ✍️ Who has to say OK | VP Product Marketing | VP Product Marketing | CMO |
 
-Then: *Say "Choose option 2".* **Shows:** a whole event worked out across many vendors, with the choices computed against the deadline.
+Then: **Does this plan feel good?** *Say "Choose option 2", or tell me what to change.* **Shows:** a whole event worked out across many vendors, with the
+choices computed against the deadline.
+
+**Change the plan before you commit** (same chat): `Make it 200 guest welcome kits.` or `Add 50 product brochures for the US.` The assistant rebuilds the list and shows the new plan.
+Nothing is ordered until you choose.
+
+### Case 1b: a single item (a simple purchase order)
+
+> We need 5 venue display stands for the US, by the end of next month. (answer its questions: event "Quick purchase", the full date)
+
+**Expected:** the same steps, shorter: shopping list with one row, stock, vendors, three choices, and a tip: *this is a single-item purchase, and that works fine,
+but if you tell me your whole event plan I can reuse more of our own stock, compare more vendors and we have a stronger case for better rates.* Then choose, and the
+approval level follows the amount (a few thousand dollars is automatic or VP, depending on the total).
 
 ### Case 2: the executive says OK, the two-step flow (human in the loop)
 

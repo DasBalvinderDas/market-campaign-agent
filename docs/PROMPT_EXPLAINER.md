@@ -39,6 +39,30 @@ service, so it needs your yes first.
 
 ---
 
+## The guided questions: how the assistant gets the details
+
+Instead of expecting a detailed brief, the assistant asks a few easy questions, **one at a time** (and skips anything you already told it):
+
+| # | It asks | Why | What it does with the answer |
+|---|---|---|---|
+| 1 | 🎪 **What is the event?** | Everything is planned against one event | `register_launch_request` finds it by name or id. An unknown name is a **new event** |
+| 2 | 📅 **By what date must everything be in hand?** | The deadline drives vendor choice and spare time | Uses the date on file for a known event (or updates it, logged in `audit_log`); a new event gets the date you give |
+| 3 | 🎁 **What do you need, and how many?** | The shopping list | `build_requirements` takes event bundles *or* single items. It **encourages the whole event plan**: more stock reuse, more vendors to compare, a stronger case for better rates |
+
+It does **not** ask about stock or vendors. It looks those up itself and shows them, in this order, in one answer:
+🧾 shopping list (BOM) → ♻️ **what we already have in stock** → 🏭 **what vendors can do, and by when** (ready-by dates) → 🎯 the 3 choices.
+
+Then the user decides: **"Does this plan feel good?"** They can say *Choose option 2*, or ask for a change (*make it 200 kits*, *add 50 brochures*, *a week earlier*);
+the assistant rebuilds the list and the plan. Only after a choice does the approval start, then the orders.
+
+**Single item?** That works too: the same steps, shorter, a simple purchase order with approval by amount if needed. The reply adds the tip to share the whole
+event plan next time. Items are matched by plain words (*hoodie size M*, *gift box*); unclear ones are asked back (*which size?*), and a region is required.
+
+**New event?** The assistant creates it (`EVT-...`) with the date you give. It has no guest list yet, so guest kits use the standard guest mix, and it says so. `--reset-demo`
+removes events made in the chat.
+
+---
+
 ## The story: one launch, one deadline, four colleagues
 
 *(Tell this first. Everything after it is the same story with the technical detail filled in. The people and numbers are fictional.)*
@@ -537,22 +561,21 @@ That is why the demo is two steps: send the prompt, click the email, ask for the
 
 Each prompt: **Business** (say this first), then **Technical** (the flow). Numbers are from the seeded Spring Launch Event data.
 
-### Prompt 0: "Hi" (what can you do, what do you need)
+### Prompt 0: "Hi" and the three questions
 
 > Hi
 
-**Business.** Anyone can open the chat and learn in ten seconds what the assistant does and what it needs from them, without a manual.
+**Business.** Anyone can open the chat and learn in ten seconds what the assistant does and what it needs. Then it simply asks: the event, the date, what you need. No manual, no form.
 
-**Technical.** The root prompt says: on a greeting, a "what can you do" question or a first message that is not an event brief, call `show_capabilities`.
-The tool returns a fixed Markdown card (no database access, no specialist). The card has **What I can do** (shopping list, compare vendors,
-use stock we already own, three choices, the right OK, place all orders, re-plan on delay), **What I need from you** (event, items and
-quantities, optional region) and sample prompts.
+**Technical.** On a greeting the root calls `show_capabilities` (fixed card, no database access) and the card ends with the first question. The next turns are driven by the root
+prompt's *ask in sequence* rule: event, date, needs, skipping what was already said. Once it has them it calls `register_launch_request(event, summary, deadline_date)` (reads or
+writes `launches`, writes `launch_requests` and `audit_log`) and moves to the brief analyst.
 
-**In plain English (technical).** It is a front desk. Asked "Hi", the coordinator hands back the same friendly card every time.
+**In plain English (technical).** The assistant is a polite interviewer: it asks only what it cannot look up, writes the answers into the request, and starts the work when it has them.
 
 ---
 
-### Prompt 1: the event brief
+### Prompt 1: the plan (after the questions, or all in one message)
 
 > Plan our Spring Product Launch Event. We need 150 VIP guest welcome kits, 10 venue display stands and 300 sales folders for the sales team. Everything must arrive before the deadline.
 
