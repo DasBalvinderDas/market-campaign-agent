@@ -16,7 +16,7 @@ and risk per option), and approval is only the last gate for the chosen option.
 | **Sourcing Planner** | Computes the 3 options (buy everything new, use our stock first, buy the rest, green option) with cost, delivery date, safety buffer, savings, carbon, risk; re-plans on a vendor delay | `sub_agents/sourcing_planner_agent.py`, `planner.py` |
 | **Fulfilment** | Places the orders of the approved option in one batch: POs, depot transfers, tracking update | `sub_agents/fulfilment_agent.py`, `execution.py` |
 | **Google BigQuery** | All data: launches, guests, depots and stock, lanes, vendors and offers, rules, policy, the computed plan, decisions, orders, audit log | dataset `launchkit` (`bigquery/schema.sql`) |
-| **Google Application Integration** | Four workflows: `create_purchase_order`, `create_depot_transfer`, `request_approval` (native Approve / Reject email) and `send_launch_update` | integration `launchkit-workflows` |
+| **Google Application Integration** | Four workflows: `create_purchase_order`, `create_depot_transfer`, `request_approval` (the approval itself; the agent sends the HTML approval email with Approve / Reject buttons) and `send_launch_update` | integration `launchkit-workflows` |
 | **Service account** | One account (`AGENT_SERVICE_ACCOUNT`) with BigQuery + Application Integration access runs the deployed agent | `.env` |
 | **Vertex AI Agent Engine / Gemini Enterprise** | Where the agent runs and is used | `scripts/deploy_agent_engine.py` |
 
@@ -47,7 +47,7 @@ tables, views and demo data and the Application Integration workflows. Full step
    in simple words with tables and icons: the **shopping list (BOM)**, the **vendor comparison**, and a **3-choices table** (price, saving,
    arrival date, spare time, pollution, who has to say OK).
 3. **Choose**: the manager replies with an option. Within the autopilot limit the recommended option runs by itself.
-4. **Sign off**: above the limit an Application Integration approval emails the executive (Approve / Reject). The reply starts with
+4. **Sign off**: above the limit the agent emails the executive an HTML approval request (Approve and Reject buttons, shopping list, vendors) and an Application Integration approval waits for the click. The reply starts with
    **HUMAN APPROVAL REQUIRED**; surplus depot stock is held; nothing is ordered.
 5. **Execute**: when the user asks for the status after the click, the orders are placed (POs, depot transfers) and the launch
    team gets a formatted HTML tracking update. The reply is a short story: what we planned, which vendors and why, why so many orders, how

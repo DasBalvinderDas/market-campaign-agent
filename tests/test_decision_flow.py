@@ -62,7 +62,7 @@ def test_the_decision_is_idempotent_and_cannot_be_switched(repo, aurora):
     other = decision_flow.authorize(repo, ex, aurora, "3", "")
     assert again["already"] and "already exists" in again["message"]
     assert other["already"] and "cannot be changed" in other["message"]
-    assert len(repo.t["decisions"]) == 1 and len([c for c in ex.calls]) == 1
+    assert len(repo.t["decisions"]) == 1 and [c[0] for c in ex.calls] == [config.APPROVAL_TRIGGER, config.UPDATE_TRIGGER]   # started once, emailed once
 
 
 def test_an_option_that_misses_the_deadline_cannot_be_authorised(repo, aurora):

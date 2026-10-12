@@ -130,7 +130,7 @@ def _approval_task(task_id, approver_emails, approve_id, reject_id):
     sample_order_processing sample. The run suspends here; each approver gets an email with Approve / Reject.
     Edges: isApproved = true -> approve_id, false -> reject_id."""
     notes = {"protoValues": [{"@type": "type.googleapis.com/enterprise.crm.eventbus.proto.Notification",
-                              "emailAddress": {"email": e}} for e in approver_emails]}
+                              "emailAddress": {"email": e}} for e in (approver_emails or [])]}
     expiry = {"@type": "type.googleapis.com/enterprise.crm.eventbus.proto.SuspensionExpiration",
               "remindAfterMs": 86400000, "expireAfterMs": 259200000}
     flag = f"$`Task_{task_id}_isApproved`$"
@@ -142,7 +142,7 @@ def _approval_task(task_id, approver_emails, approve_id, reject_id):
             "parameters": {
                 "customMessage": {"key": "customMessage", "value": {"stringValue": "$approval_message$"}},
                 "isApproved": {"key": "isApproved", "value": {"stringArray": {"stringValues": [flag]}}},
-                "notifications": {"key": "notifications", "value": {"jsonValue": json.dumps(notes)}},
+                **({"notifications": {"key": "notifications", "value": {"jsonValue": json.dumps(notes)}}} if approver_emails else {}),
                 "suspensionExpiration": {"key": "suspensionExpiration", "value": {"jsonValue": json.dumps(expiry)}}}}
 
 
@@ -166,6 +166,8 @@ def _execution_id():
 
 
 def build_version(email: bool = True, approver_emails=None, email_format: str = "html") -> dict:
+    """approver_emails: only when Google's own approval email is wanted (--platform-approval-email). By default the agent
+    sends its own HTML approval email with Approve and Reject buttons and the approval task sends none."""
     """The IntegrationVersion body: four API triggers (purchase order, depot transfer, approval, launch update)."""
     status = {"inputField": {"fieldType": S, "transformExpression": _lit("SENT")}, "outputField": _out_field("status")}
     params = {}
@@ -182,7 +184,7 @@ def build_version(email: bool = True, approver_emails=None, email_format: str = 
         tasks += [_email_task("2", "3", email_format), _mapping_task("3", "Mark update sent", [status])]
     else:
         tasks.append(_mapping_task("2", "Mark update sent", [status]))
-    tasks += [_approval_task("10", approver_emails or ["approver@example.com"], "11", "12"),
+    tasks += [_approval_task("10", approver_emails, "11", "12"),
               _decision_task("11", "APPROVED"), _decision_task("12", "REJECTED")]
     return {
         "description": "LaunchKit Provisioner workflows: purchase order, depot transfer, executive sign-off, launch update.",
@@ -270,7 +272,8 @@ def run_with(http, args, project):
     else:
         print("  creating the integration and publishing it ..." if not exists else "  adding a new version and publishing it ...")
         r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
-                      json=build_version(email=not args.no_email, approver_emails=approvers,
+                      json=build_version(email=not args.no_email,
+                                           approver_emails=approvers if getattr(args, "platform_approval_email", False) else None,
                                            email_format=getattr(args, "email_format", "html")))
         if r.status_code != 200:
             _fail(r, project)
@@ -311,6 +314,9 @@ def main():
     ap.add_argument("--approver-email", action="append", default=[], metavar="[ROLE=]EMAIL[,EMAIL]",
                     help="who gets the sign-off email (Approve / Reject); default: APPROVER_EMAILS, else your gcloud account")
     ap.add_argument("--republish", action="store_true", help="publish a new version even if the triggers exist (e.g. new approver emails)")
+    ap.add_argument("--platform-approval-email", action="store_true",
+                    help="also let Google's approval task email the approvers (the plain email with one long link). "
+                         "Default: off, because the agent sends its own HTML approval email with Approve and Reject buttons")
     ap.add_argument("--email-format", choices=["html", "text"], default="html",
                     help="body format of the launch-team update email (default html: a formatted email; use text if your "
                          "project rejects html)")
@@ -321,7 +327,8 @@ def main():
     ap.add_argument("--print-definition", action="store_true", help="print the integration definition JSON and exit")
     args = ap.parse_args()
     if args.print_definition:
-        print(json.dumps(build_version(email=not args.no_email, approver_emails=approver_addresses(args.approver_email),
+        print(json.dumps(build_version(email=not args.no_email,
+                                       approver_emails=approver_addresses(args.approver_email) if args.platform_approval_email else None,
                                        email_format=args.email_format), indent=2))
         return
     run(args, project=resolve_project(args.project))

@@ -9,7 +9,7 @@ The amount, the options and the recipients all come from BigQuery; the model onl
 """
 from datetime import datetime, timedelta, timezone
 
-from . import config, presentation
+from . import config, emails, presentation
 from .repositories.base import new_id
 
 _EXEC_PREFIX = "execution:"
@@ -118,8 +118,8 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
                 "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, "", False, request_id),
                 "next_step": "Approved by policy (autopilot). Now call the fulfilment_agent tool with the request_id to "
                              "place the orders."}
-    emails = repo.get_approver_emails(policy["approver_role"])
-    repo.create_decision({**decision, "status": "PENDING", "approver_emails": ",".join(emails)})
+    emails_to = repo.get_approver_emails(policy["approver_role"])
+    repo.create_decision({**decision, "status": "PENDING", "approver_emails": ",".join(emails_to)})
     repo.create_holds(holds)
     min_buffer = repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24)
     message = _approval_message(launch, scenario, lines, request_id, justification, min_buffer)
@@ -136,13 +136,33 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
         _audit(repo, request_id, "orchestrator", "approval_workflow_failed", error=str(exc)[:300])
         return {"status": "error", "message": f"The approval workflow could not be started: {str(exc)[:300]}"}
     repo.set_decision_note(decision["decision_id"], "PENDING", _EXEC_PREFIX + str(execution_id))
+    # Our own approval email (HTML, with Approve and Reject buttons, the shopping list and the vendors). The Application
+    # Integration approval task does not send its own email, so this is the one the approver gets.
+    rng = presentation._band(repo.list_policies(), total)[0]
+    subject, html = emails.approval_email(repo, launch, scenario, lines, request_id, justification, policy["approver_role"],
+                                          emails.approval_url(execution_id), rng)
+    sent, failed_to = [], []
+    for address in emails_to:
+        try:
+            executor.execute(config.UPDATE_TRIGGER, {"request_id": request_id, "launch_id": req["launch_id"],
+                                                     "recipient_email": address, "email_subject": subject, "email_body": html})
+            sent.append(address)
+        except Exception as exc:  # noqa: BLE001
+            failed_to.append({"email": address, "error": str(exc)[:200]})
+    if not sent:
+        repo.set_decision_note(decision["decision_id"], "FAILED", "the approval email could not be sent")
+        repo.release_holds(request_id)
+        _audit(repo, request_id, "orchestrator", "approval_email_failed", failed=failed_to or "no approver address on file")
+        return {"status": "error", "message": "The approval email could not be sent (" + (
+            failed_to[0]["error"] if failed_to else f"no email address is set for {policy['approver_role']}; run "
+            "setup_bigquery.py --approver-email") + "). Nothing was ordered and the stock is released."}
     _audit(repo, request_id, "orchestrator", "approval_requested", decision_id=decision["decision_id"],
            option=scenario["option_code"], approver_role=policy["approver_role"], amount=total, tier=policy["tier"],
            execution_id=execution_id)
-    who = ", ".join(emails) if emails else "the approver"
+    who = ", ".join(sent)
     return {"status": "pending_approval", "decision_id": decision["decision_id"], "tier": policy["tier"],
             "option": scenario["option_name"], "amount": total, "approver_role": policy["approver_role"],
-            "approver_emails": emails,
+            "approver_emails": sent,
             "announce": (f"HUMAN APPROVAL REQUIRED: an approval email with Approve / Reject buttons has been sent to "
                          f"{who} ({policy['approver_role']}) for {scenario['option_name']}, USD {total:,.2f}. "
                          f"No orders are placed until it is approved."),

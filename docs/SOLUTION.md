@@ -179,8 +179,9 @@ The root prompt sets the style (short words a 10-year-old can follow, tables, ic
 shopping list, vendors, three choices, then the question. The multi-level approval (automatic, VP, CMO) is the `approval_policy`
 table, shown as a ladder with the current order marked.
 
-**Approve / Reject in the email:** the two links come from Application Integration's approval step, whose email layout cannot be styled from
-our side. A real button needs our own small approval page (a new Cloud Run service), which is not built because it adds a service.
+**Approve / Reject in the email:** Google's own approval email is plain text, so the agent sends its own HTML approval email (`emails.py`): summary table, **Approve** and **Reject**
+buttons (the long link is hidden behind them), the shopping list and the vendor table. Both buttons open the Application Integration approval page of the run, where the approver
+confirms with one click; the approval task sends no email of its own. A true one-click button would need a small web service of our own, which is not built because it adds a service.
 
 ## 11. Assumptions and limitations
 

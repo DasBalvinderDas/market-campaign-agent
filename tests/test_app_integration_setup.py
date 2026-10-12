@@ -154,3 +154,15 @@ def test_update_email_is_html_by_default_and_text_on_request():
         return task["parameters"]["BodyFormat"]["value"]["stringValue"]
     assert fmt(sai.build_version()) == "html"
     assert fmt(sai.build_version(email_format="text")) == "text"
+
+
+def test_by_default_the_approval_task_sends_no_email_of_its_own():
+    """The agent sends its own HTML approval email with Approve and Reject buttons."""
+    a = next(t for t in sai.build_version()["taskConfigs"] if t["taskId"] == "10")
+    assert "notifications" not in a["parameters"] and a["parameters"]["customMessage"]["value"]["stringValue"] == "$approval_message$"
+    assert {n["taskId"] for n in a["nextTasks"]} == {"11", "12"}                      # still waits for the decision
+
+
+def test_the_platform_approval_email_can_be_switched_back_on():
+    a = next(t for t in sai.build_version(approver_emails=["a@x.com"])["taskConfigs"] if t["taskId"] == "10")
+    assert "notifications" in a["parameters"]

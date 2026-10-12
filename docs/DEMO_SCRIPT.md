@@ -20,7 +20,7 @@ date -d "+25 days" "+%-d %B %Y"                           # prints the date to u
 ```
 
 Use **exactly 25 days from today** for `<DATE>`. The amounts below depend on it: vendors charge **less when you order earlier and more for a rush**, and the 21 to 34 day band is
-the standard price. Open a **new chat** for every run. The approval email goes to the approver addresses you set up (`FRESH_SETUP.md`, section E).
+the standard price. Open a **new chat** for every run. The approval email goes to the approver addresses you set up (`FRESH_SETUP.md`, section E). It is an **HTML email**: summary table, **✓ Approve** and **✗ Reject** buttons, the shopping list and the vendor table. Both buttons open the approval page, where you confirm with one click.
 
 Approval levels used in both stories: **up to $5,000 automatic · $5,000 to $50,000 VP Product Marketing · above $50,000 CMO.**
 

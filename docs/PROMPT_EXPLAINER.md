@@ -22,7 +22,7 @@ so the wording is the same every time and no number is typed by the model.
 | 2 | Friendly option names | **Option 1: Buy everything new**, **Option 2: Use our stock first, buy the rest** ⭐, **Option 3: Go green with eco-friendly materials**; "Choose option 2" | `planner.OPTIONS`; `decision_flow.resolve_option` |
 | 3 | Tabular, friendly data | The three choices as one comparison table (price, saving, arrival, spare time, pollution, who says OK) | `presentation.decision_card` |
 | 4 | Approve / Decline as buttons, not long links | See the note below | Application Integration approval task |
-| 5 | Email in formatted HTML | The launch-team update is an HTML email (header, summary table). The approval email carries a short, structured summary | `execution._update_email`; setup option `--email-format` |
+| 5 | Email in formatted HTML | **Both** emails are HTML: the approval request (buttons, shopping list, vendors) and the orders-placed update (summary, shopping list, vendors, PO numbers) | `execution._update_email`; setup option `--email-format` |
 | 6 | No disconnect: why so many orders, which vendors, why procurement | After the orders: **The story in 4 lines**, **Who we bought from, and why** (per vendor), **Why so many orders?**, **How the approval worked** | `presentation.order_summary` |
 | 7 | BOM missing | **Step 1: Your shopping list (Bill of Materials)**: each bundle, each item, total, where it goes | `presentation.bom_markdown` |
 | 8 | Vendor comparison report | **Step 2: Vendors we compared**: price and days for every vendor and item, who was chosen, why the faster vendor was used, the stock we already own | `presentation.vendor_report`; tool `get_vendor_report` |
@@ -32,10 +32,12 @@ so the wording is the same every time and no number is typed by the model.
 for one item at a time. You give it a **whole campaign**, and it deals with **many vendors at once**: shopping list, vendor comparison, three
 choices, the right approver by order size, then all the orders together. That is the magic to call out.
 
-**About the Approve / Decline buttons (point 4).** The two links in the approval email are created by Google's Application Integration approval
-step, and its email layout cannot be restyled from our side. What we control, and have improved, is the content around them (a short, clear
-summary). Real buttons need a small approval page of our own (for example on Cloud Run) that the email links to. That would add a Google Cloud
-service, so it needs your yes first.
+**About the Approve / Reject buttons (point 4).** Google's own approval email is plain text with one long link, and its layout cannot be changed. So the agent
+sends its own **HTML approval email** instead (`emails.approval_email`): a header, a summary table (campaign, choice, total, saving, arrival, how, why, who has to
+approve), two buttons, **✓ Approve** and **✗ Reject**, the shopping list (Bill of Materials) and a vendor table. The long link is hidden behind the buttons. Both buttons open the
+Application Integration approval page for that run, where the approver confirms with one click (a true one-click button would need a small web service of our own,
+which is not built). The approval task itself sends no email (`--platform-approval-email` brings Google's email back). The orders-placed email now also carries the shopping
+list, the vendors and the purchase order numbers.
 
 ---
 

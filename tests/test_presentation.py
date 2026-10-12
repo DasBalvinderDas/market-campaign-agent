@@ -84,7 +84,7 @@ def test_order_summary_explains_vendors_and_why_so_many_orders(repo, aurora):
 def test_launch_team_update_is_a_formatted_html_email(repo, aurora):
     ex = _approved(repo, aurora)
     execution.execute_plan(repo, ex, aurora)
-    update = [i for t, i in ex.calls if t.endswith("send_launch_update")]
+    update = [i for t, i in ex.calls if t.endswith("send_launch_update") and "Orders placed" in i["email_subject"]]
     assert update and update[0]["email_body"].startswith("<div") and "<table" in update[0]["email_body"]
     assert "Orders placed for the Spring Product Launch Event" in update[0]["email_subject"]
 

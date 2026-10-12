@@ -108,7 +108,6 @@ Tables: `assets` (items), `vendors`, `vendor_offers` (price, days to make, carbo
 
 ```bash
 python scripts/setup_bigquery.py --approver-email "a@x.com,b@x.com"
-python scripts/setup_application_integration.py --approver-email "a@x.com,b@x.com" --republish
 ```
 
 Roles are "VP Product Marketing" and "CMO"; a bare list applies to both. The integration approval step has one recipient list,

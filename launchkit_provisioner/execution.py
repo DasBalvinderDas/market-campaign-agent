@@ -9,7 +9,7 @@ amount. Calling it twice never orders twice (executed lines are skipped).
 """
 from concurrent.futures import ThreadPoolExecutor
 
-from . import config, presentation
+from . import config, emails, presentation
 from .data.seed_data import TEAM_ROLE
 
 
@@ -20,33 +20,9 @@ def _audit(repo, request_id, actor, action, **details):
     repo.log_audit(request_id, actor, action, details)
 
 
-def _update_email(launch, scenario, pos, transfers, saved, request_id) -> tuple[str, str]:
-    """The tracking update for the launch team: a plain subject and a formatted HTML body."""
-    p = presentation
-    subject = f"Orders placed for the {launch['launch_name']} ({request_id})"
-    saving = (f"Saved {p.money(saved)} compared with buying everything new" if saved > 0
-              else f"{p.money(-saved)} more than buying everything new" if saved < 0 else "Same as buying everything new")
-    rows = [("Choice", scenario["option_name"]), ("Purchase orders placed", str(len(pos))),
-            ("Moves between our warehouses", str(len(transfers))), ("Total", p.money(scenario["total_cost"])),
-            ("Price compared with buying new", saving),
-            ("Everything arrives", f"{p.day(scenario['delivery_date'])} ({scenario['buffer_hours'] // 24} days before the "
-                                   f"{p.day(launch['in_hand_by'])} deadline)"),
-            ("Pollution (CO2)", f"{scenario['carbon_kg']:,.0f} kg")]
-    cells = "".join(
-        f'<tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;width:45%">{k}</td>'
-        f'<td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#111827">{v}</td></tr>'
-        for k, v in rows)
-    body = (
-        '<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;'
-        'border-radius:12px;overflow:hidden">'
-        f'<div style="background:#0f766e;color:#ffffff;padding:20px 24px"><div style="font-size:13px;opacity:.85">'
-        f'ORDERS PLACED</div><div style="font-size:22px;font-weight:700">{launch["launch_name"]}</div></div>'
-        '<div style="padding:20px 24px;color:#111827;font-size:15px;line-height:1.5">'
-        f'<p style="margin-top:0">Good news! All orders for this campaign have been placed. Here is the summary.</p>'
-        f'<table style="width:100%;border-collapse:collapse;font-size:14px">{cells}</table>'
-        f'<p style="margin-bottom:0;color:#6b7280;font-size:13px">Request {request_id}. To see the full list of vendors and '
-        f'orders, ask the assistant: <em>What is the status of {request_id}?</em></p></div></div>')
-    return subject, body
+def _update_email(repo, launch, scenario, pos, transfers, saved, request_id) -> tuple[str, str]:
+    """The tracking update for the launch team: a plain subject and a formatted HTML body (see emails.py)."""
+    return emails.orders_placed_email(repo, launch, scenario, pos, transfers, saved, request_id)
 
 
 def _place_group(executor, request_id, kind, source_id, lns, key, names):
@@ -160,7 +136,7 @@ def execute_plan(repo, executor, request_id: str) -> dict:
     update = {"sent_to": [], "failed": []}
     if placed_now and not remaining:
         all_pos, all_tr = repo.list_pos(request_id), repo.list_transfers(request_id)
-        subject, body = _update_email(launch, scenario, all_pos, all_tr, scenario["savings_usd"], request_id)
+        subject, body = _update_email(repo, launch, scenario, all_pos, all_tr, scenario["savings_usd"], request_id)
         for email in repo.get_approver_emails(TEAM_ROLE):
             try:
                 executor.execute(config.UPDATE_TRIGGER, {

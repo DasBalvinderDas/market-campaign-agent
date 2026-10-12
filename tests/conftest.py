@@ -12,6 +12,9 @@ from launchkit_provisioner.repositories.memory_repo import MemoryRepository
 @pytest.fixture(autouse=True)
 def repo():
     r = MemoryRepository()
+    # approvers for the two sign-off roles (the launch team is added by the tests that need it)
+    r.t["approvers"] = [{"approver_role": "VP Product Marketing", "email": "vp@example.com", "active": True},
+                        {"approver_role": "CMO", "email": "cmo@example.com", "active": True}]
     set_repo(r)
     yield r
     set_repo(None)

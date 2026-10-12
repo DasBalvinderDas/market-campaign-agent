@@ -337,8 +337,8 @@ def _pattern(sku_pattern: str):
     return re.compile("^" + re.escape(sku_pattern).replace(r"\{size\}", ".+").replace(r"\{plug\}", ".+") + "$")
 
 
-def bom_markdown(repo, request_id: str) -> str:
-    """The Bill of Materials, short: one row per pack (with what is inside) and one row per single item."""
+def bom_rows(repo, request_id: str):
+    """The Bill of Materials as data: ([(name, how many, what is inside, split by region)], total items, regions)."""
     lines = repo.get_requirement_lines(request_id)
     assets = {a["sku"]: a for a in repo.list_assets()}
     regions = sorted({ln["region"] for ln in lines})
@@ -369,13 +369,20 @@ def bom_markdown(repo, request_id: str) -> str:
                 label += f" ({plural(len({ln['sku'] for ln in hit}), 'plug type')})"
             inside.append(label)
         if count is not None:
-            rows.append((f"**{first_desc}**", f"{count:,} {_UNITS.get(btype, 'bundles')}", " · ".join(inside), split))
+            rows.append((first_desc, f"{count:,} {_UNITS.get(btype, 'bundles')}", " · ".join(inside), split))
+    return rows, total_items, regions
+
+
+def bom_markdown(repo, request_id: str) -> str:
+    """The Bill of Materials, short: one row per pack (with what is inside) and one row per single item."""
+    rows, total_items, regions = bom_rows(repo, request_id)
     where = len(regions) > 1
     out = ["### 🧾 Step 1: Your shopping list (Bill of Materials)", "",
            "| 🎁 What | 🔢 How many | 🧩 What is inside |" + (" 🌍 Where |" if where else ""),
            "|---|---|---|" + ("---|" if where else "")]
     for name, qty, inside, split in rows:
-        out.append(f"| {name} | **{qty}** | {inside or '-'} |" + (f" {' · '.join(f'{k} {v}' for k, v in split)} |" if where else ""))
+        bold = f"**{name}**" if inside else name
+        out.append(f"| {bold} | **{qty}** | {inside or '-'} |" + (f" {' · '.join(f'{k} {v}' for k, v in split)} |" if where else ""))
     out += ["", f"📦 **{total_items:,} items** in total."]
     return "\n".join(out)
 

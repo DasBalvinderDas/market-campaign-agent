@@ -81,7 +81,7 @@ def test_without_team_addresses_the_update_is_skipped_not_invented(repo, aurora)
     decision_flow.status(repo, aurora, ex)
     out = execution.execute_plan(repo, ex, aurora)
     assert out["status"] == "executed" and out["update_sent_to"] == []
-    assert config.UPDATE_TRIGGER not in [c[0] for c in ex.calls]
+    assert not [i for t, i in ex.calls if t == config.UPDATE_TRIGGER and "Orders placed" in i["email_subject"]]
 
 
 def test_a_rejected_decision_blocks_execution(repo, aurora):
