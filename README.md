@@ -42,7 +42,7 @@ tables, views and demo data and the Application Integration workflows. Full step
 
 ## How a request flows
 
-1. **Questions** (chat): the assistant asks, one at a time, *what is the event*, *by what date*, *what do you need and how many*, with a ✅/⬜ checklist (). It then shows the shopping list and **business advice** (spares, a kind of bundle you left out, the rest of a bundle, a date that is too close) and waits for *Looks good*. It looks up stock and vendors itself.
+1. **Questions** (chat): the assistant asks, one at a time, *a whole campaign or selected items?* (both work; a whole campaign is encouraged), *what is your campaign called?* (you are creating it), *by what date*, *what do you need and how many*, with a ✅/⬜ checklist. It then shows the shopping list and **business advice** (spares, a kind of bundle you left out, the rest of a bundle, a date that is too close) and waits for *Looks good*. It looks up stock and vendors itself.
 2. **Plan**: the Brief Analyst and the Sourcing Planner compute the requirement lines and three options from BigQuery. One reply,
    in simple words with tables and icons: the **shopping list (BOM)**, the **vendor comparison**, and a **3-choices table** (price, saving,
    arrival date, spare time, pollution, who has to say OK).
