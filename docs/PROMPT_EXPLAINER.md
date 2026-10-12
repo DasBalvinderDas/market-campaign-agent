@@ -114,6 +114,97 @@ decisions and audit trail are kept and reported on.
 
 ---
 
+## The sales pitch: LaunchKit Provisioner at enterprise level
+
+*(Semi-formal. Use it as a talk track of about five minutes; the sections after it back up every claim. Figures are from the demo data.)*
+
+### The problem we solve
+
+Every large launch depends on getting thousands of physical items to the right people, in the right region, before a date that cannot move.
+Most organisations still run this on email, spreadsheets and goodwill. The result is familiar: surplus stock sitting unused in one
+region while another region buys new, vendors chosen on price without checking they can make the date, approvals given on a single number
+with nothing to compare it against, and a scramble every time a supplier slips. The cost is not only money. It is missed dates, duplicated
+spend and decisions nobody can reconstruct afterwards.
+
+### What we are proposing
+
+The LaunchKit Provisioner is an AI agent that works as the launch manager's planning and fulfilment team. A launch lead describes the rollout in
+plain language, in the Gemini Enterprise chat people already use. The agent answers with a **decision**, not a report: three costed options, each
+checked against the deadline, with a recommendation. When a person chooses, it routes the sign-off to the right executive, and once that
+executive approves, it places the orders.
+
+### How it works, in four steps
+
+1. **Understand.** The agent turns the brief into exact requirements: what, how many, for which region, personalised where needed.
+2. **Plan.** It checks existing stock first and then vendor prices and lead times, and builds three options: full new production, smart
+   depot rebalance and certified eco. Each shows cost, arrival date, safety margin before the deadline, carbon and risk. On the demo launch,
+   reusing stock already in our depots cost $37,399.50 against $46,075.50 for buying everything new, saving $8,676 and arriving
+   three days earlier.
+3. **Decide.** The person chooses. The amount of the chosen option decides who signs: autopilot up to $5,000, a VP up to $50,000, the CMO
+   above. The executive approves or rejects from an email. Until then the surplus stock is held for this launch, and no money moves.
+4. **Deliver.** After approval, purchase orders and stock transfers are placed in parallel through the company's workflow system, and the
+   launch team receives a tracking update. If a vendor reports a delay, the agent re-plans on request and shows what changed.
+
+### Why an enterprise can trust it
+
+- **The numbers do not come from the AI.** Cost, dates, margins and savings are calculated by code from company data. The language model
+  chooses which step to run and writes the explanation. Ask twice, get the same numbers.
+- **Spending has one door.** Only the coordinating agent can request a sign-off, and the code refuses to place an order without an approved
+  decision, above the approved amount, or twice. This holds even if someone asks the agent to skip approval.
+- **People stay in control.** Executives approve or reject by email, with the option, amount, savings and risk in front of them. Small
+  requests run on autopilot so people only see what needs a person.
+- **Everything is traceable.** Every step, by which agent or which person, is written to an audit log, and a readiness board shows each
+  launch as green, amber or red.
+- **Rules are data, not code.** Approval limits, minimum safety margins and approvers are table entries the business can change without
+  changing the agent.
+
+### Why it fits how enterprises already work
+
+- **Built for Gemini Enterprise.** One coordinator writes every reply, with three specialists behind it. It is easy to steer, easy to
+  govern and shows up cleanly in the tool employees already use.
+- **No new exposure.** No public endpoint is required. Approval is a native workflow step, and the agent reads the answer when asked.
+- **Runs on Google Cloud services in place.** BigQuery for data, Application Integration for orders and approvals, Vertex AI Agent Engine
+  for hosting. Everything is set up and reset by scripts, which makes environments repeatable.
+- **Connects to systems of record.** In the demo the facts are in BigQuery. In production, inventory comes from the ERP, supplier terms
+  from the procurement platform, approvers from the corporate directory and orders go to the ERP, with approvals and updates in Slack or
+  Teams. The agent, its prompts and its rules stay the same; only the data and action connections change.
+
+### The value to the business
+
+| Value | How it shows up |
+|---|---|
+| Lower spend | Existing stock is used before anything new is bought (demo: 18.8% less than buying everything new) |
+| Fewer missed dates | Every option is measured against the deadline with a safety margin; delays trigger a re-plan in minutes |
+| Faster decisions | One conversation replaces a spreadsheet cycle: brief to decision card in about a minute |
+| Better governance | Right approver by amount, no spend without approval, complete audit trail |
+| Sustainability choice | Carbon is shown next to cost, so the eco trade-off is visible and deliberate |
+| Reusable pattern | The same design fits any "plan, approve, procure" process: events, field kits, onboarding kits, store openings |
+
+### What we would do next
+
+1. Agree which systems of record to connect first (inventory, procurement, and the notification channel people use).
+2. Replace the demo data with one live source at a time, starting with depot stock, keeping the agent unchanged.
+3. Run a pilot on one real launch, measuring spend avoided, deadline margin and decision time.
+4. Extend the approval tiers and policies to match the organisation's delegation of authority.
+
+### The one-line close
+
+*"Describe the launch once. The agent plans it against the deadline, reuses what we already own, asks the right person to approve
+the option chosen, and places the orders, with every number computed and every step on record."*
+
+**Be ready for these questions**
+
+| Question | Short answer |
+|---|---|
+| Is the AI making up the numbers? | No. Code computes them from company data; the AI only picks the step and writes the explanation |
+| Can it spend money on its own? | Only below the autopilot limit you set ($5,000 in the demo). Above it, a named executive must approve first |
+| What if the approver is not available? | The sign-off expires and the held stock is released; nothing is ordered |
+| What if a vendor is late? | Report it in chat; the plan is rebuilt with the delay. If already approved, you are told the effect on the margin |
+| Is this connected to our ERP today? | Not in the demo (orders are simulated through workflows). Connecting it is the first next step |
+| Why more than one agent? | Each does one job and can be tested and improved on its own; none of the specialists can spend money |
+
+---
+
 ## 1. The picture in one page
 
 **Business.** A global product launch (Project Aurora) needs 1,500+ personalised items in hand before an in-hand date and a press
