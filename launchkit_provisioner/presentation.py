@@ -12,6 +12,11 @@ ICON = {"FULL_NEW": "🛒", "REBALANCE": "♻️", "ECO": "🌱"}
 _UNITS = {"GUEST_KIT": "kits", "VENUE_DISPLAY": "stands", "SALES_PACK": "folders"}
 
 
+def plural(n: int, one: str, many: str | None = None) -> str:
+    """1 order, 2 orders."""
+    return f"{n:,} {one if n == 1 else (many or one + 's')}"
+
+
 def money(x) -> str:
     return f"${float(x):,.2f}"
 
@@ -376,7 +381,7 @@ def bom_markdown(repo, request_id: str) -> str:
            "Everything you need, worked out from what you told me.", "",
            "| 🎁 Bundle | 🧩 Item | Per bundle | Total needed | 🌍 Where it goes |", "|---|---|---|---|---|"]
     out += [f"| {b} | {i} | {p} | **{q:,}** | {s} |" for b, i, p, q, s in rows]
-    out += ["", f"📦 **{total_items:,} items in total**, in {len(lines)} separate order lines (one per item and region)."]
+    out += ["", f"📦 **{total_items:,} items in total**, in {plural(len(lines), 'order line')} (one per item and region)."]
     return "\n".join(out)
 
 
@@ -414,7 +419,7 @@ def decision_card(request_id: str, launch: dict, scenarios: list[dict], policies
         ("🛠️ How we get it", [_how(s) for s in scenarios]),
         ("✍️ Who has to say OK", [who(float(s["total_cost"])) for s in scenarios]),
     ]
-    out = [f"### 🎯 Step 4: Your 3 choices for the {launch['launch_name']}",
+    out = [f"### 🎯 Step 4: Your 3 choices for {'your quick purchase' if launch['launch_name'] == 'Quick purchase' else 'the ' + launch['launch_name']}",
            f"📅 Deadline (in our hands): **{day(launch['in_hand_by'])}**",
            f"🧾 Request number: `{request_id}`", "",
            "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
@@ -634,6 +639,8 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
                 names.append(n)
         return ", ".join(names)
 
+    n_products = len(item_names({ln["sku"] for ln in lines}).split(", "))
+    n_regions = len({ln["region"] for ln in lines})
     total = float(scenario["total_cost"])
     rng, who = _band(policies, total)
     approval = (f"{money(total)} is {rng}, so **{decision['approver_role']}** approved it ✅"
@@ -644,10 +651,12 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
            f"> 🎪 **{launch['launch_name']}** · {scenario['option_name']} · `{request_id}`", "",
            "| 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 Pollution |", "|---|---|---|---|---|",
            f"| **{money(total)}** | {saved} | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) | "
-           f"{len(vlines)} purchase orders + {len(dlines)} warehouse moves | {scenario['carbon_kg']:,.0f} kg |",
+           f"{plural(len(vlines), 'purchase order')} + {plural(len(dlines), 'warehouse move')} | {scenario['carbon_kg']:,.0f} kg |",
            "", "### 📖 What we did, in 4 lines",
-           f"1. 🎪 We planned **one whole campaign**: **{items:,} items**, {len(item_names({ln['sku'] for ln in lines}).split(', '))} different products, {len({ln['region'] for ln in lines})} {'region' if len({ln['region'] for ln in lines}) == 1 else 'regions'}.",
-           f"2. 🏭 We compared vendors and bought from **{len(by_vendor)}** of them.",
+           (f"1. 🛍️ You asked for **{items:,} items**: {plural(n_products, 'product')} for {plural(n_regions, 'region')}."
+            if launch["launch_name"] == "Quick purchase" else
+            f"1. 🎪 We planned **one whole campaign**: **{items:,} items**, {plural(n_products, 'different product')}, {plural(n_regions, 'region')}."),
+           f"2. 🏭 We compared vendors and bought from **{len(by_vendor)}** of them." if len(by_vendor) != 1 else "2. 🏭 We compared vendors and picked the best one.",
            f"3. ♻️ We took **{own:,} items from our own stock** {bar(100 * own / items) if items else ''}, so we did not buy them twice.",
            f"4. ✍️ {approval}", "", "### 🏭 Who we bought from, and why", "",
            "| 🏭 Vendor | 🧩 What | 🧾 Orders | 📦 Items | 💵 Amount | 🧠 Why |", "|---|---|---|---|---|---|"]
@@ -661,7 +670,8 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
             agg[k] = agg.get(k, 0) + ln["quantity"]
         out += ["", "### ♻️ From our own warehouses", "", "| 🏢 From | 🧩 What | 📦 Items | 🌍 To |", "|---|---|---|---|"]
         out += [f"| {w} | {i} | {q} | {r} |" for (w, i, r), q in agg.items()]
-    out += ["", f"❓ **Why so many orders?** One order per item per region: **{len(vlines)} + {len(dlines)}**, all placed together."]
+    if len(vlines) + len(dlines) > 3:
+        out += ["", f"❓ **Why so many orders?** One order per item per region: **{len(vlines)} + {len(dlines)}**, all placed together."]
     if update_sent_to:
         out += ["", f"📧 The launch team got an email: {', '.join(update_sent_to)}."]
     if failed:
