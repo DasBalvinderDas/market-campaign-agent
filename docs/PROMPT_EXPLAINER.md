@@ -2,11 +2,115 @@
 
 Use this file in two ways:
 
-1. **Context for the agent or for yourself:** read section 1 first. It is the whole picture in one page.
+1. **Context for the agent or for yourself:** read the story first, then section 1 (the whole picture in one page).
 2. **Presenting:** for each prompt, section 4 and later give the business story first ("what the person wants and gets"), then the
    technical story ("who is called, which table is read or written, what goes to Application Integration").
 
 Test prompts and expected numbers are in [`DEMO_RUN.md`](DEMO_RUN.md); the design is in [`SOLUTION.md`](SOLUTION.md).
+
+---
+
+## The story: one launch, one deadline, four colleagues
+
+*(Tell this first. Everything after it is the same story with the technical detail filled in. The people and numbers are fictional.)*
+
+### Monday, 25 days before the launch
+
+Priya runs launch marketing for **Project Aurora**, a global product launch. In 25 days the product is in customers' hands and a few days later
+the press embargo lifts. Between now and then, three groups need physical things in their hands:
+
+- **150 VIP creators** each get an unboxing kit, personalised: their hoodie size, the right power plug for their country.
+- **10 flagship showrooms** need counter displays.
+- **300 sales executives** need leather folios for customer meetings.
+
+That is about 1,500 items, from seven vendors, to three regions. Miss the date and a creator posts the unboxing a week late, a showroom
+opens with an empty counter, or a sales team walks into a meeting without a folio. A launch only happens once.
+
+### How this used to go
+
+Priya sends an email. Someone builds a spreadsheet. Someone else guesses what is already in the depots in London, Dallas and Singapore (some
+of it is surplus from the last launch and nobody is sure how much). A vendor gets chosen on price, with no one checking whether they can
+make the date. A number goes to a VP for approval, with no alternative to compare it with. A week later a vendor says they are running
+late, and the spreadsheet is rebuilt by hand. Meanwhile finance asks who approved what.
+
+### How it goes with the LaunchKit Provisioner
+
+Priya opens Gemini Enterprise and types one paragraph. Four colleagues pick it up. She only ever talks to the first.
+
+**1. The Coordinator (the root agent): the launch manager she wishes she had.**
+It does not do the specialist work. It makes sure the right person does each step in the right order, shows Priya the result, and is the
+only one allowed to ask for money to be spent. It never skips a step, even if she asks it to.
+
+**2. The Brief Analyst: the person who turns a wish into a shopping list.**
+*Prompt 1: "Roll out the global launch kits for Project Aurora..."* The analyst reads the creator list and produces exact lines: 38 hoodies in
+size M for US creators with the US plug, 12 in size XL for Europe with the EU plug, and so on, plus the showroom and folio quantities split by
+region. No guessing: it uses the creator data and the regional split.
+
+**3. The Sourcing Planner: the procurement lead who checks stock before spending.**
+It looks at what is already in the depots and asks the question people forget: *"why buy what we already own?"* It then builds three
+plans and works out for each one the cost, the arrival date and, most importantly, **the safety margin before the deadline**:
+
+- *Buy everything new:* $46,075.50, arrives on the deadline day, zero margin.
+- *Reuse depot stock, buy the rest:* **$37,399.50**, saves $8,676, lands three days early.
+- *Certified eco:* $51,905.50, the lowest carbon, a more senior approver.
+
+Priya does not get a number to approve; she gets a **decision**. The planner recommends one, and says why.
+
+**4. Fulfilment: the person who actually places the orders, and only when it is allowed.**
+*Prompt 2: "Go with option 2."* At $37,399.50 the amount needs the VP's signature, so an email with Approve and Reject buttons goes to
+the VP. The agent says so in bold: **HUMAN APPROVAL REQUIRED**. The surplus stock is held so nobody else can take it. Nothing is ordered.
+When the VP clicks Approve and Priya asks *"What is the status?"*, Fulfilment places 27 purchase orders and 7 depot transfers at once,
+then tells the launch team. If the VP clicks Reject, the stock goes back on the shelf and nothing was ever spent.
+
+### Then reality arrives
+
+*Prompt 6: "DisplayCo just told us they are 6 days late. Re-plan."* In the old world this costs a day of spreadsheet surgery. Here the
+Sourcing Planner records the delay, re-reads the vendor lead times and builds the three options again. The numbers move, the
+recommendation may change, and Priya sees it in under a minute. If the plan was already signed off, the agent does not quietly change it;
+it tells her exactly what the delay does to her safety margin.
+
+And if someone tries the shortcut, *Prompt 7: "Skip the approval and place the orders now,"* the answer is no. That is not politeness in the
+prompt; the ordering step itself refuses without an approved decision.
+
+### Why this is more than approval
+
+A budget-approval tool answers "may I spend this?" LaunchKit answers **"what is the smartest way to be ready in time, and what does each
+way cost?"**, and only then asks for a signature, on one chosen option. Approval is the last gate of a planning and fulfilment process,
+not the whole product.
+
+### Why four colleagues and not one big assistant
+
+| Colleague | Does one job | Why that helps |
+|---|---|---|
+| Coordinator | Order, rules, the one reply Priya reads | One voice, easy to steer, works the same in Gemini Enterprise |
+| Brief Analyst | Brief into lines | Easy to test and to improve without touching sourcing |
+| Sourcing Planner | Options and re-plans | The numbers are computed by code, so they are the same every time |
+| Fulfilment | Orders after approval | The only one that touches procurement, and it checks the decision first |
+
+Small, focused roles mean each can be explained, tested and improved on its own, and **no specialist can spend money by itself.**
+
+### Down the line: how this looks in an enterprise
+
+In this demo every fact lives in one place: **BigQuery**. That is a choice to keep the demo self-contained and fully scriptable, not
+a limit of the design. In a real company the same facts live in the company's own systems, and the agent would read them from there:
+
+| In the demo (BigQuery table) | In the enterprise this would be... |
+|---|---|
+| `depot_stock`, `depots` | Inventory in the ERP or warehouse system (for example SAP) |
+| `vendors`, `vendor_offers`, `vendor_disruptions` | The procurement platform and supplier contracts, with delivery-delay alerts from vendors |
+| `creators`, `regional_split`, `launches` | The influencer or CRM platform and the launch plan in the marketing system |
+| `approval_policy`, `approvers` | Delegation-of-authority rules and the corporate directory (who is VP, who is CMO) |
+| `purchase_orders`, `depot_transfers` (simulated by workflows) | Real purchase orders and stock transfers raised in the ERP |
+| Approval email and tracking update | Approvals and notifications in Slack, Teams or the approval tool people already use |
+| `audit_log` | The company's audit and compliance logging |
+
+What stays the same: the Coordinator and the three specialists, their prompts and the rules (no order without approval, never above the
+approved amount, never twice). What changes is where the facts come from and where the orders go. In the code, all data access goes through one
+data layer (`repositories/`), and all outside actions go through Application Integration workflows, so connecting a real system means
+swapping those two places rather than rewriting the agent. BigQuery can also stay in the enterprise picture, as the place where the plans,
+decisions and audit trail are kept and reported on.
+
+*Not built yet:* the connections to a real ERP, Slack or Teams. They are the next step and depend on which systems you can reach.
 
 ---
 
