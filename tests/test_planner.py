@@ -152,10 +152,10 @@ def test_small_request_fits_autopilot(repo):
 
 
 def test_decision_card_shows_only_computed_numbers(repo, aurora):
-    card = planner.decision_card(aurora, repo.get_launch("LAUNCH-SPRING"), repo.get_scenarios(aurora), 5000)
+    card = planner.decision_card(aurora, repo.get_launch("LAUNCH-SPRING"), repo.get_scenarios(aurora), repo.list_policies())
     for s in repo.get_scenarios(aurora):
         assert f"${s['total_cost']:,.2f}" in card
-    assert "RECOMMENDED" in card and card.count("**Option") == 3
+    assert "Best choice" in card and card.count("**Option") == 3 and "| 💰 Total price |" in card
 
 
 def test_launch_dates_are_relative_to_setup_day(repo):

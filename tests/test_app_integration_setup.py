@@ -146,3 +146,11 @@ def test_native_approval_task_branches_on_the_decision():
 def test_approver_addresses_are_taken_from_role_specs():
     got = sai.approver_addresses(["VP Product Marketing=md@x.com,md2@x.com", "CMO=vp@x.com;md@x.com"])
     assert got == ["md@x.com", "md2@x.com", "vp@x.com"]
+
+
+def test_update_email_is_html_by_default_and_text_on_request():
+    def fmt(v):
+        task = next(t for t in v["taskConfigs"] if t["task"] == "EmailTask")
+        return task["parameters"]["BodyFormat"]["value"]["stringValue"]
+    assert fmt(sai.build_version()) == "html"
+    assert fmt(sai.build_version(email_format="text")) == "text"

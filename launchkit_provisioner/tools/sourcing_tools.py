@@ -1,5 +1,5 @@
 """Tools of the sourcing planner agent."""
-from .. import config, planner
+from .. import config, planner, presentation
 from ..repositories import get_repo
 from .audit import audit
 
@@ -33,6 +33,7 @@ def build_scenarios(request_id: str) -> dict:
     stored = repo.get_scenarios(request_id)
     launch = repo.get_launch(repo.get_request(request_id)["launch_id"])
     limit = _autopilot_limit(repo)
+    policies = repo.list_policies()
     best = next(s for s in stored if s["recommended"])
     autopilot = bool(best["feasible"] and float(best["total_cost"]) <= limit)
     audit(request_id, "sourcing_planner_agent", "scenarios_built", recommended=best["option_code"],
@@ -45,7 +46,9 @@ def build_scenarios(request_id: str) -> dict:
                          "carbon_kg": s["carbon_kg"], "feasible": s["feasible"], "recommended": s["recommended"]}
                         for i, s in enumerate(stored, start=1)],
             "active_vendor_delays": repo.list_disruptions(),
-            "decision_card": planner.decision_card(request_id, launch, stored, limit)}
+            "decision_card": planner.decision_card(request_id, launch, stored, policies,
+                                                   repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24)),
+            "vendor_report": presentation.vendor_report(repo, request_id)}
 
 
 def report_vendor_delay(request_id: str, vendor: str, delay_days: int, reason: str = "") -> dict:

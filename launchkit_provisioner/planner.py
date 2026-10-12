@@ -17,9 +17,9 @@ from datetime import date, timedelta
 
 from .repositories.base import Repository
 
-OPTIONS = [("FULL_NEW", "FN", "Full brand-new production"),
-           ("REBALANCE", "RB", "Smart depot rebalance"),
-           ("ECO", "EC", "Certified eco launch")]
+OPTIONS = [("FULL_NEW", "FN", "Buy everything new"),
+           ("REBALANCE", "RB", "Use our stock first, buy the rest"),
+           ("ECO", "EC", "Go green with eco-friendly materials")]
 CHANNEL = {"GUEST_KIT": "GUESTS", "VENUE_DISPLAY": "VENUES", "SALES_PACK": "SALES"}
 
 
@@ -256,27 +256,17 @@ def _summary(code: str, lines: list[dict]) -> str:
     vendor_units = sum(ln["quantity"] for ln in lines if ln["source_type"] == "VENDOR")
     eco_units = sum(ln["quantity"] for ln in lines if ln.get("variant") == "ECO")
     if code == "FULL_NEW":
-        return f"{vendor_units} units manufactured new from the cheapest vendors."
+        return f"Order all {vendor_units:,} items new from the cheapest vendors."
     if code == "REBALANCE":
-        return f"{depot_units} units reused from regional depots, {vendor_units} units bought (deadline-aware vendor choice)."
-    return f"{eco_units} units on certified eco material, {vendor_units - eco_units} on standard where eco cannot make the date."
+        return f"Take {depot_units:,} items we already own from our warehouses and order the other {vendor_units:,}."
+    return f"{eco_units:,} items made from eco-friendly materials, {vendor_units - eco_units:,} normal ones where eco is too slow."
 
 
 # ---------------------------------------------------------------------------- presentation
-def decision_card(request_id: str, launch: dict, scenarios: list[dict], limit: float) -> str:
-    """The text a decision maker reads: one block per option, computed from the stored scenarios."""
-    rows = [f"**Launch decision for {launch['launch_name']}** (request {request_id}): in-hand by {launch['in_hand_by']}, "
-            f"press embargo {launch['embargo_date']}.", ""]
-    for i, s in enumerate(scenarios, start=1):
-        tag = " (RECOMMENDED)" if s["recommended"] else ""
-        save = f", saves ${s['savings_usd']:,.2f}" if s["savings_usd"] > 0 else (
-            f", costs ${-s['savings_usd']:,.2f} more" if s["savings_usd"] < 0 else "")
-        rows.append(f"**Option {i}: {s['option_name']}{tag}**: ${s['total_cost']:,.2f}{save}")
-        rows.append(f"- Arrives {s['delivery_date']} | buffer {s['buffer_hours']} h | carbon {s['carbon_kg']:,.0f} kg | {s['risk']}")
-        rows.append(f"- {s['summary']}")
-        rows.append("")
-    rows.append(f"Spend up to ${limit:,.0f} runs on autopilot; above that a named executive signs off by email.")
-    return "\n".join(rows)
+def decision_card(request_id: str, launch: dict, scenarios: list[dict], policies: list[dict], min_buffer: float = 24) -> str:
+    """The three choices as a table (see presentation.py), computed from the stored scenarios."""
+    from . import presentation
+    return presentation.decision_card(request_id, launch, scenarios, policies, min_buffer)
 
 
 # ---------------------------------------------------------------------------- vendor delays

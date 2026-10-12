@@ -1,7 +1,7 @@
 """Tools of the brief analyst agent (and the intake tool of the root agent)."""
 from pydantic import BaseModel
 
-from .. import planner
+from .. import planner, presentation
 from ..repositories import get_repo
 from .audit import audit
 
@@ -57,7 +57,7 @@ def build_requirements(request_id: str, bundles: list[BundleRequest]) -> dict:
         ch["units"] += ln["quantity"]
         ch["regions"][ln["region"]] = ch["regions"].get(ln["region"], 0) + ln["quantity"]
     out = {"status": "ok", "request_id": request_id, "requirement_lines": len(lines), "channels": by_channel,
-           "total_units": sum(ln["quantity"] for ln in lines)}
+           "total_units": sum(ln["quantity"] for ln in lines), "bom_markdown": presentation.bom_markdown(repo, request_id)}
     sizes, plugs = {}, {}
     for ln in lines:
         if ln["sku"].startswith("HOODIE-EVENT-"):

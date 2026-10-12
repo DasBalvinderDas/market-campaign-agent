@@ -41,7 +41,7 @@ def test_build_scenarios_returns_the_card_and_the_decision_mode(repo):
     brief_tools.build_requirements(rid, bundles(("GUEST_KIT", 150, ""), ("VENUE_DISPLAY", 10, ""), ("SALES_PACK", 300, "")))
     out = sourcing_tools.build_scenarios(rid)
     assert out["status"] == "ok" and out["decision_mode"] == "CHOOSE" and out["autopilot_limit_usd"] == 5000.0
-    assert [o["option"] for o in out["options"]] == [1, 2, 3] and out["recommended_option"] == "Smart depot rebalance"
+    assert [o["option"] for o in out["options"]] == [1, 2, 3] and out["recommended_option"] == "Use our stock first, buy the rest"
     assert out["decision_card"].count("**Option") == 3
     assert len(repo.get_scenarios(rid)) == 3 and "scenarios_built" in [a["action"] for a in repo.list_audit(rid)]
 

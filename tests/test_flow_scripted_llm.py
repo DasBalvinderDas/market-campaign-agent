@@ -197,7 +197,7 @@ def test_big_brief_is_planned_then_waits_for_the_pmm_to_choose(monkeypatch, repo
     chat = Chat(monkeypatch, repo)
     calls, final = chat.say("Roll out Spring kits: 150 guest welcome kits, 10 venue display stands, 300 folders.")
     assert calls == ["register_launch_request", "brief_analyst_agent", "sourcing_planner_agent"]
-    assert final.count("**Option") == 3 and "RECOMMENDED" in final and "Which option" in final
+    assert final.count("**Option") == 3 and "Best choice" in final and "Which option" in final
     assert not repo.t["decisions"] and not repo.list_pos("REQ-001") and len(repo.get_scenarios("REQ-001")) == 3
 
 

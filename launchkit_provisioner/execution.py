@@ -8,7 +8,7 @@ amount. Calling it twice never orders twice (executed lines are skipped).
 """
 from concurrent.futures import ThreadPoolExecutor
 
-from . import config
+from . import config, presentation
 from .data.seed_data import TEAM_ROLE
 
 
@@ -20,14 +20,31 @@ def _audit(repo, request_id, actor, action, **details):
 
 
 def _update_email(launch, scenario, pos, transfers, saved, request_id) -> tuple[str, str]:
-    subject = f"Launch collateral confirmed: {launch['launch_name']} ({request_id})"
-    body = (f"{launch['launch_name']}: the sourcing plan '{scenario['option_name']}' was approved and placed.\n\n"
-            f"- Purchase orders issued: {len(pos)}\n- Depot transfers created: {len(transfers)}\n"
-            f"- Total: USD {scenario['total_cost']:,.2f} ({scenario['savings_usd']:+,.2f} versus full new production)\n"
-            f"- Estimated delivery: {scenario['delivery_date']} ({scenario['buffer_hours']} hours before the in-hand "
-            f"date {launch['in_hand_by']}; press embargo {launch['embargo_date']})\n"
-            f"- Carbon: {scenario['carbon_kg']:,.0f} kg CO2e\n\nTracking: ask the Launch Provisioner for "
-            f"the status of {request_id}.")
+    """The tracking update for the launch team: a plain subject and a formatted HTML body."""
+    p = presentation
+    subject = f"Orders placed for the {launch['launch_name']} ({request_id})"
+    saving = (f"Saved {p.money(saved)} compared with buying everything new" if saved > 0
+              else f"{p.money(-saved)} more than buying everything new" if saved < 0 else "Same as buying everything new")
+    rows = [("Choice", scenario["option_name"]), ("Purchase orders placed", str(len(pos))),
+            ("Moves between our warehouses", str(len(transfers))), ("Total", p.money(scenario["total_cost"])),
+            ("Price compared with buying new", saving),
+            ("Everything arrives", f"{p.day(scenario['delivery_date'])} ({scenario['buffer_hours'] // 24} days before the "
+                                   f"{p.day(launch['in_hand_by'])} deadline)"),
+            ("Pollution (CO2)", f"{scenario['carbon_kg']:,.0f} kg")]
+    cells = "".join(
+        f'<tr><td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;color:#6b7280;width:45%">{k}</td>'
+        f'<td style="padding:10px 14px;border-bottom:1px solid #e5e7eb;font-weight:600;color:#111827">{v}</td></tr>'
+        for k, v in rows)
+    body = (
+        '<div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;'
+        'border-radius:12px;overflow:hidden">'
+        f'<div style="background:#0f766e;color:#ffffff;padding:20px 24px"><div style="font-size:13px;opacity:.85">'
+        f'ORDERS PLACED</div><div style="font-size:22px;font-weight:700">{launch["launch_name"]}</div></div>'
+        '<div style="padding:20px 24px;color:#111827;font-size:15px;line-height:1.5">'
+        f'<p style="margin-top:0">Good news! All orders for this event have been placed. Here is the summary.</p>'
+        f'<table style="width:100%;border-collapse:collapse;font-size:14px">{cells}</table>'
+        f'<p style="margin-bottom:0;color:#6b7280;font-size:13px">Request {request_id}. To see the full list of vendors and '
+        f'orders, ask the assistant: <em>What is the status of {request_id}?</em></p></div></div>')
     return subject, body
 
 
@@ -123,7 +140,10 @@ def execute_plan(repo, executor, request_id: str) -> dict:
         events.append(("fulfilment_agent", "launch_update_sent", {"sent_to": update["sent_to"], "failed": update["failed"]}))
     repo.log_audit_batch(request_id, events)
     all_pos, all_tr = repo.list_pos(request_id), repo.list_transfers(request_id)
+    summary = presentation.order_summary(repo, request_id, scenario, repo.get_decision_for_request(request_id),
+                                         update["sent_to"], failed)
     return {"status": "executed" if not remaining else "partial", "option": scenario["option_name"],
+            "display_markdown": summary,
             "orders_placed_now": placed_now, "purchase_orders": [p["po_number"] for p in all_pos],
             "depot_transfers": [t["transfer_number"] for t in all_tr], "failed": failed,
             "total_usd": float(scenario["total_cost"]), "savings_usd": float(scenario["savings_usd"]),

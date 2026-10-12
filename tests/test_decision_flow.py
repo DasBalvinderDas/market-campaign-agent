@@ -29,7 +29,7 @@ def test_above_the_limit_a_human_must_sign_off_and_nothing_is_ordered(repo, auro
     trig, inputs = ex.calls[0]
     reb = option(repo, aurora, "REBALANCE")
     assert trig == config.APPROVAL_TRIGGER and inputs["amount"] == reb["total_cost"] and inputs["launch_id"] == "LAUNCH-SPRING"
-    assert "Smart depot rebalance" in inputs["approval_message"] and "Approve to place" in inputs["approval_message"]
+    assert "Use our stock first, buy the rest" in inputs["approval_message"] and "If you approve we place" in inputs["approval_message"]
     assert repo.get_decision_for_request(aurora)["status"] == "PENDING"
     assert not repo.list_pos(aurora) and not repo.list_transfers(aurora)
     holds = [h for h in repo.t["depot_holds"] if h["status"] == "ACTIVE"]

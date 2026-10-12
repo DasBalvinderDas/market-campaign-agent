@@ -9,7 +9,7 @@ The amount, the options and the recipients all come from BigQuery; the model onl
 """
 from datetime import datetime, timedelta, timezone
 
-from . import config
+from . import config, presentation
 from .repositories.base import new_id
 
 _EXEC_PREFIX = "execution:"
@@ -58,13 +58,17 @@ def _check_stock(repo, lines) -> str | None:
 def _approval_message(launch, scenario, lines, request_id, justification, min_buffer) -> str:
     depot_units = sum(x["quantity"] for x in lines if x["source_type"] == "DEPOT")
     vendor_units = sum(x["quantity"] for x in lines if x["source_type"] == "VENDOR")
-    return (f"{justification or 'A launch sourcing plan needs your sign-off.'} Request {request_id} for "
-            f"{launch['launch_name']} (cost center {launch.get('cost_center') or 'n/a'}). Chosen: {scenario['option_name']}, "
-            f"total USD {scenario['total_cost']:,.2f} ({scenario['savings_usd']:+,.2f} versus full new production). "
-            f"Arrives {scenario['delivery_date']}, {scenario['buffer_hours']} hours before the in-hand date {launch['in_hand_by']} "
-            f"(press embargo {launch['embargo_date']}). {depot_units} units reused from depots, {vendor_units} bought. "
-            f"Risk: {scenario['risk']}. Approve to place the purchase orders and depot transfers; Reject to release "
-            f"the held depot stock.")
+    p = presentation
+    return (f"Please approve or reject this order for the {launch['launch_name']} (request {request_id}).\n"
+            f"Choice: {scenario['option_name']}\n"
+            f"Total price: {p.money(scenario['total_cost'])} ({p.money(abs(scenario['savings_usd']))} "
+            f"{'saved' if scenario['savings_usd'] >= 0 else 'extra'} compared with buying everything new)\n"
+            f"Everything arrives: {p.day(scenario['delivery_date'])}, deadline {p.day(launch['in_hand_by'])} "
+            f"({scenario['buffer_hours'] // 24} days to spare)\n"
+            f"How: {depot_units:,} items from our own warehouses, {vendor_units:,} items ordered from vendors\n"
+            f"Cost center: {launch.get('cost_center') or 'n/a'}\n"
+            f"Why this choice: {justification or 'best balance of price and delivery time'}\n"
+            f"If you approve we place the orders. If you reject nothing is bought and the held stock is released.")
 
 
 def authorize(repo, executor, request_id: str, option: str, justification: str = "", now: datetime | None = None) -> dict:
@@ -111,6 +115,7 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
                tier=policy["tier"])
         return {"status": "approved", "tier": policy["tier"], "option": scenario["option_name"], "amount": total,
                 "approved_by": "autopilot",
+                "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, "", False, request_id),
                 "next_step": "Approved by policy (autopilot). Now call the fulfilment_agent tool with the request_id to "
                              "place the orders."}
     emails = repo.get_approver_emails(policy["approver_role"])
@@ -141,9 +146,9 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
             "announce": (f"HUMAN APPROVAL REQUIRED: an approval email with Approve / Reject buttons has been sent to "
                          f"{who} ({policy['approver_role']}) for {scenario['option_name']}, USD {total:,.2f}. "
                          f"No orders are placed until it is approved."),
-            "next_step": "Start your reply with the text in `announce`, in bold, exactly. Never write an email address "
-                         "that is not in `approver_emails`. Do NOT call the fulfilment_agent tool. Tell the user that "
-                         f"after the approver clicks Approve they should send: \"What is the status of {request_id}?\""}
+            "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, who, True, request_id),
+            "next_step": "Start your reply with the text in `announce`, in bold, exactly, then show `display_markdown` exactly. "
+                         "Never write an email address that is not in `approver_emails`. Do NOT call the fulfilment_agent tool."}
 
 
 # ---------------------------------------------------------------------------- reading the workflow's answer
@@ -239,6 +244,7 @@ def status(repo, request_id: str, executor=None) -> dict:
            "lines_executed": done, "lines_total": len(lines),
            "purchase_orders": [p["po_number"] for p in repo.list_pos(request_id)],
            "depot_transfers": [t["transfer_number"] for t in repo.list_transfers(request_id)]}
+    out["display_markdown"] = presentation.status_markdown(request_id, d, done, len(lines), note)
     if d["status"] == "APPROVED" and done < len(lines):
         out["next_step"] = "Approved. Now call the fulfilment_agent tool with the request_id to place the orders."
     elif d["status"] == "REJECTED":

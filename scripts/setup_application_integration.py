@@ -71,7 +71,7 @@ def update_sample(email):
     return {"request_id": {"stringValue": "SETUP-TEST"}, "launch_id": {"stringValue": "LAUNCH-SPRING"},
             "recipient_email": {"stringValue": email},
             "email_subject": {"stringValue": "LaunchKit Provisioner setup test (please ignore)"},
-            "email_body": {"stringValue": "This is a test of the launch tracking update email. No action needed."}}
+            "email_body": {"stringValue": "<div style=\"font-family:Arial,sans-serif\"><h3>LaunchKit setup test</h3><p>This is a test of the formatted tracking update email. <b>No action needed.</b></p></div>"}}
 
 
 # ---------------------------------------------------------------- integration definition
@@ -108,7 +108,7 @@ def _trigger(number, trigger_id, start_task, inputs, outputs):
             "inputVariables": {"names": list(inputs)}, "outputVariables": {"names": list(outputs)}}
 
 
-def _email_task(task_id, next_id):
+def _email_task(task_id, next_id, body_format="html"):
     """Send Email task. Parameter keys follow Google's published foreach-loop-send-email sample."""
     empty = {"stringArray": {}}
     return {"task": "EmailTask", "taskId": task_id, "displayName": "Email the launch team",
@@ -119,7 +119,7 @@ def _email_task(task_id, next_id):
                 "AttachmentPath": {"key": "AttachmentPath", "value": empty},
                 "Subject": {"key": "Subject", "value": {"stringValue": "$email_subject$"}},
                 "TextBody": {"key": "TextBody", "value": {"stringValue": "$email_body$"}},
-                "BodyFormat": {"key": "BodyFormat", "value": {"stringValue": "text"}},
+                "BodyFormat": {"key": "BodyFormat", "value": {"stringValue": body_format}},
                 "EmailConfigInput": {"key": "EmailConfigInput", "value": {
                     "jsonValue": json.dumps({"@type": "type.googleapis.com/enterprise.crm.eventbus.proto.EmailConfig"})}}}}
 
@@ -164,7 +164,7 @@ def _execution_id():
         "outputField": _out_field("execution_id")}
 
 
-def build_version(email: bool = True, approver_emails=None) -> dict:
+def build_version(email: bool = True, approver_emails=None, email_format: str = "html") -> dict:
     """The IntegrationVersion body: four API triggers (purchase order, depot transfer, approval, launch update)."""
     status = {"inputField": {"fieldType": S, "transformExpression": _lit("SENT")}, "outputField": _out_field("status")}
     params = {}
@@ -178,7 +178,7 @@ def build_version(email: bool = True, approver_emails=None) -> dict:
     if email:
         # 2: send email (only trigger inputs are referenced, like Google's foreach-loop-send-email sample)
         # 3: set status
-        tasks += [_email_task("2", "3"), _mapping_task("3", "Mark update sent", [status])]
+        tasks += [_email_task("2", "3", email_format), _mapping_task("3", "Mark update sent", [status])]
     else:
         tasks.append(_mapping_task("2", "Mark update sent", [status]))
     tasks += [_approval_task("10", approver_emails or ["approver@example.com"], "11", "12"),
@@ -269,7 +269,8 @@ def run_with(http, args, project):
     else:
         print("  creating the integration and publishing it ..." if not exists else "  adding a new version and publishing it ...")
         r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
-                      json=build_version(email=not args.no_email, approver_emails=approvers))
+                      json=build_version(email=not args.no_email, approver_emails=approvers,
+                                           email_format=getattr(args, "email_format", "html")))
         if r.status_code != 200:
             _fail(r, project)
         version = r.json()["name"]
@@ -309,6 +310,9 @@ def main():
     ap.add_argument("--approver-email", action="append", default=[], metavar="[ROLE=]EMAIL[,EMAIL]",
                     help="who gets the sign-off email (Approve / Reject); default: APPROVER_EMAILS, else your gcloud account")
     ap.add_argument("--republish", action="store_true", help="publish a new version even if the triggers exist (e.g. new approver emails)")
+    ap.add_argument("--email-format", choices=["html", "text"], default="html",
+                    help="body format of the launch-team update email (default html: a formatted email; use text if your "
+                         "project rejects html)")
     ap.add_argument("--no-email", action="store_true", help="do not add the Send Email task to send_launch_update")
     ap.add_argument("--check-only", action="store_true", help="check only; do not create anything")
     ap.add_argument("--provision-region", action="store_true",
@@ -316,7 +320,8 @@ def main():
     ap.add_argument("--print-definition", action="store_true", help="print the integration definition JSON and exit")
     args = ap.parse_args()
     if args.print_definition:
-        print(json.dumps(build_version(email=not args.no_email, approver_emails=approver_addresses(args.approver_email)), indent=2))
+        print(json.dumps(build_version(email=not args.no_email, approver_emails=approver_addresses(args.approver_email),
+                                       email_format=args.email_format), indent=2))
         return
     run(args, project=resolve_project(args.project))
 

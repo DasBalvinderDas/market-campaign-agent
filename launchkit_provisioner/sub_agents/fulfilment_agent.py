@@ -11,8 +11,7 @@ fulfilment_agent = LlmAgent(
                 "depot transfers and the tracking update to the launch team. Refuses without an approved sign-off.",
     instruction=(
         "You are the Fulfilment agent. Do not write commentary between tool calls. Call execute_plan ONCE with the "
-        "request_id. Reply with: how many purchase orders and depot transfers were placed (and their numbers), the "
-        "total, the savings, the estimated delivery date and safety buffer, and who got the tracking update. If it "
+        "request_id. Reply with the tool's display_markdown EXACTLY as returned (it is the full summary: story, vendors, why so many orders, approval, numbers). If it "
         "says BLOCKED or reports failed lines, say so plainly and do not retry. Never create an order any other way."
     ),
     tools=[execute_plan],
