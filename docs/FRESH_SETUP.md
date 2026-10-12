@@ -93,7 +93,7 @@ so everyone in it receives every sign-off email. Launch-team tracking updates go
 
 ## F. Test and debug the sign-off
 
-1. Send the launch brief, then "Go with option 2." The reply must start with **HUMAN APPROVAL REQUIRED** and name the approver(s).
+1. Send the launch brief, then "Choose option 2." The reply must start with **HUMAN APPROVAL REQUIRED** and name the approver(s).
 2. Click **Approve** in the email.
 3. Ask "What is the status?". Expect APPROVED, then the orders and transfers placed.
 
@@ -121,4 +121,5 @@ Approve shows as an approval record `LIFTED`, Reject as `REJECTED`; `PENDING` me
 | Buffers or delivery dates look wrong | Run `--reset-demo` (it re-bases the dates) |
 | Gemini Enterprise shows no final answer | Check the Traces tab and `agent_engine_logs.py --errors-only`; the agent writes no text between steps, do not add it |
 | Old numbers in the chat | Open a new chat after every reset |
+| Publishing the workflows fails on the email body format | The launch-team update is an HTML email. Run `python scripts/setup_application_integration.py --email-format text --republish` to fall back to plain text |
 | 403 on Application Integration | `AGENT_SERVICE_ACCOUNT` missing in `.env` or roles missing; the deploy script says which |

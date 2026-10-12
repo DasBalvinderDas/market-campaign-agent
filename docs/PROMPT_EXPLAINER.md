@@ -10,13 +10,42 @@ Test prompts and expected numbers are in [`DEMO_RUN.md`](DEMO_RUN.md); the desig
 
 ---
 
+## What changed after the demo review (how each comment is handled)
+
+The nine review comments, and where each one shows up. Everything is built from stored data by `launchkit_provisioner/presentation.py`,
+so the wording is the same every time and no number is typed by the model.
+
+| # | Review comment | What you see now | Where it lives |
+|---|---|---|---|
+| 0 | Simple, 10-year-old wording, Markdown, tables, markers, icons | Short sentences, tables, 🟢🟡🔴 lights, icons in every answer | `presentation.py`; the root prompt's "How to write" rule |
+| 1 | Say what it does and needs on "Hi" | A card: **What I can do** and **What I need from you**, with a sample prompt | tool `show_capabilities` |
+| 2 | Friendly option names | **Option 1: Buy everything new**, **Option 2: Use our stock first, buy the rest** ⭐, **Option 3: Go green with eco-friendly materials**; "Choose option 2" | `planner.OPTIONS`; `decision_flow.resolve_option` |
+| 3 | Tabular, friendly data | The three choices as one comparison table (price, saving, arrival, spare time, pollution, who says OK) | `presentation.decision_card` |
+| 4 | Approve / Decline as buttons, not long links | See the note below | Application Integration approval task |
+| 5 | Email in formatted HTML | The launch-team update is an HTML email (header, summary table). The approval email carries a short, structured summary | `execution._update_email`; setup option `--email-format` |
+| 6 | No disconnect: why so many orders, which vendors, why procurement | After the orders: **The story in 4 lines**, **Who we bought from, and why** (per vendor), **Why so many orders?**, **How the approval worked** | `presentation.order_summary` |
+| 7 | BOM missing | **Step 1: Your shopping list (Bill of Materials)**: each bundle, each item, total, where it goes | `presentation.bom_markdown` |
+| 8 | Vendor comparison report | **Step 2: Vendors we compared**: price and days for every vendor and item, who was chosen, why the faster vendor was used, the stock we already own | `presentation.vendor_report`; tool `get_vendor_report` |
+| 9 | Multi-level approval and prompts | The ladder **up to $5,000 automatic, up to $50,000 VP, above that CMO**, with *this order* marked; prompts for each level (`DEMO_RUN.md`, case 3) and "Who has to approve what?" | `approval_policy` table; tool `get_approval_rules` |
+
+**The idea to say first:** underneath it is still a **purchase order, procurement and approval system**. The difference is that it does not ask
+for one item at a time. You give it a **whole event**, and it deals with **many vendors at once**: shopping list, vendor comparison, three
+choices, the right approver by order size, then all the orders together. That is the magic to call out.
+
+**About the Approve / Decline buttons (point 4).** The two links in the approval email are created by Google's Application Integration approval
+step, and its email layout cannot be restyled from our side. What we control, and have improved, is the content around them (a short, clear
+summary). Real buttons need a small approval page of our own (for example on Cloud Run) that the email links to. That would add a Google Cloud
+service, so it needs your yes first.
+
+---
+
 ## The story: one launch, one deadline, four colleagues
 
 *(Tell this first. Everything after it is the same story with the technical detail filled in. The people and numbers are fictional.)*
 
 ### Monday, 25 days before the launch
 
-Priya runs launch marketing for **Spring Launch Event**, a global product launch. In 25 days the product is in customers' hands and a few days later
+Priya runs launch marketing for the **Spring Product Launch Event**, a global product launch. In 25 days the product is in customers' hands and a few days later
 the press embargo lifts. Between now and then, three groups need physical things in their hands:
 
 - **150 VIP guests** each get an unboxing kit, personalised: their hoodie size, the right power plug for their country.
@@ -42,7 +71,7 @@ It does not do the specialist work. It makes sure the right person does each ste
 only one allowed to ask for money to be spent. It never skips a step, even if she asks it to.
 
 **2. The Brief Analyst: the person who turns a wish into a shopping list.**
-*Prompt 1: "Roll out the global launch kits for Spring Launch Event..."* The analyst reads the guest list and produces exact lines: 38 hoodies in
+*Prompt 1: "Plan our Spring Product Launch Event..."* The analyst reads the guest list and produces exact lines: 38 hoodies in
 size M for US guests with the US plug, 12 in size XL for Europe with the EU plug, and so on, plus the venue and folder quantities split by
 region. No guessing: it uses the guest data and the regional split.
 
@@ -57,7 +86,7 @@ plans and works out for each one the cost, the arrival date and, most importantl
 Priya does not get a number to approve; she gets a **decision**. The planner recommends one, and says why.
 
 **4. Fulfilment: the person who actually places the orders, and only when it is allowed.**
-*Prompt 2: "Go with option 2."* At $37,399.50 the amount needs the VP's signature, so an email with Approve and Reject buttons goes to
+*Prompt 2: "Choose option 2."* At $37,399.50 the amount needs the VP's signature, so an email with Approve and Reject buttons goes to
 the VP. The agent says so in bold: **HUMAN APPROVAL REQUIRED**. The surplus stock is held so nobody else can take it. Nothing is ordered.
 When the VP clicks Approve and Priya asks *"What is the status?"*, Fulfilment places 27 purchase orders and 7 depot transfers at once,
 then tells the launch team. If the VP clicks Reject, the stock goes back on the shelf and nothing was ever spent.
@@ -149,7 +178,7 @@ executive approves, it places the orders.
 ### How it works, in four steps
 
 1. **Understand.** The agent turns the brief into exact requirements: what, how many, for which region, personalised where needed.
-2. **Plan.** It checks existing stock first and then vendor prices and lead times, and builds three options: full new production, smart
+2. **Plan.** It checks existing stock first and then vendor prices and lead times, and builds three options: buying everything new, smart
    depot rebalance and certified eco. Each shows cost, arrival date, safety margin before the deadline, carbon and risk. On the demo launch,
    reusing stock already in our depots cost $37,399.50 against $46,075.50 for buying everything new, saving $8,676 and arriving
    three days earlier.
@@ -188,7 +217,7 @@ executive approves, it places the orders.
 |---|---|
 | Lower spend | Existing stock is used before anything new is bought (demo: 18.8% less than buying everything new) |
 | Fewer missed dates | Every option is measured against the deadline with a safety margin; delays trigger a re-plan in minutes |
-| Faster decisions | One conversation replaces a spreadsheet cycle: brief to decision card in about a minute |
+| Faster decisions | One conversation replaces a spreadsheet cycle: brief to 3-choices table in about a minute |
 | Better governance | Right approver by amount, no spend without approval, complete audit trail |
 | Sustainability choice | Carbon is shown next to cost, so the eco trade-off is visible and deliberate |
 | Reusable pattern | The same design fits any "plan, approve, procure" process: events, field kits, onboarding kits, store openings |
@@ -317,7 +346,7 @@ The planner pays $500 more for RapidDisplay because DisplayCo would land exactly
 rebalance plan has a 72-hour buffer and the full-new plan has 0. This is the rule `TARGET_BUFFER_HOURS` / `MIN_BUFFER_HOURS` in `planning_rules`
 at work. No prompt contains it.
 
-**Step 3, the sign-off gate (prompt 2: "Go with option 2")**
+**Step 3, the sign-off gate (prompt 2: "Choose option 2")**
 
 | table | row | proves |
 |---|---|---|
@@ -397,8 +426,8 @@ User (Gemini Enterprise chat)
    |
    v
 ROOT  launchkit_provisioner  (Vertex AI Agent Engine)
-   |  own tools: register_launch_request, authorize_launch, get_launch_status,
-   |             get_launch_overview, get_audit_trail
+   |  own tools: show_capabilities, register_launch_request, authorize_launch, get_launch_status,
+   |             get_launch_overview, get_audit_trail, get_approval_rules, get_vendor_report
    |
    |--(AgentTool)--> brief_analyst_agent     tool: build_requirements
    |--(AgentTool)--> sourcing_planner_agent  tools: build_scenarios, report_vendor_delay
@@ -474,10 +503,10 @@ root writes the one final message. The root's prompt also says: no narration bet
 
 | Agent | Prompt in one line | Tools | Reads | Writes |
 |---|---|---|---|---|
-| **Root** `launchkit_provisioner` | Collect the brief, call specialists in a fixed order, show the card, wait for the user's choice, gate spend, summarise. No narration. Never skip approval | `register_launch_request`, `authorize_launch`, `get_launch_status`, `get_launch_overview`, `get_audit_trail`, + the 3 specialists | `launches`, `approval_policy`, `approvers`, `decisions`, views | `launch_requests`, `decisions`, `depot_holds`, `audit_log` |
-| **Brief Analyst** | Call `build_requirements` once with every bundle (GUEST_KIT, VENUE_DISPLAY, SALES_PACK) and quantity; report totals. Never invent a bundle or quantity | `build_requirements` | `bundle_templates`, `guests`, `regional_split`, `assets`, `launch_requests` | `requirement_lines`, `audit_log` |
-| **Sourcing Planner** | Call `build_scenarios` once; on a vendor delay call `report_vendor_delay` first. Return the decision card exactly; never recompute | `build_scenarios`, `report_vendor_delay` | `requirement_lines`, `v_depot_available`, `vendor_offers`, `vendors`, `vendor_disruptions`, `transit_lanes`, `planning_rules`, `assets`, `approval_policy` | `scenarios`, `scenario_lines`, `vendor_disruptions`, `audit_log` |
-| **Fulfilment** | Call `execute_plan` once; report orders, transfers, total, savings, delivery date, buffer. If BLOCKED say so and do not retry | `execute_plan` | `decisions`, `scenarios`, `scenario_lines`, `approvers` (Launch Team) | `purchase_orders`, `depot_transfers`, `scenario_lines` (status), `depot_holds` (consumed), `audit_log` |
+| **Root** `launchkit_provisioner` | Collect the brief, call specialists in a fixed order, show the card, wait for the user's choice, gate spend, summarise. No narration. Never skip approval | `show_capabilities`, `register_launch_request`, `authorize_launch`, `get_launch_status`, `get_launch_overview`, `get_audit_trail`, `get_approval_rules`, `get_vendor_report`, + the 3 specialists | `launches`, `approval_policy`, `approvers`, `decisions`, views | `launch_requests`, `decisions`, `depot_holds`, `audit_log` |
+| **Brief Analyst** | Call `build_requirements` once with every bundle (GUEST_KIT, VENUE_DISPLAY, SALES_PACK) and quantity; return the shopping list (Bill of Materials) exactly. Never invent a bundle or quantity | `build_requirements` | `bundle_templates`, `guests`, `regional_split`, `assets`, `launch_requests` | `requirement_lines`, `audit_log` |
+| **Sourcing Planner** | Call `build_scenarios` once; on a vendor delay call `report_vendor_delay` first. Return the vendor comparison, then the 3-choices table, exactly; never recompute | `build_scenarios`, `report_vendor_delay` | `requirement_lines`, `v_depot_available`, `vendor_offers`, `vendors`, `vendor_disruptions`, `transit_lanes`, `planning_rules`, `assets`, `approval_policy` | `scenarios`, `scenario_lines`, `vendor_disruptions`, `audit_log` |
+| **Fulfilment** | Call `execute_plan` once; return its summary exactly (story, vendors and why, why so many orders, approval, numbers). If BLOCKED say so and do not retry | `execute_plan` | `decisions`, `scenarios`, `scenario_lines`, `approvers` (Launch Team) | `purchase_orders`, `depot_transfers`, `scenario_lines` (status), `depot_holds` (consumed), `audit_log` |
 
 Root workflow in its prompt (paraphrased): **1** collect launch and bundles, **2** register, **3** Brief Analyst, **4** Sourcing Planner,
 **5** autopilot or choose, **6** authorise the chosen option, **7** on a status question read the decision and place orders if approved,
@@ -508,9 +537,24 @@ That is why the demo is two steps: send the prompt, click the email, ask for the
 
 Each prompt: **Business** (say this first), then **Technical** (the flow). Numbers are from the seeded Spring Launch Event data.
 
-### Prompt 1: the launch brief
+### Prompt 0: "Hi" (what can you do, what do you need)
 
-> Roll out the global launch kits for Spring Launch Event. I need 150 VIP guest welcome kits (personalised hoodie size and power plug for each guest), 10 venue display stands for our flagship spaces, and 300 sales folders for the sales team. Everything has to be in hand before the in-hand deadline.
+> Hi
+
+**Business.** Anyone can open the chat and learn in ten seconds what the assistant does and what it needs from them, without a manual.
+
+**Technical.** The root prompt says: on a greeting, a "what can you do" question or a first message that is not an event brief, call `show_capabilities`.
+The tool returns a fixed Markdown card (no database access, no specialist). The card has **What I can do** (shopping list, compare vendors,
+use stock we already own, three choices, the right OK, place all orders, re-plan on delay), **What I need from you** (event, items and
+quantities, optional region) and sample prompts.
+
+**In plain English (technical).** It is a front desk. Asked "Hi", the coordinator hands back the same friendly card every time.
+
+---
+
+### Prompt 1: the event brief
+
+> Plan our Spring Product Launch Event. We need 150 VIP guest welcome kits, 10 venue display stands and 300 sales folders for the sales team. Everything must arrive before the deadline.
 
 **Business.** The launch lead describes the whole rollout in one sentence. They get back, in about a minute, three ways to do it, each with
 cost, arrival date and safety margin before the deadline, plus a recommendation. They can see where money is saved by reusing stock
@@ -522,14 +566,15 @@ that is already sitting in depots.
 |---|---|---|---|---|
 | 1 | Root | `register_launch_request("LAUNCH-SPRING", summary)` | reads `launches`; writes `launch_requests`, `audit_log` | none |
 | 2 | Root -> **Brief Analyst** | Prompt tells it to call `build_requirements` once with all three bundles | | none |
-| 3 | Brief Analyst | `expand_bundles`: guest welcome kits become one line per size / plug / region from the real guest list; displays and folders follow the regional split | reads `bundle_templates`, `guests`, `regional_split`, `assets`; writes `requirement_lines`, `audit_log` | none |
+| 3 | Brief Analyst | `expand_bundles`: guest welcome kits become one line per size / plug / region from the real guest list; displays and folders follow the regional split. Returns the **shopping list (Bill of Materials)** | reads `bundle_templates`, `guests`, `regional_split`, `assets`; writes `requirement_lines`, `audit_log` | none |
 | 4 | Root -> **Sourcing Planner** | `build_scenarios(request_id)` | | none |
 | 5 | Sourcing Planner | `plan_scenarios`: prefetches vendor offers, assets and free depot stock in bulk, then builds three options. **Depot rebalance** takes surplus nearest-depot first; **new** picks the cheapest vendor that makes the date (target buffer 48 h, minimum 24 h); **eco** prefers certified material, standard where eco cannot make the date. Recommends the cheapest option with buffer of at least 24 h | reads `requirement_lines`, `v_depot_available`, `vendor_offers`, `vendors`, `vendor_disruptions`, `transit_lanes`, `planning_rules`, `launches`; writes `scenarios`, `scenario_lines`, `audit_log` | none |
-| 6 | Sourcing Planner | Returns the formatted `decision_card` and `decision_mode` (AUTOPILOT if the recommended option is within $5,000, else CHOOSE) | reads `approval_policy` | none |
-| 7 | Root | Prints the card exactly and asks which option. **Stops.** Nothing is authorised | | none |
+| 6 | Sourcing Planner | Returns the **vendor comparison** (every vendor checked, who was chosen, stock we already own), the 3-choices table and `decision_mode` (AUTOPILOT if the recommended option is within $5,000, else CHOOSE) | reads `approval_policy`, `vendor_offers`, `depot stock` | none |
+| 7 | Root | Shows one message: shopping list, vendors compared, the 3 choices, then asks which option. **Stops.** Nothing is authorised | | none |
 
-**What the user sees:** Option 1 full new $46,075.50 (0 h buffer), Option 2 depot rebalance $37,399.50 recommended (saves $8,676, 72 h
-buffer), Option 3 eco $51,905.50 (48 h buffer).
+**What the user sees, in this order:** (1) the shopping list: 1,210 items in 31 order lines; (2) the vendor comparison: 7 vendors, 24 offers, who was chosen and why RapidDisplay was used
+even though DisplayCo is cheaper; (3) one table with the three choices: Option 1 *Buy everything new* $46,075.50 (no spare time), Option 2 *Use our stock first, buy the rest* $37,399.50
+(saves $8,676, 3 days to spare, best choice), Option 3 *Go green* $51,905.50 (2 days to spare).
 
 **In plain English (technical).** The coordinator first files the request and gets a reference number. It then briefs the analyst, who looks up the guest list and the regional split and writes one line per item and region. Next the planner reads current stock, vendor prices and delivery times and works out three plans, applying simple rules: use surplus stock first and from the nearest depot, buy from the cheapest vendor that still arrives with a safety margin, and prefer certified eco material where it makes the date. Everything is saved, the coordinator shows the card and waits.
 
@@ -543,7 +588,7 @@ vendor price or a depot stock and the card changes."
 Prompt 1 always produces the same three options for the same brief. The brief does not change between them; **where the items come from,
 when they arrive and what they cost** does. Business language first:
 
-| | **Option 1: Full new production** | **Option 2: Smart depot rebalance** (recommended) | **Option 3: Certified eco launch** |
+| | **Option 1: Buy everything new production** | **Option 2: Use our stock first, buy the rest** (recommended) | **Option 3: Go green with eco-friendly materials** |
 |---|---|---|---|
 | **The idea** | Buy everything new from the cheapest vendors | Use stock already sitting in our regional depots first, buy only the rest | Buy certified sustainable material wherever it can make the date |
 | **What we do** | 1,210 units manufactured new | 240 units moved from depots, 970 bought | 1,034 units on eco material, 176 on standard where eco cannot make the date |
@@ -581,16 +626,16 @@ So to show the three side by side:
 | You want to show | What to do |
 |---|---|
 | The comparison | Stay on the prompt 1 reply. Read the card aloud; do not choose yet |
-| Option 2 end to end | In the same chat: "Go with option 2." -> click Approve -> ask the status |
-| Option 3 and the CMO | `python scripts/setup_bigquery.py --reset-demo`, **new chat**, send prompt 1, then "Go with option 3, the eco launch." |
-| Option 1 | Same: reset, new chat, prompt 1, then "Go with option 1." |
+| Option 2 end to end | In the same chat: "Choose option 2." -> click Approve -> ask the status |
+| Option 3 and the CMO | `python scripts/setup_bigquery.py --reset-demo`, **new chat**, send prompt 1, then "Choose option 3, the eco one." |
+| Option 1 | Same: reset, new chat, prompt 1, then "Choose option 1." |
 | Change your mind after a **Reject** | Reject releases the held stock; ask to re-plan and choose again in the same chat |
 
 So you do not need to keep re-running prompt 1 inside one chat. Run it once per fresh demo, then continue with the follow-up prompts in the same conversation.
 
 ### Prompt 2: choose an option (human in the loop)
 
-> Go with option 2.
+> Choose option 2.
 
 **Business.** The launch lead picks the recommended option. Because $37,399.50 is above the $5,000 autopilot limit, the VP Product
 Marketing must sign off. The agent says so clearly, emails the executive, and keeps the surplus stock held for this launch while it
@@ -637,7 +682,9 @@ gives the order numbers, total, savings, delivery date and buffer.
 | 7 | Code | When every line is placed, sends the tracking update to each address of the Launch Team role | reads `approvers` | **`send_launch_update`** |
 | 8 | Root | Summarises: PO and transfer numbers, total, savings, delivery date, buffer | | none |
 
-**Expected:** 27 purchase orders and 7 depot transfers for option 2 on the starting data.
+**Expected:** 27 purchase orders and 7 depot transfers for option 2 on the starting data. The reply is the order story: **The story in 4 lines**, **Who we bought
+from, and why** (one row per vendor with orders, items, amount, reason), **What we moved from our own warehouses**, **Why so many orders?**, **How the approval worked**,
+and the numbers. It is built by `presentation.order_summary` from `scenario_lines`, `vendor_offers` and `decisions`, so every figure matches BigQuery.
 
 **In plain English (technical).** When you ask for the status, the tool asks the workflow system whether the executive has clicked and what they chose. If approved, the decision is marked approved and the coordinator hands over to the fulfilment specialist. Fulfilment checks again that the decision is approved and that the amount is not exceeded, then sends all the purchase orders and stock transfers to the workflow system at the same time, collects the numbers it gets back, saves them in one go, and finally sends an update email to the launch team.
 
@@ -648,7 +695,7 @@ the agent reads its answer when asked. No public endpoint, nothing to secure."
 
 ### Prompt 3: the larger option needs the CMO
 
-> Go with option 3, the eco launch.
+> Choose option 3, the eco one.
 
 (Use after a reset and a new brief, or on a fresh request.)
 
@@ -694,7 +741,7 @@ Root calls Fulfilment immediately: 22 orders through `create_purchase_order` / `
 
 > Our display vendor DisplayCo just told us they are 6 days late. Re-plan.
 
-**Business.** The launch lead hears bad news from a vendor. The agent records it, re-plans, and shows a new decision card. Options that relied
+**Business.** The launch lead hears bad news from a vendor. The agent records it, re-plans, and shows a new 3-choices table. Options that relied
 on that vendor lose buffer or switch to another vendor; the recommendation may change.
 
 **Technical flow**
@@ -740,6 +787,26 @@ buffer and a GREEN / AMBER / RED readiness, plus free surplus per depot. The aud
 `get_audit_trail` (reads `audit_log`). Read-only; no specialist and no Application Integration call.
 
 **In plain English (technical).** These are look-ups only. The coordinator reads two ready-made summaries and the history log and describes them; nothing is changed.
+
+---
+
+### Prompt 9: who has to approve what? (multi-level approval)
+
+> Who has to approve what?
+
+**Business.** Shows the approval levels: up to $5,000 automatic, up to $50,000 the VP Product Marketing, above that the CMO. The audience sees that
+procurement approvals are tiered by order value.
+
+**Technical.** Root calls `get_approval_rules`, which reads `approval_policy` and returns the ladder table. The same ladder appears in the sign-off message
+with **this order** marked and in the final order story. Demo each level: 40 guest kits (automatic), option 2 (VP), option 3 (CMO).
+
+### Prompt 10: compare the vendors
+
+> Compare the vendors for that request.
+
+**Business.** The buyer asks "who did you check, and why those vendors?" and gets the comparison on demand.
+
+**Technical.** Root calls `get_vendor_report(request_id)`, which reads `requirement_lines`, `vendor_offers`, `vendor_disruptions` (late vendors are marked) and the saved plan.
 
 ---
 

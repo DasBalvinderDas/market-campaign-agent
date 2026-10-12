@@ -1,8 +1,8 @@
 # The LaunchKit Provisioner
 
-An autonomous Google ADK agent that plans product-launch collateral against a deadline. A Product Marketing Manager gives it a
+An autonomous Google ADK agent that handles a **whole event** instead of one item at a time. Underneath it is still a purchase order, procurement and approval system, but it takes a full event brief, turns it into a shopping list (Bill of Materials), compares many vendors, and places bulk orders. It plans against a deadline. A Product Marketing Manager gives it a
 brief ("150 VIP guest welcome kits, 10 venue display stands, 300 sales folders for Spring Launch Event"); it works out what is needed in which
-region, reuses surplus stock from regional depots, **computes three sourcing options** against the in-hand date and the press
+region, reuses surplus stock from regional depots, **computes three sourcing options** (plain-English names: *Buy everything new*, *Use our stock first, buy the rest*, *Go green*) against the in-hand date and the press
 embargo, lets the manager choose, gets a named executive to sign off above the autopilot limit, and has the purchase orders and
 depot transfers placed. It is built for **Gemini Enterprise** (the root agent writes every reply) and runs on Vertex AI Agent Engine.
 
@@ -11,9 +11,9 @@ and risk per option), and approval is only the last gate for the chosen option.
 
 | Part | What it does | Where it lives |
 |---|---|---|
-| **Root agent** | Takes the brief, calls the three specialists as tools, shows the decision card, holds the sign-off gate, answers status questions | `launchkit_provisioner/agent.py` |
+| **Root agent** | Takes the brief, calls the three specialists as tools, shows the 3-choices table, holds the sign-off gate, answers status questions | `launchkit_provisioner/agent.py` |
 | **Brief Analyst** | Breaks the brief into requirement lines (guest welcome kits personalised by size and plug, venue display stands, sales folders) | `sub_agents/brief_analyst_agent.py` |
-| **Sourcing Planner** | Computes the 3 options (full new, smart depot rebalance, eco launch) with cost, delivery date, safety buffer, savings, carbon, risk; re-plans on a vendor delay | `sub_agents/sourcing_planner_agent.py`, `planner.py` |
+| **Sourcing Planner** | Computes the 3 options (buy everything new, use our stock first, buy the rest, green option) with cost, delivery date, safety buffer, savings, carbon, risk; re-plans on a vendor delay | `sub_agents/sourcing_planner_agent.py`, `planner.py` |
 | **Fulfilment** | Places the orders of the approved option in one batch: POs, depot transfers, tracking update | `sub_agents/fulfilment_agent.py`, `execution.py` |
 | **Google BigQuery** | All data: launches, guests, depots and stock, lanes, vendors and offers, rules, policy, the computed plan, decisions, orders, audit log | dataset `launchkit` (`bigquery/schema.sql`) |
 | **Google Application Integration** | Four workflows: `create_purchase_order`, `create_depot_transfer`, `request_approval` (native Approve / Reject email) and `send_launch_update` | integration `launchkit-workflows` |
@@ -43,13 +43,17 @@ tables, views and demo data and the Application Integration workflows. Full step
 ## How a request flows
 
 1. **Brief** (chat): the manager describes what the launch needs.
-2. **Plan**: the Brief Analyst and the Sourcing Planner compute the requirement lines and three options from BigQuery. The reply
-   is a decision card (cost, arrival, buffer in hours, carbon, risk per option).
+2. **Plan**: the Brief Analyst and the Sourcing Planner compute the requirement lines and three options from BigQuery. One reply,
+   in simple words with tables and icons: the **shopping list (BOM)**, the **vendor comparison**, and a **3-choices table** (price, saving,
+   arrival date, spare time, pollution, who has to say OK).
 3. **Choose**: the manager replies with an option. Within the autopilot limit the recommended option runs by itself.
 4. **Sign off**: above the limit an Application Integration approval emails the executive (Approve / Reject). The reply starts with
    **HUMAN APPROVAL REQUIRED**; surplus depot stock is held; nothing is ordered.
 5. **Execute**: when the user asks for the status after the click, the orders are placed (POs, depot transfers) and the launch
-   team gets a tracking update. A rejection releases the held stock.
+   team gets a formatted HTML tracking update. The reply is a short story: what we planned, which vendors and why, why so many orders, how
+   the approval worked. A rejection releases the held stock.
+
+Say **Hi** and the agent introduces itself: what it can do and what it needs. Ask *Who has to approve what?* for the approval levels.
 
 ## Documents
 

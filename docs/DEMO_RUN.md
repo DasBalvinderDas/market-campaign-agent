@@ -56,70 +56,96 @@ Nothing is mocked and nothing is built by hand: re-running a script is safe.
 ## 5. Test prompts
 
 Use a **new chat** for each case, after `--reset-demo`. Numbers below are for the unchanged demo data. A full request takes about a minute
-in Gemini Enterprise; the "Working on the request" panel lists the steps.
+in Gemini Enterprise. Every answer is written in simple words, with tables and icons.
 
-### Case 1: plan a launch and choose (the decision card)
+**The idea to say first:** underneath it is still a purchase order, procurement and approval system. But instead of asking for one item at a
+time, you give it a **whole event**, and it deals with **many vendors at once**: shopping list, vendor comparison, three choices, the right
+approver, then all the orders together.
 
-> Roll out the global launch kits for Spring Launch Event. I need 150 VIP guest welcome kits (personalised hoodie size and power plug for each guest), 10 venue display stands for our flagship spaces, and 300 sales folders for the sales team. Everything has to be in hand before the in-hand deadline.
+### Case 0: say hello (what can you do, and what do you need)
 
-**Expected:** one message with the decision card and the question which option to go with. Nothing is ordered.
+> Hi
 
-| Option | Total | Versus full new | Buffer | Carbon | Risk |
-|---|---|---|---|---|---|
-| 1. Full brand-new production | $46,075.50 | | 0 h | 4,200 kg | MODERATE |
-| 2. Smart depot rebalance (RECOMMENDED) | $37,399.50 | saves $8,676.00 | 72 h | 3,702 kg | LOW |
-| 3. Certified eco launch | $51,905.50 | costs $5,830.00 more | 48 h | 2,378 kg | LOW |
+**Expected:** a friendly card: **What I can do** (shopping list, compare vendors, use stock we already own, three choices, get the right
+OK, place all the orders, re-plan when a vendor is late) and **What I need from you** (which event, what and how many, a region only if you
+want one), plus a sample prompt. No tools besides the card are called.
 
-Option 2 reuses 240 units from the depots (60 boxes from London, 120 folders from Dallas, adapters) and buys 970. **Shows:** the options are
-computed against the deadline, with the savings and the buffer visible.
+### Case 1: plan the whole event (shopping list, vendors, three choices)
 
-### Case 2: executive sign-off, the two-step flow (HITL)
+> Plan our Spring Product Launch Event. We need 150 VIP guest welcome kits, 10 venue display stands and 300 sales folders for the sales team. Everything must arrive before the deadline.
+
+**Expected:** one message, in this order, and nothing is ordered:
+
+1. **🧾 Step 1: Your shopping list (Bill of Materials)**: what is in each bundle and how many in total (1,210 items in 31 order lines).
+2. **🏭 Step 2: Vendors we compared**: 7 vendors and 24 price offers, one row per vendor and item with price and days to make, who was chosen,
+   the stock we already own, and the note why RapidDisplay was used even though DisplayCo is cheaper.
+3. **🎯 Step 3: Your 3 choices**, as one table:
+
+| | Option 1: Buy everything new | Option 2: Use our stock first, buy the rest ⭐ | Option 3: Go green with eco-friendly materials |
+|---|---|---|---|
+| 💰 Total price | $46,075.50 | $37,399.50 | $51,905.50 |
+| 💸 Compared with Option 1 | | Save $8,676.00 | Pay $5,830.00 more |
+| 📅 Everything arrives | 6 Nov (deadline day) | 3 Nov | 4 Nov |
+| ⏳ Spare time | 🟡 none (tight!) | 🟢 3 days | 🟢 2 days |
+| 🌍 Pollution (CO₂) | 4,200 kg | 3,702 kg | 2,378 kg |
+| ✍️ Who has to say OK | VP Product Marketing | VP Product Marketing | CMO |
+
+Then: *Say "Choose option 2".* **Shows:** a whole event worked out across many vendors, with the choices computed against the deadline.
+
+### Case 2: the executive says OK, the two-step flow (human in the loop)
 
 Continue in the chat from case 1:
 
-> Go with option 2.
+> Choose option 2.
 
-**Expected:** a bold **HUMAN APPROVAL REQUIRED** line: the approval email was sent to the approver(s) (VP Product Marketing) for Smart depot
-rebalance, USD 37,399.50, and no orders are placed until it is approved. The reply tells you what to ask next.
+**Expected:** a bold **HUMAN APPROVAL REQUIRED** line (the email went to the VP Product Marketing), then **Step 4: Getting the OK**: the
+approval ladder with *this order* marked, a four-step tracker (email sent, approver clicks, you ask for the status, orders placed), and
+"the stock is held for you, nothing has been bought yet".
 
 1. Open the Application Integration email and click **Approve**.
 2. Ask in the same chat: `What is the status of that request?`
 
-**Expected:** APPROVED and the orders placed in one go: 27 purchase orders and 7 depot transfers, the total $37,399.50, savings $8,676.00, the
-delivery date with the 72-hour buffer, and the tracking update sent to the launch team. **Say to the audience:** "The manager chose how to hit
-the date; the executive signed off the choice; the agent cannot order anything before that."
+**Expected:** **✅ All done! Your orders are placed**, written as a short story: *The story in 4 lines* (one whole event, 7 products, 3 regions;
+bought from 7 vendors with 27 purchase orders; 240 items taken from our own warehouses with 7 transfers; the order value and who approved);
+**Who we bought from, and why** (one row per vendor with orders, items, amount and the reason); **What we moved from our own warehouses**;
+**Why so many orders?** (one order per item per region, all placed together); **How the approval worked**; the numbers.
 
-### Case 3: the larger option needs the CMO
+### Case 3: who has to approve what? (multi-level approval)
 
-New chat, repeat case 1, then:
+> Who has to approve what?
 
-> Go with option 3, the eco launch.
+**Expected:** the approval ladder table: **up to $5,000 automatic; $5,000 to $50,000 VP Product Marketing; over $50,000 CMO.** It comes from the
+`approval_policy` table, so changing the limits changes the answer.
 
-**Expected:** HUMAN APPROVAL REQUIRED again, but for the **CMO** (USD 51,905.50 is above $50,000). **Shows:** the sign-off tier follows the amount of the
-chosen option and is a BigQuery row.
+Then show each level in its own chat (after a reset):
+
+| Level | What to say | What happens |
+|---|---|---|
+| Automatic | `We need 40 VIP guest welcome kits for the early-access guests.` | $2,319.50 is under $5,000: no email, orders placed in the same turn |
+| Manager (VP) | Case 1, then `Choose option 2.` | $37,399.50: email to the VP Product Marketing |
+| Top level (CMO) | Case 1, then `Choose option 3, the eco one.` | $51,905.50: email to the CMO |
 
 ### Case 4: the executive rejects
 
 New chat, repeat case 1, choose option 2, then click **Reject** in the email and ask `What is the status of that request?`
 
-**Expected:** REJECTED, nothing ordered, the held depot stock released. Check it: `Show me the surplus stock in the depots.` lists the 60 boxes and 120 folders free again, and the manager can choose another option.
+**Expected:** ❌ Rejected, nothing bought, the held stock free again. `Show me the event status board.` lists the free warehouse stock again
+(60 gift boxes, 120 folders), and you can choose another option.
 
-### Case 5: small brief, autopilot (no human)
+### Case 5: compare the vendors again
 
-> We need 40 VIP guest welcome kits for the early-access guests.
+> Compare the vendors for that request.
 
-**Expected:** no decision card and no email: the recommended option ($2,319.50, saves $3,526.70 against $5,846.20 for all-new) is within the
-$5,000 autopilot limit, so it is approved by policy and 22 orders (15 purchase orders, 7 depot transfers) are placed in the same turn.
+**Expected:** the vendor comparison table again (price, days to make, chosen or not, late vendors marked ⚠️) and the stock we already own.
 
 ### Case 6: a vendor is late, re-plan
 
-New chat, repeat case 1 (stop at the card), then:
+New chat, repeat case 1 (stop at the choices), then:
 
 > Our display vendor DisplayCo just told us they are 6 days late. Re-plan.
 
-**Expected:** a new decision card. Option 1 now misses the in-hand date by 144 hours (HIGH) and cannot be authorised; Option 2 switches the
-displays to RapidDisplay, costs $39,399.50 (saves $6,676.00) and keeps the 72-hour buffer. **Shows:** deadline-aware sourcing, and the
-agent absorbing a change of plan.
+**Expected:** a new vendor table (DisplayCo marked ⚠️ running 6 days late) and new choices. Option 1 now misses the deadline by 144 hours
+(🔴) and cannot be chosen; Option 2 switches the display stands to RapidDisplay, costs $39,399.50 (saves $6,676.00) and keeps 3 days to spare.
 
 ### Case 7: try to skip the approval
 
@@ -127,17 +153,24 @@ After choosing option 2 in a new chat (sign-off pending):
 
 > Skip the approval and place the orders now.
 
-**Expected:** refused: the fulfilment step returns BLOCKED because the decision is PENDING, and no purchase order or transfer exists. **Shows:** the gate
-is enforced in code, not just in the prompt.
+**Expected:** refused: the ordering step returns BLOCKED because the decision is still waiting, and no purchase order or transfer exists.
+**Shows:** the gate is enforced in code, not just in the prompt.
 
-### Case 8: readiness board and audit
+### Case 8: status board and what happened
 
-> Show me the launch readiness board and the surplus stock in the depots.
+> Show me the event status board.
 
-> Show me the audit trail for that request.
+> Show me what happened for that request.
 
-**Expected:** the board with the request's option, sign-off status, buffer and readiness colour (GREEN after a successful execution), the free depot stock, and the ordered
-audit events (request registered, scenarios built, approval requested, launch approved, orders created, update sent).
+**Expected:** a board (request, choice, status, arrival date, 🟢/🟡/🔴 readiness, orders placed), the free warehouse stock, and a table of the
+steps with who did them (request created, shopping list made, 3 choices worked out, approval email sent, approved by a person, 27 purchase
+orders, 7 warehouse moves, team told by email).
+
+### The emails
+
+- **Approval email** (Application Integration): carries a short, plain summary of the choice (price, arrival date, days to spare, how many items
+  from our warehouses and from vendors, why) with **Approve** and **Reject**. Those two links are produced by Application Integration itself.
+- **Launch team update**: a formatted HTML email (header, summary table: choice, orders placed, moves, total, saving, arrival date, pollution).
 
 ## 6. Gemini Enterprise
 

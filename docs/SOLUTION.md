@@ -18,7 +18,7 @@ It is a **launch-readiness planner**. The question it answers is "which way do w
 | Aspect | A spend approval agent | The LaunchKit Provisioner |
 |---|---|---|
 | Unit of work | A purchase amount | A launch brief: bundles, sizes, plugs, regions |
-| What the human sees | Yes / No on a number | A decision card with three computed options: cost, arrival, safety buffer (hours), savings, carbon, risk |
+| What the human sees | Yes / No on a number | A 3-choices table with three computed options: cost, arrival, safety buffer (hours), savings, carbon, risk |
 | Stock | Checks a catalog | Reuses surplus depot stock first, nearest depot first, and **holds** it while a sign-off is pending |
 | Deadline | Not modelled | Every option is costed against the in-hand date; vendors are chosen to keep a safety buffer |
 | Change of plan | Start again | A vendor delay re-plans the options; after sign-off it reports the impact on the buffer |
@@ -59,22 +59,22 @@ Everything the manager sees is computed from BigQuery data by deterministic code
    plaque), a venue display stand and a sales folder. Guest kits follow the `guests` list (sizes and plugs per region, scaled to the
    quantity with largest-remainder rounding, so totals are exact); other bundles follow `regional_split` or a region the brief names.
 2. **Three options.**
-   - *Full new*: every line from the cheapest standard vendor offer, ignoring the deadline.
-   - *Smart depot rebalance*: surplus depot stock first (nearest depot first, per SKU), the rest from the cheapest standard offer
+   - *Buy everything new*: every line from the cheapest standard vendor offer, ignoring the deadline.
+   - *Use our stock first, buy the rest*: surplus depot stock first (nearest depot first, per SKU), the rest from the cheapest standard offer
      that keeps at least `TARGET_BUFFER_HOURS` before the in-hand date, otherwise the fastest offer.
-   - *Eco launch*: eco offers with the same deadline-aware choice, falling back to a standard offer for a line where no eco offer can
+   - *Go green*: eco offers with the same deadline-aware choice, falling back to a standard offer for a line where no eco offer can
      make the date.
 3. **Metrics per option.** Cost (product plus lane shipping), delivery date (the slowest line: vendor lead time plus any reported
-   delay plus transit, or depot handling plus transit), buffer hours against the in-hand date, savings versus full new, carbon (vendor
+   delay plus transit, or depot handling plus transit), buffer hours against the in-hand date, savings versus buy everything new, carbon (vendor
    carbon per unit, or transfer carbon for reused stock), and a risk label (LOW / MODERATE / HIGH).
 4. **Recommendation.** The cheapest option that keeps `MIN_BUFFER_HOURS`. If none does, the one with the most buffer (then the
    cheapest) is flagged and its risk says why. An option that misses the in-hand date cannot be authorised.
 5. **Decision mode.** If the recommended option is within the autopilot limit the root agent runs it by itself; otherwise it shows the
-   decision card and waits for the manager's choice.
+   3-choices table and waits for the manager's choice.
 
-With the demo data (Spring Launch Event, 150 guest welcome kits, 10 displays, 300 folders) the options come out as: Full new $46,075.50 with
-0 hours of buffer; **Smart depot rebalance $37,399.50, saves $8,676.00, 72 hours of buffer (recommended)**; Eco launch $51,905.50 with
-48 hours of buffer and 1,822 kg less carbon than full new. Choosing eco crosses $50,000, so the CMO signs off instead of the VP.
+With the demo data (Spring Launch Event, 150 guest welcome kits, 10 displays, 300 folders) the options come out as: Buy everything new $46,075.50 with
+0 hours of buffer; **Use our stock first, buy the rest $37,399.50, saves $8,676.00, 72 hours of buffer (recommended)**; Go green $51,905.50 with
+48 hours of buffer and 1,822 kg less carbon than buy everything new. Choosing eco crosses $50,000, so the CMO signs off instead of the VP.
 
 ## 5. The sign-off (`launchkit_provisioner/decision_flow.py`)
 
@@ -141,13 +141,36 @@ The first sketch of this solution (a sequential agent pipeline with hard-coded s
 |---|---|
 | Scenario costs, dates and savings were typed constants | Computed from BigQuery data by the planner and stored; the card repeats stored numbers |
 | A fixed `SequentialAgent` runs every stage whatever the request | The root calls specialists as tools in the order the situation needs (skip the card on autopilot, re-plan on a delay) and works in Gemini Enterprise |
-| The decision card needed a public callback to resume the run | The choice is made in the chat; the executive signs off through Application Integration's own approval email (no public endpoint) |
+| The 3-choices table needed a public callback to resume the run | The choice is made in the chat; the executive signs off through Application Integration's own approval email (no public endpoint) |
 | An "approve" resumed with a made-up PO number and fixed depot transfers | Orders and transfers come from the approved plan lines, each with an id, and are recorded in BigQuery |
 | Stock was only audited | Surplus is **held** while a sign-off is pending, consumed on transfer, released on rejection |
 | Mock data switched by an environment variable | Real tables, set up and re-set by scripts; no mock mode |
 | One order call per item through the model | Batch tools and a parallel execution step keep a request to a handful of model calls |
 | No guard against ordering without approval, twice, or beyond the amount | Code refuses all three |
 | Deadline risk was text | Buffer hours are computed per option; an option that misses the date cannot be authorised; vendor delays re-plan |
+
+## 10a. How the answers are written (`launchkit_provisioner/presentation.py`)
+
+Every answer is built by code from stored data and shown by the root exactly as returned. This keeps the wording simple and the numbers
+identical to BigQuery.
+
+| What the user reads | Built by | Data used |
+|---|---|---|
+| "Hi" card: what I can do, what I need | `capabilities_card` (tool `show_capabilities`) | none |
+| **Step 1** shopping list (Bill of Materials) | `bom_markdown` (Brief Analyst) | `requirement_lines`, `bundle_templates`, `assets` |
+| **Step 2** vendors we compared, stock we already own | `vendor_report` (Sourcing Planner, tool `get_vendor_report`) | `vendor_offers`, `vendor_disruptions`, depot stock, the saved plan |
+| **Step 3** three choices in one table with friendly names | `decision_card` | `scenarios`, `approval_policy` |
+| **Step 4** getting the OK (approval ladder, tracker) | `sign_off_markdown`, `approval_ladder` (tool `get_approval_rules`) | `approval_policy`, `approvers` |
+| After the orders: the story, vendors and why, why so many orders | `order_summary` (Fulfilment) | `scenario_lines`, `vendor_offers`, `decisions` |
+| Status, board, audit as tables | `status_markdown`, `board_markdown`, `audit_markdown` | views and tables |
+| Launch-team tracking email | `_update_email` (HTML, sent by `send_launch_update`) | the plan |
+
+The root prompt sets the style (short words a 10-year-old can follow, tables, icons) and the order of the one message after prompt 1:
+shopping list, vendors, three choices, then the question. The multi-level approval (automatic, VP, CMO) is the `approval_policy`
+table, shown as a ladder with the current order marked.
+
+**Approve / Reject in the email:** the two links come from Application Integration's approval step, whose email layout cannot be styled from
+our side. A real button needs our own small approval page (a new Cloud Run service), which is not built because it adds a service.
 
 ## 11. Assumptions and limitations
 

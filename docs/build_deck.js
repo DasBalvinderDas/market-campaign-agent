@@ -5,7 +5,7 @@ const F = 'Calibri', NAVY='1F3A8A', BLUE='2563EB', PURPLE='6D28D9', INK='1E293B'
 // ---------- Slide 1: title ----------
 let s = p.addSlide(); s.background = {color: '4C1D95'};
 s.addText('The LaunchKit Provisioner', {x:0.9,y:2.3,w:11,h:1,fontFace:F,fontSize:44,bold:true,color:'FFFFFF',margin:0,isTextBox:true});
-s.addText('A launch-readiness agent on BigQuery and Application Integration: three computed sourcing options, executive sign-off by policy, orders placed automatically', {x:0.9,y:3.4,w:10.5,h:0.9,fontFace:F,fontSize:22,color:'FFFFFF',margin:0,isTextBox:true});
+s.addText('An event procurement agent on BigQuery and Application Integration: one event brief, many vendors, three plain-English options, approval by order size, bulk orders placed automatically', {x:0.9,y:3.4,w:10.5,h:0.9,fontFace:F,fontSize:22,color:'FFFFFF',margin:0,isTextBox:true});
 s.addText('User Persona: Product Marketing Manager, Brand Director, VP / CMO approver', {x:0.9,y:4.6,w:10.5,h:0.5,fontFace:F,fontSize:18,color:'DDD6FE',margin:0,isTextBox:true});
 s.addNotes('Title slide. Replace with your own template title slide and copy the text across.');
 
@@ -13,8 +13,8 @@ s.addNotes('Title slide. Replace with your own template title slide and copy the
 s = p.addSlide(); s.background = {color:'FFFFFF'};
 s.addText('The LaunchKit Provisioner', {x:0.6,y:0.4,w:7,h:0.7,fontFace:F,fontSize:30,color:INK,margin:0,isTextBox:true});
 s.addText([
- {text:'A flagship launch has to equip guests, venues and sales teams in several regions before a hard in-hand date and the press embargo. Teams juggle sizes, plugs, vendor lead times and surplus stock in different regional depots, and the only question finance sees is "approve this spend?".', options:{bullet:true,breakLine:true,paraSpaceAfter:14}},
- {text:'The agent plans the launch against the deadline. A central orchestrator breaks the brief into bundles (Brief Analyst), computes three sourcing options from BigQuery data (Sourcing Planner: full new production, smart depot rebalance, certified eco launch), lets the Product Marketing Manager choose, gets a named executive to sign off above the autopilot limit, and has the orders placed (Fulfilment). Purchase orders, depot transfers, the sign-off email and the tracking update run as Google Application Integration workflows. The orchestrator is the only agent that can authorise spend.', options:{bullet:true}}
+ {text:'A big event, such as a product launch, needs many different items from many vendors, delivered to guests, venues and sales teams in several regions before a hard deadline. Teams buy item by item, juggle sizes, vendor lead times and surplus stock in different warehouses, and the only question finance sees is "approve this spend?".', options:{bullet:true,breakLine:true,paraSpaceAfter:14}},
+ {text:'Underneath it is still a purchase order, procurement and approval system, but it takes a WHOLE EVENT instead of single items. A central orchestrator turns the brief into a shopping list / Bill of Materials (Brief Analyst), compares many vendors and computes three plain-English options from BigQuery data (Sourcing Planner: buying everything new, use our stock first, buy the rest, certified green option), lets the Product Marketing Manager choose, gets a named executive to sign off above the autopilot limit, and has the orders placed (Fulfilment). Purchase orders, depot transfers, the sign-off email and the tracking update run as Google Application Integration workflows. The orchestrator is the only agent that can authorise spend.', options:{bullet:true}}
 ], {x:0.6,y:1.4,w:6.2,h:5.2,fontFace:F,fontSize:15,color:INK,valign:'top',margin:0,isTextBox:true});
 s.addShape(p.ShapeType.rect,{x:7.2,y:0,w:6.13,h:7.5,fill:{color:'2B4BD8'},line:{color:'2B4BD8'}});
 const pillars = [
@@ -64,14 +64,14 @@ s.addShape(p.ShapeType.roundRect,{x:3.15,y:1.38,w:1.0,h:0.22,rectRadius:0.05,fil
 txt('Root Agent',3.15,1.38,1.0,0.22,{sz:8,b:true,c:'FFFFFF'});
 txt('LaunchKit Provisioner (Orchestrator)',3.2,1.64,6.9,0.34,{sz:13,c:NAVY,b:true});
 box(3.25,2.02,6.8,0.5,{round:true,fill:'FFFFFF',line:LINE});
-txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:NAVY}},{text:'Brief intake  •  Coordination  •  Decision card for the manager  •  Sign-off gate (autopilot, VP, CMO)  •  Status & results',options:{color:INK}}],3.3,2.04,6.7,0.46,{sz:8.5});
+txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:NAVY}},{text:'Hello card  •  Coordination  •  3-choices table  •  Sign-off gate (automatic, VP, CMO)  •  Order story & status',options:{color:INK}}],3.3,2.04,6.7,0.46,{sz:8.5});
 
 // specialist agents
 box(3.1,2.8,7.1,2.05,{fill:'E8F0FF',line:LINE,dash:'dash'});
 s.addShape(p.ShapeType.roundRect,{x:3.15,y:2.73,w:3.0,h:0.22,rectRadius:0.05,fill:{color:BLUE},line:{color:BLUE}}); txt('3 Sub Agents (called by the root as tools)',3.15,2.73,3.0,0.22,{sz:8,b:true,c:'FFFFFF'});
-const subs=[['1. Brief Analyst','(Decompose the brief)',['Guest, venue, sales bundles','Sizes and plugs from the guest list','Requirement lines per region'],'F0F7FF'],
- ['2. Sourcing Planner','(Compute 3 options)',['Reuse depot surplus first','Lead times vs. the embargo date','Cost, buffer, carbon, risk'],LILAC],
- ['3. Fulfilment Agent','(Place the orders)',['PO per vendor line (App Integration)','Depot transfer per surplus line','Tracking update to the launch team'],'FFF7ED']];
+const subs=[['1. Brief Analyst','(Decompose the brief)',['Shopping list (Bill of Materials)','Sizes and plugs from the guest list','Requirement lines per region'],'F0F7FF'],
+ ['2. Sourcing Planner','(Compute 3 options)',['Vendor comparison report','Reuse our own stock first','Price, spare time, pollution'],LILAC],
+ ['3. Fulfilment Agent','(Place the orders)',['PO per vendor line (App Integration)','Warehouse move per surplus line','HTML update + order story'],'FFF7ED']];
 subs.forEach((q,i)=>{ const x=3.2+i*2.33; box(x,3.05,2.25,1.7,{fill:q[3],line:LINE});
  txt(q[0],x+0.05,3.08,2.15,0.28,{b:true,sz:10,c:PURPLE}); txt(q[1],x+0.05,3.34,2.15,0.22,{sz:8,c:PURPLE});
  box(x+0.1,3.62,2.05,1.05,{fill:'FFFFFF',line:'D6E0F5'});
