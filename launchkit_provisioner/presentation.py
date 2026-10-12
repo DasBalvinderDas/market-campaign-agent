@@ -633,6 +633,8 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
     dlines = [ln for ln in lines if ln["source_type"] == "DEPOT"]
     items = sum(ln["quantity"] for ln in lines)
     own = sum(ln["quantity"] for ln in dlines)
+    n_po = len(repo.list_pos(request_id)) or len({ln["source_id"] for ln in vlines})          # one per vendor
+    n_tr = len(repo.list_transfers(request_id)) or len({ln["source_id"] for ln in dlines})    # one per warehouse
     eco_plan = scenario["option_code"] == "ECO"
 
     by_vendor: dict = {}
@@ -664,7 +666,7 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
            f"> 🎪 **{launch['launch_name']}** · {scenario['option_name']} · `{request_id}`", "",
            "| 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 Pollution |", "|---|---|---|---|---|",
            f"| **{money(total)}** | {saved} | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) | "
-           f"{plural(len(vlines), 'purchase order')} + {plural(len(dlines), 'warehouse move')} | {scenario['carbon_kg']:,.0f} kg |",
+           f"{plural(n_po, 'purchase order')} + {plural(n_tr, 'warehouse move')} | {scenario['carbon_kg']:,.0f} kg |",
            "", "### 📖 What we did, in 4 lines",
            (f"1. 🛍️ You asked for **{items:,} items**: {plural(n_products, 'product')} for {plural(n_regions, 'region')}."
             if launch["launch_name"] == "Quick purchase" else
@@ -682,10 +684,10 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
             w = depots.get(ln["source_id"], ln["source_id"]).split(" ")[0]
             agg.setdefault(w, {})
             agg[w][_item_label(assets, ln["sku"])] = agg[w].get(_item_label(assets, ln["sku"]), 0) + ln["quantity"]
-        out += ["", "♻️ **From our own warehouses** (" + plural(len(dlines), "move") + "): "
+        out += ["", "♻️ **From our own warehouses** (" + plural(n_tr, "move") + "): "
                 + " · ".join(f"**{w}**: " + ", ".join(f"{i} {q:,}" for i, q in items_.items()) for w, items_ in agg.items())]
-    if len(vlines) + len(dlines) > 3:
-        out += ["", f"❓ **Why so many orders?** One order per item per region: **{len(vlines)} + {len(dlines)}**, all placed together."]
+    if n_po + n_tr > 2:
+        out += ["", f"❓ **How many orders?** One purchase order per vendor and one move per warehouse: **{n_po} + {n_tr}**, all placed together."]
     if update_sent_to:
         out += ["", f"📧 The launch team got an email: {', '.join(update_sent_to)}."]
     if failed:

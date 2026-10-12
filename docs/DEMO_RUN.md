@@ -148,9 +148,9 @@ approval ladder with *this order* marked, a four-step tracker (email sent, appro
 1. Open the Application Integration email and click **Approve**.
 2. Ask in the same chat: `What is the status of that request?`
 
-**Expected:** **✅ Done! All your orders are placed**: one row of numbers (total $37,399.50, $8,676.00 saved, arrives 3 Nov with 3 days to spare, 27 purchase orders + 7 warehouse moves,
+**Expected:** **✅ Done! All your orders are placed**: one row of numbers (total $37,399.50, $8,676.00 saved, arrives 3 Nov with 3 days to spare, 7 purchase orders (one per vendor) + 3 warehouse moves (one per warehouse),
 3,702 kg pollution); **What we did, in 4 lines** (one whole campaign with 1,210 items; 7 vendors; 240 items from our own stock with a picture bar; the amount and who approved);
-**Who we bought from, and why** (one row per vendor); **From our own warehouses**; and one line on **why so many orders** (one per item per region, all placed together).
+**Who we bought from, and why** (one row per vendor); **From our own warehouses** (one line); and one line on **how many orders** (one purchase order per vendor and one move per warehouse, all placed together).
 
 ### Case 3: who has to approve what? (multi-level approval)
 
@@ -205,8 +205,8 @@ After choosing option 2 in a new chat (sign-off pending):
 > Show me what happened for that request.
 
 **Expected:** a board (request, choice, status, arrival date, 🟢/🟡/🔴 readiness, orders placed), the free warehouse stock, and a table of the
-steps with who did them (request created, shopping list made, 3 choices worked out, approval email sent, approved by a person, 27 purchase
-orders, 7 warehouse moves, team told by email).
+steps with who did them (request created, shopping list made, 3 choices worked out, approval email sent, approved by a person, 7 purchase
+orders, 3 warehouse moves, team told by email).
 
 ### The emails
 

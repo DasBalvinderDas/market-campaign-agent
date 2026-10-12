@@ -116,7 +116,7 @@ Then: *Say **use the suggested plan**, or say how many.*
 
 > What is the status of that request?
 
-**✅ Done! All your orders are placed**: **$8,863.50**, $6,666.00 saved, **11 purchase orders + 5 warehouse moves** (16 orders in one go), 490 items from our own stock, one short vendor table
+**✅ Done! All your orders are placed**: **$8,863.50**, $6,666.00 saved, **8 purchase orders (one per vendor) + 3 warehouse moves (one per warehouse)**, 11 orders in one go, 490 items from our own stock, one short vendor table
 with a *why* for each of the 8 vendors, **one line** for the warehouse moves, and a launch-team email.
 
 **Say:** *"One conversation. Our own stock first, eight vendors compared, the best date shown, the right approver, and every order placed together, with the reason for each."*
@@ -125,11 +125,11 @@ with a *why* for each of the 8 vendors, **one line** for the warehouse moves, an
 
 | Say | You get |
 |---|---|
-| Place **London** | Option 2 **$8,696.00**, 3 days to spare; 10 POs + 7 warehouse moves |
-| Place **Singapore** | Option 2 **$9,915.50**, 5 days to spare; 11 POs + 7 warehouse moves |
+| Place **London** | Option 2 **$8,696.00**, 3 days to spare; 6 POs + 3 warehouse moves |
+| Place **Singapore** | Option 2 **$9,915.50**, 5 days to spare; 8 POs + 3 warehouse moves |
 | Place **Canada** | The same as the USA (served from the US) |
 | **1,000 people**, USA | Option 2 $40,637 (VP), but Option 1 $51,765 needs the **CMO** |
-| **2,000 people**, USA | Option 2 **$91,830**: needs the **CMO** (above $50,000); 13 POs + 5 warehouse moves |
+| **2,000 people**, USA | Option 2 **$91,830**: needs the **CMO** (above $50,000); 8 POs + 3 warehouse moves |
 
 ---
 

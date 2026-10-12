@@ -186,7 +186,7 @@ our side. A real button needs our own small approval page (a new Cloud Run servi
 
 - **Demo data** is fictional (Spring Launch Event, vendors, prices, depots, guests). Currency is USD; no tax, duties or partial deliveries.
 - **SAP S/4HANA, Slack and Teams** are not connected. The purchase order and depot transfer are Application Integration workflows that
-  create a number (`PO-<line id>`, `TR-<line id>`); tracking updates go by email. Connecting a real ERP or chat tool is the next step
+  create a number (`PO-<request>-<vendor>`, `TR-<request>-<warehouse>`: one purchase order per vendor, one transfer per warehouse); tracking updates go by email. Connecting a real ERP or chat tool is the next step
   and only changes the workflows, not the agents.
 - Option inputs are simplified: delivery uses calendar days, one lane per region pair, no vendor capacity limits, no partial shipments.
 - The choice among the three options is made in the chat. A one-click choice inside the executive's email would need a public

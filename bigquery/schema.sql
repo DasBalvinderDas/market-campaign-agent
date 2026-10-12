@@ -208,27 +208,27 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.vendor_disruptions` (
 ) OPTIONS(description="Reported vendor delays that the planner adds to the lead time.");
 
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.purchase_orders` (
-  po_number STRING NOT NULL,
+  po_number STRING NOT NULL OPTIONS(description="PO-<request>-<vendor>: one purchase order per vendor"),
   request_id STRING NOT NULL,
-  line_id STRING NOT NULL,
+  line_id STRING NOT NULL OPTIONS(description="The plan lines this order covers, comma separated"),
   vendor_id STRING NOT NULL,
-  sku STRING NOT NULL,
-  region STRING NOT NULL,
-  quantity INT64 NOT NULL,
-  total_amount FLOAT64 NOT NULL,
+  sku STRING NOT NULL OPTIONS(description="Items and quantities, in words (for example 'Event hoodie M x9; Power adapter x30')"),
+  region STRING NOT NULL OPTIONS(description="Destination region(s), comma separated"),
+  quantity INT64 NOT NULL OPTIONS(description="Total units on the order"),
+  total_amount FLOAT64 NOT NULL OPTIONS(description="Total of all its lines"),
   status STRING NOT NULL,
   integration_execution_id STRING,
   created_at TIMESTAMP NOT NULL
 ) OPTIONS(description="Purchase orders issued through Application Integration for the approved scenario.");
 
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.depot_transfers` (
-  transfer_number STRING NOT NULL,
+  transfer_number STRING NOT NULL OPTIONS(description="TR-<request>-<warehouse>: one transfer per warehouse"),
   request_id STRING NOT NULL,
-  line_id STRING NOT NULL,
+  line_id STRING NOT NULL OPTIONS(description="The plan lines this transfer covers, comma separated"),
   depot_id STRING NOT NULL,
-  sku STRING NOT NULL,
-  region STRING NOT NULL,
-  quantity INT64 NOT NULL,
+  sku STRING NOT NULL OPTIONS(description="Items and quantities, in words"),
+  region STRING NOT NULL OPTIONS(description="Destination region(s), comma separated"),
+  quantity INT64 NOT NULL OPTIONS(description="Total units on the transfer"),
   status STRING NOT NULL,
   integration_execution_id STRING,
   created_at TIMESTAMP NOT NULL

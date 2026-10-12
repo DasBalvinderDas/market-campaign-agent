@@ -15,7 +15,7 @@ and `execution.py`. The variable names below are a contract with that code.
 | in | `request_id`, `plan_line_id`, `vendor_id`, `sku`, `destination_region` | String |
 | in | `quantity` | Integer |
 | in | `total_amount` | Double |
-| out | `po_number` = `"PO-"` + `plan_line_id` , `execution_id` | String |
+| out | `po_number` = `"PO-"` + `plan_line_id` (the agent sends `<request>-<vendor>`: one purchase order per vendor; `sku` carries the item list) , `execution_id` | String |
 
 Task: **Data Mapping** (builds `po_number` and `execution_id`). One call per vendor line of the approved option.
 
@@ -24,7 +24,7 @@ Task: **Data Mapping** (builds `po_number` and `execution_id`). One call per ven
 |---|---|---|
 | in | `request_id`, `plan_line_id`, `depot_id`, `sku`, `destination_region` | String |
 | in | `quantity` | Integer |
-| out | `transfer_number` = `"TR-"` + `plan_line_id`, `execution_id` | String |
+| out | `transfer_number` = `"TR-"` + `plan_line_id` (the agent sends `<request>-<warehouse>`: one transfer per warehouse), `execution_id` | String |
 
 Task: **Data Mapping**. One call per depot (surplus stock) line.
 

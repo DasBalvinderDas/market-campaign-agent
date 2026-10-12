@@ -75,9 +75,9 @@ def test_order_summary_explains_vendors_and_why_so_many_orders(repo, aurora):
     out = execution.execute_plan(repo, ex, aurora)
     md = out["display_markdown"]
     assert "Done! All your orders are placed" in md and "What we did, in 4 lines" in md
-    assert "27 purchase orders + 7 warehouse moves" in md and "Why so many orders" in md
+    assert "7 purchase orders + 3 warehouse moves" in md and "How many orders?" in md and "**7 + 3**" in md
     assert "RapidDisplay" in md and "cheaper vendors were too slow" in md
-    assert "♻️ **From our own warehouses** (7 moves): **London**: Black gift box 60" in md and "**Dallas**: Leather sales folder 120" in md
+    assert "♻️ **From our own warehouses** (3 moves): **London**: Black gift box 60" in md and "**Dallas**: Leather sales folder 120" in md
     assert "is $5,000.00 to $50,000.00, so **VP Product Marketing** approved it" in md and "🟩" in md
 
 

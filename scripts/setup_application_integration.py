@@ -7,9 +7,10 @@
 
 It builds integration "launchkit-workflows" with four API triggers through the Application Integration REST API:
   create_purchase_order   in: request_id, plan_line_id, vendor_id, sku, quantity, total_amount, destination_region
-                          out: po_number (PO-<plan_line_id>), execution_id
+                          out: po_number (PO-<plan_line_id>), execution_id. The agent sends one call per vendor:
+                          plan_line_id = <request>-<vendor>, sku = the item list, quantity and amount = the vendor's totals
   create_depot_transfer   in: request_id, plan_line_id, depot_id, sku, quantity, destination_region
-                          out: transfer_number (TR-<plan_line_id>), execution_id
+                          out: transfer_number (TR-<plan_line_id>), execution_id. One call per warehouse (plan_line_id = <request>-<depot>)
   request_approval        in: request_id, launch_id, approver_role, amount, approval_message
                           out: decision (APPROVED / REJECTED). A native Approval (suspension) task: the run pauses, the
                           approver(s) get an Application Integration email with Approve / Reject, and the run continues

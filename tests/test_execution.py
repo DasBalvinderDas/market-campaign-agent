@@ -30,16 +30,18 @@ def test_approved_plan_places_every_line_and_tells_the_team(repo, aurora):
     out = execution.execute_plan(repo, ex, aurora)
     lines = repo.get_scenario_lines(repo.get_decision_for_request(aurora)["scenario_id"])
     vendor, depot = [x for x in lines if x["source_type"] == "VENDOR"], [x for x in lines if x["source_type"] == "DEPOT"]
-    assert out["status"] == "executed" and out["orders_placed_now"] == len(lines)
-    assert len(out["purchase_orders"]) == len(vendor) and len(out["depot_transfers"]) == len(depot)
+    n_vendors, n_depots = len({x["source_id"] for x in vendor}), len({x["source_id"] for x in depot})
+    assert out["status"] == "executed" and out["lines_placed_now"] == len(lines) and out["orders_placed_now"] == n_vendors + n_depots
+    assert len(out["purchase_orders"]) == n_vendors and len(out["depot_transfers"]) == n_depots       # one per vendor, one per warehouse
     assert all(x["execution_status"] == "EXECUTED" for x in repo.get_scenario_lines(lines[0]["scenario_id"]))
     triggers = [c[0] for c in ex.calls]
-    assert triggers.count(config.PO_TRIGGER) == len(vendor) and triggers.count(config.TRANSFER_TRIGGER) == len(depot)
+    assert triggers.count(config.PO_TRIGGER) == n_vendors and triggers.count(config.TRANSFER_TRIGGER) == n_depots
     assert triggers.count(config.UPDATE_TRIGGER) == 2 and sorted(out["update_sent_to"]) == ["team2@example.com", "team@example.com"]
     po_inputs = next(i for t, i in ex.calls if t == config.PO_TRIGGER)
-    assert po_inputs["plan_line_id"] and po_inputs["destination_region"] in ("US", "EMEA", "APAC")
+    assert po_inputs["plan_line_id"].startswith("REQ-001-V-") and " x" in po_inputs["sku"]
+    assert set(po_inputs["destination_region"].split(",")) <= {"US", "EMEA", "APAC"}
     assert not [h for h in repo.t["depot_holds"] if h["status"] == "ACTIVE"]       # held stock became consumed
-    assert sum(1 for h in repo.t["depot_holds"] if h["status"] == "CONSUMED") == len(depot)
+    assert sum(1 for h in repo.t["depot_holds"] if h["status"] == "CONSUMED") == len(depot)       # every held line is used
     total = sum(p["total_amount"] for p in repo.list_pos(aurora))
     assert total <= out["total_usd"] and out["savings_usd"] > 0
 
@@ -49,13 +51,13 @@ def test_executing_twice_never_orders_twice(repo, aurora):
     first = execution.execute_plan(repo, ex, aurora)
     n = len(ex.calls)
     again = execution.execute_plan(repo, ex, aurora)
-    assert again["orders_placed_now"] == 0 and len(ex.calls) == n
+    assert again["orders_placed_now"] == 0 and again["lines_placed_now"] == 0 and len(ex.calls) == n
     assert len(repo.list_pos(aurora)) == len(first["purchase_orders"])
 
 
 def test_a_failing_line_is_reported_and_retried_later(repo, aurora):
     ex = approve(repo, aurora)
-    ex.fail_on = lambda t, i: t == config.PO_TRIGGER and i["sku"] == "DISPLAY-STAND"
+    ex.fail_on = lambda t, i: t == config.PO_TRIGGER and "Venue display stand" in i["sku"]
     out = execution.execute_plan(repo, ex, aurora)
     assert out["status"] == "partial" and out["failed"] and out["update_sent_to"] == []        # no update until all is placed
     ex.fail_on = None
@@ -88,3 +90,38 @@ def test_a_rejected_decision_blocks_execution(repo, aurora):
     ex.suspensions = [{"state": "REJECTED"}]
     decision_flow.status(repo, aurora, ex)
     assert execution.execute_plan(repo, ex, aurora)["status"] == "BLOCKED"
+
+
+def test_one_purchase_order_per_vendor_carries_all_of_its_lines(repo, aurora):
+    ex = approve(repo, aurora)
+    execution.execute_plan(repo, ex, aurora)
+    lines = repo.get_scenario_lines(repo.get_decision_for_request(aurora)["scenario_id"])
+    pos = repo.list_pos(aurora)
+    by_vendor = {}
+    for ln in lines:
+        if ln["source_type"] == "VENDOR":
+            by_vendor.setdefault(ln["source_id"], []).append(ln)
+    assert sorted(p["vendor_id"] for p in pos) == sorted(by_vendor) and len({p["po_number"] for p in pos}) == len(pos)
+    for p in pos:
+        mine = by_vendor[p["vendor_id"]]
+        assert p["quantity"] == sum(x["quantity"] for x in mine) and abs(p["total_amount"] - sum(x["line_total"] for x in mine)) < 0.01
+        assert set(p["line_id"].split(",")) == {x["line_id"] for x in mine} and p["po_number"] == f"PO-{aurora}-{p['vendor_id']}"
+    assert len(pos) < sum(len(v) for v in by_vendor.values())                  # fewer orders than lines
+
+
+def test_one_transfer_per_warehouse(repo, aurora):
+    ex = approve(repo, aurora)
+    execution.execute_plan(repo, ex, aurora)
+    transfers = repo.list_transfers(aurora)
+    assert sorted(t["depot_id"] for t in transfers) == sorted({t["depot_id"] for t in transfers})
+    assert {t["depot_id"] for t in transfers} == {"DEPOT-LON-01", "DEPOT-DAL-02", "DEPOT-SIN-03"}
+
+
+def test_a_retry_after_a_failed_order_keeps_the_numbers_unique(repo, aurora):
+    ex = approve(repo, aurora)
+    ex.fail_on = lambda t, i: t == config.PO_TRIGGER and i["vendor_id"] == "V-DISPLAYCO"
+    execution.execute_plan(repo, ex, aurora)
+    ex.fail_on = None
+    out = execution.execute_plan(repo, ex, aurora)
+    numbers = out["purchase_orders"] + out["depot_transfers"]
+    assert out["status"] == "executed" and len(numbers) == len(set(numbers)) and f"PO-{aurora}-V-DISPLAYCO" in numbers

@@ -130,7 +130,7 @@ Priya does not get a number to approve; she gets a **decision**. The planner rec
 **4. Fulfilment: the person who actually places the orders, and only when it is allowed.**
 *Prompt 2: "Choose option 2."* At $37,399.50 the amount needs the VP's signature, so an email with Approve and Reject buttons goes to
 the VP. The agent says so in bold: **HUMAN APPROVAL REQUIRED**. The surplus stock is held so nobody else can take it. Nothing is ordered.
-When the VP clicks Approve and Priya asks *"What is the status?"*, Fulfilment places 27 purchase orders and 7 depot transfers at once,
+When the VP clicks Approve and Priya asks *"What is the status?"*, Fulfilment places one purchase order per vendor (7 of them) and one transfer per warehouse (3) at once,
 then tells the launch team. If the VP clicks Reject, the stock goes back on the shelf and nothing was ever spent.
 
 ### Then reality arrives
@@ -401,11 +401,11 @@ at work. No prompt contains it.
 | table | rows | proves |
 |---|---|---|
 | `decisions` | status **APPROVED**, decided_by "Application Integration approval" | The answer was read from the approval record |
-| `purchase_orders` | **27** rows, e.g. `PO-REQ-xxxx-RB-L01`, V-ENGRAVE, NAME-CARD, APAC, 20, $125.00, CREATED | One order per vendor line, number returned by the workflow |
+| `purchase_orders` | **7** rows (one per vendor), e.g. `PO-REQ-xxxx-V-ENGRAVE`, V-ENGRAVE, `Engraved name card x150`, `APAC,EMEA,US`, 150, $918.25, CREATED, with the plan lines it covers in `line_id` | One order per vendor, number returned by the workflow |
 | `depot_transfers` | **7** rows, e.g. `TR-REQ-xxxx-RB-L16`, DEPOT-LON-01, GIFT-BOX-BLACK, EMEA, 45 | One transfer per depot line |
 | `depot_holds` | the 7 holds become **CONSUMED** | The reserved stock was actually used |
 | `scenario_lines` | `execution_status` = EXECUTED on all 34 | Idempotent: running again would skip them |
-| `audit_log` | 27 `po_created`, 7 `transfer_created`, 1 `launch_update_sent` | Full trail by `fulfilment_agent` |
+| `audit_log` | 7 `po_created`, 3 `transfer_created`, 1 `launch_update_sent` | Full trail by `fulfilment_agent` |
 
 Application Integration calls made in that turn: **27 x `create_purchase_order`, 7 x `create_depot_transfer`, then `send_launch_update`**
 (and 1 x `request_approval` earlier, when the sign-off was requested).
@@ -417,7 +417,7 @@ Application Integration calls made in that turn: **27 x `create_purchase_order`,
 | **Coordinator** | A user would have to know which step comes next, and anyone could trigger spending | Fixed order of steps, the one reply, and the sole `authorize_launch` door. Proof: `decisions` rows exist only through it; a "skip approval" request is answered with a refusal |
 | **Brief Analyst** | Hand-built per-size, per-region lists from a spreadsheet | 31 exact `requirement_lines` from `guests`, `regional_split`, `bundle_templates`. Proof: hoodie quantities per size and plug match the guest table |
 | **Sourcing Planner** | Guessing stock, picking a vendor on price alone | Three costed plans, deadline buffers, surplus reuse, re-plan on delay. Proof: `scenarios` and `scenario_lines` (Proofs 1 and 2 above); `vendor_disruptions` rows change the next plan |
-| **Fulfilment** | Someone keying 34 orders into a procurement system | 27 POs and 7 transfers in parallel, once, only if APPROVED. Proof: `purchase_orders`, `depot_transfers`, EXECUTED lines, `execution_blocked` in `audit_log` when not approved |
+| **Fulfilment** | Someone keying 34 orders into a procurement system | 7 POs (one per vendor) and 3 transfers (one per warehouse) in parallel, once, only if APPROVED. Proof: `purchase_orders`, `depot_transfers`, EXECUTED lines, `execution_blocked` in `audit_log` when not approved |
 | **Application Integration** | Manual emails and ERP entries | Approval email and suspension, PO and transfer numbers, tracking email. Proof: `integration_execution_id` on every order row; approval record `LIFTED` / `REJECTED` |
 | **BigQuery** | Facts scattered across files | One source of truth, holds, audit. Proof: every number above can be queried |
 
@@ -564,8 +564,8 @@ agent's service account (`AGENT_SERVICE_ACCOUNT`). No public endpoint, no webhoo
 
 | Trigger | Called by | Inputs | Returns | What the workflow does |
 |---|---|---|---|---|
-| `create_purchase_order` | Fulfilment, one call per vendor line | request_id, plan_line_id, vendor_id, sku, quantity, total_amount, destination_region | `po_number` (`PO-` + plan line), execution_id | Data Mapping task builds the PO number (simulated ERP/SAP) |
-| `create_depot_transfer` | Fulfilment, one call per depot line | request_id, plan_line_id, depot_id, sku, quantity, destination_region | `transfer_number` (`TR-` + plan line), execution_id | Data Mapping task builds the transfer number |
+| `create_purchase_order` | Fulfilment, one call per vendor (all its items together) | request_id, plan_line_id, vendor_id, sku, quantity, total_amount, destination_region | `po_number` (`PO-` + plan line), execution_id | Data Mapping task builds the PO number (simulated ERP/SAP) |
+| `create_depot_transfer` | Fulfilment, one call per warehouse (all its items together) | request_id, plan_line_id, depot_id, sku, quantity, destination_region | `transfer_number` (`TR-` + plan line), execution_id | Data Mapping task builds the transfer number |
 | `request_approval` | Root via `authorize_launch`, only above the autopilot limit | request_id, launch_id, approver_role, amount, approval_message | executionId | Native **Approval task** emails Approve / Reject to the approvers and **suspends** the execution |
 | `send_launch_update` | Fulfilment, once per Launch Team address when all lines are placed | request_id, launch_id, recipient_email, email_subject, email_body | none | Send Email task to the Launch Team |
 
@@ -723,7 +723,7 @@ gives the order numbers, total, savings, delivery date and buffer.
 | 7 | Code | When every line is placed, sends the tracking update to each address of the Launch Team role | reads `approvers` | **`send_launch_update`** |
 | 8 | Root | Summarises: PO and transfer numbers, total, savings, delivery date, buffer | | none |
 
-**Expected:** 27 purchase orders and 7 depot transfers for option 2 on the starting data. The reply is the order story: **The story in 4 lines**, **Who we bought
+**Expected:** 7 purchase orders (one per vendor) and 3 depot transfers (one per warehouse) for option 2 on the starting data. The reply is the order story: **The story in 4 lines**, **Who we bought
 from, and why** (one row per vendor with orders, items, amount, reason), **What we moved from our own warehouses**, **Why so many orders?**, **How the approval worked**,
 and the numbers. It is built by `presentation.order_summary` from `scenario_lines`, `vendor_offers` and `decisions`, so every figure matches BigQuery.
 

@@ -297,7 +297,7 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 >
 > | 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 Pollution |
 > |---|---|---|---|---|
-> | **$8,863.50** | **$6,666.00** saved | **31 Oct 2026** (6 days to spare) | 11 purchase orders + 5 warehouse moves | 1,222 kg |
+> | **$8,863.50** | **$6,666.00** saved | **31 Oct 2026** (6 days to spare) | 8 purchase orders + 3 warehouse moves | 1,222 kg |
 >
 > ### 📖 What we did, in 4 lines
 > 1. 🎪 We planned **one whole campaign**: **1,083 items**, 10 different products, 1 region.
@@ -318,9 +318,9 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 > | EngraveWorks | Engraved name card (30) | $181.50 | 💰 cheapest that arrives on time |
 > | PrintCo | Product brochure (30) | $114.00 | 💰 cheapest that arrives on time |
 >
-> ♻️ **From our own warehouses** (5 moves): **London**: Black gift box 30, Canvas tote bag 200 · **Dallas**: Leather sales folder 30, Steel water bottle 150 · **Singapore**: Steel water bottle 80
+> ♻️ **From our own warehouses** (3 moves): **London**: Black gift box 30, Canvas tote bag 200 · **Dallas**: Leather sales folder 30, Steel water bottle 150 · **Singapore**: Steel water bottle 80
 >
-> ❓ **Why so many orders?** One order per item per region: **11 + 5**, all placed together.
+> ❓ **How many orders?** One purchase order per vendor and one move per warehouse: **8 + 3**, all placed together.
 >
 > 📧 The launch team got an email: team@example.com.
 
