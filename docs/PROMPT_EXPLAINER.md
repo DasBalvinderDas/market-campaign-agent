@@ -17,7 +17,7 @@ so the wording is the same every time and no number is typed by the model.
 
 | # | Review comment | What you see now | Where it lives |
 |---|---|---|---|
-| 0 | Simple, 10-year-old wording, Markdown, tables, markers, icons | Short sentences, tables, 🟢🟡🔴 lights, icons in every answer | `presentation.py`; the root prompt's "How to write" rule |
+| 0 | Simple, 10-year-old wording, Markdown, tables, markers, icons | Short sentences, tables, 🟢🟡🔴 lights, 🟩⬜ bars, a 📌 *In short* box, a ✅/⬜ checklist for the questions. Real pictures need hosted image links, so icons and bars stand in for images | `presentation.py`; the root prompt's "How to write" rule |
 | 1 | Say what it does and needs on "Hi" | A card: **What I can do** and **What I need from you**, with a sample prompt | tool `show_capabilities` |
 | 2 | Friendly option names | **Option 1: Buy everything new**, **Option 2: Use our stock first, buy the rest** ⭐, **Option 3: Go green with eco-friendly materials**; "Choose option 2" | `planner.OPTIONS`; `decision_flow.resolve_option` |
 | 3 | Tabular, friendly data | The three choices as one comparison table (price, saving, arrival, spare time, pollution, who says OK) | `presentation.decision_card` |
@@ -41,7 +41,7 @@ service, so it needs your yes first.
 
 ## The guided questions: how the assistant gets the details
 
-Instead of expecting a detailed brief, the assistant asks a few easy questions, **one at a time** (and skips anything you already told it):
+Instead of expecting a detailed brief, the assistant asks a few easy questions, **one at a time** (and skips anything you already told it). Every question turn shows the same small checklist, from the tool `show_checklist`: ✅ for what is closed, ⬜ for what is open, and the one next question.
 
 | # | It asks | Why | What it does with the answer |
 |---|---|---|---|
@@ -49,8 +49,19 @@ Instead of expecting a detailed brief, the assistant asks a few easy questions, 
 | 2 | 📅 **By what date must everything be in hand?** | The deadline drives vendor choice and spare time | Uses the date on file for a known event (or updates it, logged in `audit_log`); a new event gets the date you give |
 | 3 | 🎁 **What do you need, and how many?** | The shopping list | `build_requirements` takes event bundles *or* single items. It **encourages the whole event plan**: more stock reuse, more vendors to compare, a stronger case for better rates |
 
-It does **not** ask about stock or vendors. It looks those up itself and shows them, in this order, in one answer:
-🧾 shopping list (BOM) → ♻️ **what we already have in stock** → 🏭 **what vendors can do, and by when** (ready-by dates) → 🎯 the 3 choices.
+**Business advice before planning.** After the shopping list the assistant checks it (`advisor.py`, plain rules over data, no model) and, if it finds something, shows **💡 Anything you may be missing?** and waits:
+
+| Advice | Rule |
+|---|---|
+| 🛟 A few spares | `SPARE_PERCENT` in `planning_rules` (5%): late additions, damage, loss |
+| 🖼️ 📁 🎁 A bundle you left out | the plan has some bundle types but not all |
+| 🧩 The rest of the bundle | a single item that is normally part of a bundle (from `bundle_templates`) |
+| 🔴 🟡 A date that is too close | the fastest vendor offer (plus any delay) does not fit the days left, and our stock does not cover it |
+
+The user adds something or says *Looks good*. That is the "close on the details" moment: the agent adds business value instead of just punching in an order.
+
+It does **not** ask about stock or vendors. It looks those up itself and shows them, in one answer:
+📌 **in short** (best choice, price, arrival, who says OK, stock coverage bar) → ♻️ **what we already have in stock** → 🏭 **what vendors can do, and by when** (ready-by dates) → 🎯 the 3 choices.
 
 Then the user decides: **"Does this plan feel good?"** They can say *Choose option 2*, or ask for a change (*make it 200 kits*, *add 50 brochures*, *a week earlier*);
 the assistant rebuilds the list and the plan. Only after a choice does the approval start, then the orders.

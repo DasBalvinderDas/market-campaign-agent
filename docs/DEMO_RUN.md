@@ -62,33 +62,45 @@ in Gemini Enterprise. Every answer is written in simple words, with tables and i
 time, you give it a **whole event**, and it deals with **many vendors at once**: shopping list, vendor comparison, three choices, the right
 approver, then all the orders together.
 
-### Case 0: say hello, then answer three easy questions
+### Case 0: say hello, then close on three things
 
 > Hi
 
-**Expected:** a friendly card: **What I can do** (shopping list, check our stock, compare vendors, three choices, the right OK, place all the
-orders, re-plan, buy a single item), **The best way to use me** (tell me the whole event: more stock reuse, more vendors, a stronger case
-for better rates) and **I will ask you, one question at a time**. It ends with the first question: **What is the event?**
+**Expected:** a short card: **I can** (shopping list, spot what you may be missing, check our stock, compare vendors, 3 choices, the right OK, place all orders, buy one single
+item), **💡 Best way to use me** (tell me the whole event) and a checklist with three open boxes. It ends with the first question: **What is the event?**
 
-The assistant then asks, one at a time (it skips anything you already said):
+Every question turn shows the same small checklist, with ✅ for what is closed and ⬜ for what is open, and **one** next question:
 
-| It asks | You say |
-|---|---|
-| 🎪 What is the event? | `The Spring Product Launch Event` |
-| 📅 By what date must everything be in hand? (it tells you the date on file and asks only if you want to change it) | `The date on file is fine` (or a full date, such as `20 December 2026`) |
-| 🎁 What do you need and how many? (it encourages the whole event plan, or a single item) | `150 VIP guest welcome kits, 10 venue display stands and 300 sales folders` |
+| It asks | You say | Checklist after |
+|---|---|---|
+| 🎪 What is the event? | `The Spring Product Launch Event` | ✅ ⬜ ⬜ |
+| 📅 By what date must everything be in hand? (full date; for a known event it tells you the date on file) | `The date on file is fine` or `20 December 2026` | ✅ ✅ ⬜ |
+| 🎁 What do you need, and how many? (it encourages the whole event) | `150 VIP guest welcome kits and 300 sales folders` | ✅ ✅ ✅ |
 
-You do not have to wait for the questions: `Plan our Spring Product Launch Event. We need 150 VIP guest welcome kits, 10 venue display stands and 300 sales folders for the sales team. Everything must arrive before the deadline.` answers all three at once.
+You can skip ahead: `Plan our Spring Product Launch Event. We need 150 VIP guest welcome kits and 300 sales folders. Everything must arrive before the deadline.` answers all three at once.
 
-### Case 1: the plan (shopping list, stock, vendors, three choices)
+### Case 0b: the assistant spots what you may be missing (business advice)
 
-**Expected:** one message, in this order, and nothing is ordered:
+After the third answer, the assistant shows **🧾 Step 1: your shopping list** and then **💡 Step 1b: Anything you may be missing?** and **waits**:
 
-1. **🧾 Step 1: Your shopping list (Bill of Materials)**: what is in each bundle and how many in total (1,210 items in 31 order lines).
-2. **♻️ Step 2: What we already have in stock**: free units per warehouse and how many the best choice uses (for example 120 folders in Dallas, 60 gift boxes in London).
-3. **🏭 Step 3: What vendors can do, and by when**: 7 vendors and 24 price offers, one row per vendor and item with price and *ready by* date, who was chosen, late vendors marked,
-   and the note why RapidDisplay was used even though DisplayCo is cheaper.
-4. **🎯 Step 4: Your 3 choices**, as one table:
+| Advice | Example | Why |
+|---|---|---|
+| 🛟 Spares | 5% extra: 8 kits, 15 folders | late additions, damage, loss (rule `SPARE_PERCENT` in `planning_rules`) |
+| 🖼️ 📁 🎁 A kind of bundle you left out | venue display stands (with only guest kits and folders) | guests need somewhere to see the product |
+| 🧩 The rest of a bundle | you asked for 5 gift boxes: the welcome kit also has a hoodie, power adapter and name card | a whole bundle means more stock to reuse and more vendors to compare |
+| 🔴 🟡 A date that is too close | the fastest vendor needs 14 days, you have 12 | so you can move the date before it is too late |
+
+Reply `Add 10 venue display stands` (the shopping list and advice are shown again) or `Looks good` to go on. Try it with the two-bundle answer above, then add the stands.
+
+### Case 1: the plan (in short, stock, vendors, three choices)
+
+Reply `Looks good`. **Expected:** one message, in this order, and nothing is ordered:
+
+1. **📌 In short**: the best choice in four lines (option, price and saving, arrival and spare time, who has to say OK) and a picture of how much our own stock covers (🟩🟩⬜⬜⬜…).
+2. **♻️ Step 2: What we already have in stock**: free units per warehouse and how many the best choice uses.
+3. **🏭 Step 3: What vendors can do, and by when**: 7 vendors, 24 price offers, one row per vendor and item with price and *ready by* date, who was chosen, late vendors marked,
+   and why RapidDisplay was used even though DisplayCo is cheaper.
+4. **🎯 Step 4: Your 3 choices**, as one table (with the full demo brief of 150 kits, 10 stands, 300 folders):
 
 | | Option 1: Buy everything new | Option 2: Use our stock first, buy the rest ⭐ | Option 3: Go green with eco-friendly materials |
 |---|---|---|---|
@@ -100,9 +112,9 @@ You do not have to wait for the questions: `Plan our Spring Product Launch Event
 | ✍️ Who has to say OK | VP Product Marketing | VP Product Marketing | CMO |
 
 Then: **Does this plan feel good?** *Say "Choose option 2", or tell me what to change.* **Shows:** a whole event worked out across many vendors, with the
-choices computed against the deadline.
+choices computed against the deadline. If the shopping list had nothing to advise, the plan comes straight after the third answer.
 
-**Change the plan before you commit** (same chat): `Make it 200 guest welcome kits.` or `Add 50 product brochures for the US.` The assistant rebuilds the list and shows the new plan.
+**Change the plan before you commit** (same chat): `Make it 200 guest welcome kits.` or `Add 50 product brochures for the US.` The assistant rebuilds the list and the plan.
 Nothing is ordered until you choose.
 
 ### Case 1b: a single item (a simple purchase order)
@@ -126,10 +138,9 @@ approval ladder with *this order* marked, a four-step tracker (email sent, appro
 1. Open the Application Integration email and click **Approve**.
 2. Ask in the same chat: `What is the status of that request?`
 
-**Expected:** **✅ All done! Your orders are placed**, written as a short story: *The story in 4 lines* (one whole event, 7 products, 3 regions;
-bought from 7 vendors with 27 purchase orders; 240 items taken from our own warehouses with 7 transfers; the order value and who approved);
-**Who we bought from, and why** (one row per vendor with orders, items, amount and the reason); **What we moved from our own warehouses**;
-**Why so many orders?** (one order per item per region, all placed together); **How the approval worked**; the numbers.
+**Expected:** **✅ Done! All your orders are placed**: one row of numbers (total $37,399.50, $8,676.00 saved, arrives 3 Nov with 3 days to spare, 27 purchase orders + 7 warehouse moves,
+3,702 kg pollution); **What we did, in 4 lines** (one whole event with 1,210 items; 7 vendors; 240 items from our own stock with a picture bar; the amount and who approved);
+**Who we bought from, and why** (one row per vendor); **From our own warehouses**; and one line on **why so many orders** (one per item per region, all placed together).
 
 ### Case 3: who has to approve what? (multi-level approval)
 

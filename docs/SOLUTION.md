@@ -165,6 +165,8 @@ identical to BigQuery.
 | Status, board, audit as tables | `status_markdown`, `board_markdown`, `audit_markdown` | views and tables |
 | Launch-team tracking email | `_update_email` (HTML, sent by `send_launch_update`) | the plan |
 
+**Guided questions and advice:** every question turn shows a ✅/⬜ checklist (`show_checklist`). Before planning, `advisor.py` checks the shopping list with plain rules (spares from `SPARE_PERCENT`, a kind of bundle that is missing, the rest of a bundle for a single item, a date the vendors cannot meet) and the user adds something or says *Looks good*. The plan opens with a 📌 *In short* box.
+
 **Guided questions:** the root asks one question at a time (event, date, what is needed), looks up stock and vendors itself, and shows stock, vendor *ready-by* dates and the three choices before anything is approved. The user can change the plan until they choose. A single item is a shorter run of the same steps (`ItemRequest`), and an unknown event name is created with the date given (`EVT-...`; `--reset-demo` removes such events).
 
 The root prompt sets the style (short words a 10-year-old can follow, tables, icons) and the order of the one message after prompt 1:

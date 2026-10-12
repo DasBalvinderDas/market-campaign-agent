@@ -24,7 +24,7 @@ AGENTS = [
     ("Sub Agent", "Brief Analyst Agent",
      "The brief analyst turns the free-text brief into requirement lines in one call: guest welcome kits (hoodie size, power plug and "
      "engraving from the guest list), venue display stands and executive sales folders, spread over the regions. It returns the shopping list "
-     "(Bill of Materials): each bundle, each item, totals and where they go. It never invents a bundle type.",
+     "(Bill of Materials) and business advice (spares, a kind of bundle left out, the rest of a bundle, a date that is too close). It never invents a bundle type.",
      "BigQuery: bundle_templates, guests, regional_split, requirement_lines, audit_log"),
     ("Sub Agent", "Sourcing Planner Agent",
      "The sourcing planner computes three options for the request from BigQuery data: full brand-new production, use our stock first, buy the rest "
@@ -48,6 +48,7 @@ TOOLS = [
     ("Root Agent", "get_launch_overview", "Python tool", "Launch readiness board (GREEN / AMBER / RED, buffer, orders placed) and free surplus stock per depot.", "v_launch_readiness, launches, v_depot_available", "-", "-", "Read only"),
     ("Root Agent", "get_audit_trail", "Python tool", "Ordered audit events for a request.", "audit_log", "-", "-", "Read only"),
     ("Root Agent", "show_capabilities", "Python tool", "The hello card: what the assistant can do and what it needs from the user, with sample prompts.", "-", "-", "-", "Fixed text, no data access"),
+    ("Root Agent", "show_checklist", "Python tool", "The three things to close on (event, date, what is needed) with ticks and the one next question, shown on every question turn.", "-", "-", "-", "Fixed wording, no data access"),
     ("Root Agent", "get_approval_rules", "Python tool", "The approval levels as a ladder (up to $5,000 automatic, up to $50,000 VP, above that CMO).", "approval_policy", "-", "-", "Read only"),
     ("Root Agent", "get_vendor_report", "Python tool", "Vendor comparison for a request: every vendor checked per item, price, days to make, late vendors, who was chosen, stock we already own.", "requirement_lines, vendor_offers, vendor_disruptions, scenarios, scenario_lines, v_depot_available", "-", "-", "Read only"),
     ("Brief Analyst Agent", "build_requirements", "Python tool (batch)", "Expands every bundle of the brief into requirement lines per SKU and region; guest welcome kits personalised from the guest list. Returns the shopping list (Bill of Materials).", "bundle_templates, guests, regional_split, launch_requests", "requirement_lines, audit_log", "-", "Unknown bundle type returns the valid types"),
