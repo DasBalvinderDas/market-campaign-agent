@@ -91,6 +91,8 @@ def test_every_query_is_valid_bigquery_sql():
     r.list_bundle_types(); r.get_bundle_templates("B"); r.guest_mix("L"); r.get_regional_split("B"); r.get_asset("S")
     r.replace_requirement_lines("R", [{"bundle_type": "B", "channel": "C", "sku": "S", "region": "US", "quantity": 1}])
     r.get_requirement_lines("R"); r.get_planning_rules(); r.get_lanes(); r.list_vendor_offers("S"); r.depot_free("S")
+    r.list_venues(); r.list_date_pricing(); r.create_launch({"launch_id": "L2", "launch_name": "N", "in_hand_by": ts.date(), "embargo_date": ts.date()})
+    r.update_launch_dates("L", ts.date(), ts.date())
     r.get_vendor("V"); r.list_vendors(); r.list_depot_free(); r.add_disruption("V", 2, "r"); r.list_disruptions()
     r.get_scenarios("R"); r.get_scenario("S"); r.get_scenario_lines("S"); r.mark_line_executed("L")
     r.get_policy(1.0); r.list_policies(); r.get_approver_emails("CMO")

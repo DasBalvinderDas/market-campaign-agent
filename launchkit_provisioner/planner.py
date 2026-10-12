@@ -24,6 +24,17 @@ OPTIONS = [("FULL_NEW", "FN", "Buy everything new"),
 CHANNEL = {"GUEST_KIT": "GUESTS", "VENUE_DISPLAY": "VENUES", "SALES_PACK": "SALES", "SINGLE_ITEM": "ITEMS"}
 
 
+def price_factor(rules: list[dict], vendor_id: str, days_ahead: int) -> tuple[float, str]:
+    """The vendor's price factor for an order placed this many days before the in-hand date (early-bird or rush).
+    A vendor with its own rows uses only those; every other vendor uses the '*' rows."""
+    mine = [r for r in rules if r["vendor_id"] == vendor_id] or [r for r in rules if r["vendor_id"] == "*"]
+    fits = [r for r in mine if int(r["min_days_ahead"]) <= days_ahead]
+    if not fits:
+        return 1.0, ""
+    r = max(fits, key=lambda r: int(r["min_days_ahead"]))
+    return float(r["price_factor"]), r.get("label") or ""
+
+
 class PlanError(ValueError):
     """A problem the model should explain to the user (unknown bundle, missing launch, ...)."""
 
@@ -132,11 +143,13 @@ def expand_bundles(repo: Repository, launch_id: str, bundles: list[dict]) -> lis
 
 # ---------------------------------------------------------------------------- scenarios
 class _Ctx:
-    def __init__(self, repo: Repository, request_id: str, today: date):
+    def __init__(self, repo: Repository, request_id: str, today: date, deadline: date | None = None):
         req = repo.get_request(request_id)
         if not req:
             raise PlanError(f"Unknown request '{request_id}'.")
-        self.launch = repo.get_launch(req["launch_id"])
+        self.launch = dict(repo.get_launch(req["launch_id"]))
+        if deadline:
+            self.launch["in_hand_by"] = deadline
         self.lines = repo.get_requirement_lines(request_id)
         if not self.lines:
             raise PlanError("This request has no requirement lines yet: run the brief analysis first.")
@@ -145,7 +158,17 @@ class _Ctx:
         self.today = today
         self.repo = repo
         self.window_days = (self.launch["in_hand_by"] - today).days
-        self._offers = self._assets = self._depots = None
+        self._offers = self._assets = self._depots = self._pricing = None
+
+    def set_deadline(self, deadline: date) -> None:
+        self.launch["in_hand_by"] = deadline
+        self.window_days = (deadline - self.today).days
+
+    def factor(self, vendor_id: str) -> float:
+        """Early-bird discount or rush charge for this vendor on this date."""
+        if self._pricing is None:
+            self._pricing = self.repo.list_date_pricing()
+        return price_factor(self._pricing, vendor_id, self.window_days)[0]
 
     def lane(self, a, b):
         lane = self.lanes.get((a, b))
@@ -182,9 +205,10 @@ def _vendor_line(ctx: _Ctx, line: dict, offer: dict) -> dict:
     qty = line["quantity"]
     shipping = round(qty * factor * lane["cost_per_unit"], 2)
     days = int(offer["lead_days"]) + int(offer["delay_days"]) + lane["days"]
+    price = round(float(offer["unit_price"]) * ctx.factor(offer["vendor_id"]), 2)
     return {"source_type": "VENDOR", "source_id": offer["vendor_id"], "variant": offer["variant"],
-            "unit_price": float(offer["unit_price"]), "shipping_cost": shipping,
-            "line_total": round(qty * float(offer["unit_price"]) + shipping, 2), "days_to_deliver": days,
+            "unit_price": price, "shipping_cost": shipping,
+            "line_total": round(qty * price + shipping, 2), "days_to_deliver": days,
             "carbon_kg": round(qty * float(offer["carbon_kg"]), 2)}
 
 
@@ -271,9 +295,34 @@ def _risk(buffer_hours: int, min_buffer: float, unsourced: list) -> str:
     return f"LOW: {buffer_hours} hours of safety buffer"
 
 
-def plan_scenarios(repo: Repository, request_id: str, today: date | None = None) -> tuple[list[dict], list[dict]]:
-    """Compute the three scenarios for a request. Returns (scenarios, scenario_lines), ready to store."""
-    ctx = _Ctx(repo, request_id, today or date.today())
+def plan_scenarios(repo: Repository, request_id: str, today: date | None = None,
+                   deadline: date | None = None) -> tuple[list[dict], list[dict]]:
+    """Compute the three scenarios for a request. Returns (scenarios, scenario_lines), ready to store.
+    A deadline other than the one on file plans for that date instead (used to compare dates; nothing is stored)."""
+    return _plan(_Ctx(repo, request_id, today or date.today(), deadline), request_id)
+
+
+def plan_dates(repo: Repository, request_id: str, offsets: list[int], today: date | None = None) -> list[dict]:
+    """The best option for the same list on other dates: [{offset, deadline, window, best, band}], one planning pass each.
+    Dates that are not at least a day away are left out."""
+    today = today or date.today()
+    ctx = _Ctx(repo, request_id, today)
+    base = ctx.launch["in_hand_by"]
+    rules = repo.list_date_pricing()
+    out = []
+    for off in offsets:
+        d = base + timedelta(days=off)
+        if (d - today).days < 1:
+            continue
+        ctx.set_deadline(d)
+        scenarios, _ = _plan(ctx, request_id)
+        best = next(s for s in scenarios if s["recommended"])
+        out.append({"offset": off, "deadline": d, "window": ctx.window_days, "best": best,
+                    "band": price_factor(rules, "*", ctx.window_days)[1]})
+    return out
+
+
+def _plan(ctx: _Ctx, request_id: str) -> tuple[list[dict], list[dict]]:
     min_buffer = ctx.rules.get("MIN_BUFFER_HOURS", 24)
     scenarios, all_lines = [], []
     for code, short, name in OPTIONS:

@@ -4,6 +4,7 @@ from ..repositories import get_repo
 from .audit import audit
 
 _FINAL = ("PENDING", "APPROVED")
+DATE_OFFSETS = [-14, -7, 0, 7, 14, 28]       # days earlier or later than the date on file
 
 
 def _autopilot_limit(repo) -> float:
@@ -50,6 +51,7 @@ def build_scenarios(request_id: str) -> dict:
                 request_id, launch, stored, policies, repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24),
                 single_item=all(ln["bundle_type"] == "SINGLE_ITEM" for ln in repo.get_requirement_lines(request_id))),
             "tldr": presentation.tldr(repo, request_id, stored, policies),
+            "date_options": presentation.date_options_markdown(planner.plan_dates(repo, request_id, DATE_OFFSETS), policies),
             "stock_report": presentation.stock_report(repo, request_id),
             "vendor_report": presentation.vendor_report(repo, request_id)}
 

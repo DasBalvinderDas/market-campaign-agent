@@ -42,6 +42,7 @@ def run(args, project=""):
     items, offers, vendors = repo.list_assets(), repo.list_vendor_offers_all(), repo.list_vendors()
     print(f"\nOffer catalog: {len(items)} items, {len(vendors)} vendors, {len(offers)} price offers "
           f"(if these are lower than expected run: python scripts/setup_bigquery.py --refresh-reference)")
+    print(f"Venues: {', '.join(v['venue_name'] for v in repo.list_venues())}; date pricing rows: {len(repo.list_date_pricing())}")
     print("\nGuests on the seeding list:", sum(m["n"] for m in repo.guest_mix(launches[0]["launch_id"])))
     print("Planning rules:", ", ".join(f"{k}={v:g}" for k, v in sorted(repo.get_planning_rules().items())))
     print("\nSign-off tiers")

@@ -14,11 +14,11 @@ def _approved(repo, aurora, option="2"):
     return ex
 
 
-def test_greeting_card_offers_both_ways_to_start():
+def test_greeting_card_invites_a_natural_conversation():
     card = orchestration_tools.show_capabilities()["display_markdown"]
-    assert "Campaign Procurement Assistant" in card and "Two ways to start" in card
-    assert "Plan a whole campaign" in card and "Buy selected items" in card and "Compare **vendors**" in card
-    assert "Do you want to plan a whole campaign, or buy selected items?" in card
+    assert "Campaign Procurement Assistant" in card and "Just talk to me" in card and "300 people on 31st Oct" in card
+    assert "where we can deliver" in card and "best date" in card and "Compare **vendors**" in card
+    assert "how many people, and on which date?" in card
 
 
 def test_bom_lists_every_item_with_totals(repo, aurora):
@@ -113,47 +113,80 @@ def _iso(days):
     return (date.today() + timedelta(days=days)).isoformat()
 
 
-def test_checklist_closes_one_thing_at_a_time_starting_with_campaign_or_items():
-    c0 = orchestration_tools.show_checklist()["display_markdown"]
-    assert c0.count("⬜") == 4 and "plan a whole campaign, or buy selected items?" in c0
-    c1 = orchestration_tools.show_checklist("campaign")["display_markdown"]
-    assert c1.count("✅") == 1 and "What is your campaign called?" in c1 and "Plan a whole campaign ⭐" in c1
-    c2 = orchestration_tools.show_checklist("campaign", "Summer Sale")["display_markdown"]
-    assert c2.count("✅") == 2 and "By what date" in c2
-    c4 = orchestration_tools.show_checklist("campaign", "Summer Sale", _iso(25), "150 kits")["display_markdown"]
-    assert c4.count("✅") == 5 and "All 4 closed" in c4 and "What we can offer" not in c4
+def test_nothing_known_asks_to_tell_about_the_campaign():
+    c = orchestration_tools.show_checklist()["display_markdown"]
+    assert "Tell me about your campaign" in c and "Just talk to me" in c
 
 
-def test_a_campaign_on_file_offers_its_date():
-    out = orchestration_tools.show_checklist("campaign", "Spring Product Launch Event")
-    assert "is on file with the date" in out["display_markdown"] and out["date_on_file"]
+def test_a_natural_first_message_is_enough_and_the_next_question_is_where():
+    out = orchestration_tools.show_checklist("campaign", "", 300, "31st Oct")
+    md = out["display_markdown"]
+    assert "300" in md and out["date_iso"].endswith("-10-31")
+    assert md.count("✅") == 2 and "Where is your campaign?" in md
+    assert "where can we deliver?" in md and "**USA**" in md and "**Canada**" in md and "**London**" in md and "**Singapore**" in md
+    assert "UK and European vendors" in md and "Dallas Marketing Depot" in md
 
 
-def test_when_it_is_time_to_pick_we_show_what_we_can_offer():
-    md = orchestration_tools.show_checklist("campaign", "Summer Sale", _iso(25))["display_markdown"]
-    assert "What would you like from our offer?" in md and "What we can offer you" in md
-    assert "Ready-made packs" in md and "VIP guest welcome kit" in md and "Single items" in md
-    assert "120 Dallas" in md and "RapidDisplay" in md and "Pick what you want" in md and "🟢 fits" in md
+def test_questions_come_in_order_people_date_place_name_then_picks():
+    assert "How many people" in orchestration_tools.show_checklist("campaign")["display_markdown"]
+    assert "On which date" in orchestration_tools.show_checklist("campaign", "", 300)["display_markdown"]
+    assert "Where is your campaign?" in orchestration_tools.show_checklist("campaign", "", 300, _iso(25))["display_markdown"]
+    named = orchestration_tools.show_checklist("campaign", "", 300, _iso(25), "London")
+    assert named["region"] == "EMEA" and "What would you like to call your campaign?" in named["display_markdown"]
+    offer = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "London")["display_markdown"]
+    assert "What would you like from our offer?" in offer and "What we can offer you" in offer
+
+
+def test_canada_is_served_from_the_us_region():
+    out = orchestration_tools.show_checklist("campaign", "", 100, _iso(25), "Toronto, Canada")
+    assert out["region"] == "US" and out["venue_name"] == "Canada"
+
+
+def test_an_unknown_place_is_asked_again_without_losing_what_we_know():
+    md = orchestration_tools.show_checklist("campaign", "", 100, _iso(25), "Mars")["display_markdown"]
+    assert "I do not serve 'Mars' yet" in md and "**Singapore**" in md and md.count("✅") == 2
+
+
+def test_a_date_in_the_past_or_unreadable_is_explained():
+    assert "not in the future" in orchestration_tools.show_checklist("campaign", "", 100, "2020-01-01")["display_markdown"]
+    assert "could not read the date" in orchestration_tools.show_checklist("campaign", "", 100, "sometime soon")["display_markdown"]
+
+
+def test_items_only_needs_a_date_a_place_and_the_pick_but_no_name_or_headcount():
+    md = orchestration_tools.show_checklist("items", "", 0, _iso(25), "USA")["display_markdown"]
+    assert "How many people" not in md and "Campaign name" not in md
+    assert "What would you like from our offer?" in md and "Single items" in md and md.index("Single items") < md.index("Ready-made packs")
+
+
+def test_the_offer_shows_a_suggested_plan_for_the_headcount():
+    out = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
+    md = out["display_markdown"]
+    assert "💡 For 300 people" in md and "use the suggested plan" in md
+    assert out["suggested"]["bundles"] == [{"bundle_type": "GUEST_KIT", "quantity": 30, "region": "US"},
+                                           {"bundle_type": "SALES_PACK", "quantity": 30, "region": "US"},
+                                           {"bundle_type": "VENUE_DISPLAY", "quantity": 3, "region": "US"}]
+    assert {"item": "Name badge with lanyard", "quantity": 300, "region": "US"} in out["suggested"]["items"]
+    assert {"item": "Roll-up banner", "quantity": 6, "region": "US"} in out["suggested"]["items"]
+
+
+def test_the_offer_shows_stock_only_where_the_campaign_is():
+    us = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "USA")["display_markdown"]
+    sg = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "Singapore")["display_markdown"]
+    assert "| Leather sales folder | 120 Dallas |" in us and "| Leather sales folder | - |" in sg
+
+
+def test_the_offer_prices_follow_the_date():
+    near = orchestration_tools.show_checklist("campaign", "S", 100, _iso(10), "USA")["display_markdown"]
+    far = orchestration_tools.show_checklist("campaign", "S", 100, _iso(50), "USA")["display_markdown"]
+    std = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "USA")["display_markdown"]
+    assert "rush: 12% extra" in near and "$9.52" in near            # 8.5 * 1.12 (steel water bottle)
+    assert "early bird: 8% off" in far and "$7.82" in far            # 8.5 * 0.92
+    assert "standard price" in std and "$8.50" in std
 
 
 def test_the_offer_marks_what_cannot_make_the_date():
-    md = orchestration_tools.show_checklist("items", "Quick purchase", _iso(3))["display_markdown"]
-    assert "🔴 too late" in md and md.index("Single items") < md.index("Ready-made packs")
-
-
-def test_the_offer_shows_stock_best_price_and_the_faster_option():
-    from launchkit_provisioner.presentation import catalog_markdown
-    md = catalog_markdown(repo=orchestration_tools.get_repo(), deadline=None)
-    assert "| Leather sales folder | 120 Dallas | $25.00 | PrintCo |" in md
-    assert "| Venue display stand | - | $1,400.00 | DisplayCo |" in md and "RapidDisplay $1,650.00" in md
-    assert "Black gift box 60, Power adapter 75" in md
-
-
-def test_selected_items_are_allowed_with_a_gentle_nudge_and_a_campaign_or_not():
-    c = orchestration_tools.show_checklist("selected items")["display_markdown"]
-    assert "Buy selected items" in c and "Is this for a campaign?" in c and "plan the whole campaign" in c.lower()
-    q = orchestration_tools.show_checklist("items", "Quick purchase")["display_markdown"]
-    assert "No campaign (quick purchase)" in q and "By what date" in q
+    md = orchestration_tools.show_checklist("items", "", 0, _iso(3), "USA")["display_markdown"]
+    assert "🔴 too late" in md
 
 
 def test_the_plan_starts_with_an_in_short_box(repo):

@@ -99,7 +99,7 @@ def main():
 
 
 REFERENCE_TABLES = ["assets", "bundle_templates", "regional_split", "depots", "depot_stock", "transit_lanes", "vendors",
-                    "vendor_offers", "planning_rules", "approval_policy"]
+                    "vendor_offers", "planning_rules", "approval_policy", "venues", "vendor_date_pricing"]
 
 
 def refresh_reference(client, ds, bigquery):

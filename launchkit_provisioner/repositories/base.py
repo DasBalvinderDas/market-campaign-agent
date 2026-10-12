@@ -29,6 +29,8 @@ class Repository:
     def guest_mix(self, launch_id: str) -> list[dict]: raise NotImplementedError          # size, region, plug_type, n
     def get_regional_split(self, bundle_type: str) -> list[dict]: raise NotImplementedError  # region, share_pct
     def get_asset(self, sku: str) -> dict | None: raise NotImplementedError
+    def list_venues(self) -> list[dict]: raise NotImplementedError                    # where a campaign can be held
+    def list_date_pricing(self) -> list[dict]: raise NotImplementedError              # price factor by days ahead
     def list_assets(self) -> list[dict]: raise NotImplementedError
     def replace_requirement_lines(self, request_id: str, lines: list[dict]) -> None: raise NotImplementedError
     def get_requirement_lines(self, request_id: str) -> list[dict]: raise NotImplementedError

@@ -94,7 +94,7 @@ class BigQueryRepository(Repository):
             "SELECT DISTINCT bundle_type FROM `{ds}.bundle_templates` ORDER BY bundle_type")]
 
     def get_bundle_templates(self, bundle_type):
-        return self._run("SELECT bundle_type, description, sku_pattern, qty_per_bundle, split_by "
+        return self._run("SELECT bundle_type, description, sku_pattern, qty_per_bundle, split_by, suggested_per_person "
                          "FROM `{ds}.bundle_templates` WHERE bundle_type = @bt ORDER BY sku_pattern", bt=bundle_type)
 
     def guest_mix(self, launch_id):
@@ -110,7 +110,14 @@ class BigQueryRepository(Repository):
         return rows[0] if rows else None
 
     def list_assets(self):
-        return self._run("SELECT sku, name, component_type, ship_factor FROM `{ds}.assets` ORDER BY sku")
+        return self._run("SELECT sku, name, component_type, ship_factor, suggested_per_person FROM `{ds}.assets` ORDER BY sku")
+
+    def list_venues(self):
+        return self._run("SELECT venue_id, venue_name, country, region, served_from FROM `{ds}.venues` ORDER BY venue_id")
+
+    def list_date_pricing(self):
+        return self._run("SELECT vendor_id, min_days_ahead, price_factor, label FROM `{ds}.vendor_date_pricing` "
+                         "ORDER BY vendor_id, min_days_ahead DESC")
 
     def replace_requirement_lines(self, request_id, lines):
         self._dml("DELETE FROM `{ds}.requirement_lines` WHERE request_id = @rid", rid=request_id)

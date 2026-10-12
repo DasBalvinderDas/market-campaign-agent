@@ -33,6 +33,7 @@ TABLES = {
             ("name", "STRING", "REQUIRED", ""),
             ("component_type", "STRING", "REQUIRED", "BOX, APPAREL, POWER, PERSONALISATION, DISPLAY, FOLDER, PRINT"),
             ("ship_factor", "FLOAT64", "REQUIRED", "Relative size/weight: multiplies the shipping lane cost"),
+            ("suggested_per_person", "FLOAT64", "NULLABLE", "Units we suggest per campaign guest (blank: not by headcount)"),
         ],
     },
     "bundle_templates": {
@@ -43,6 +44,7 @@ TABLES = {
             ("sku_pattern", "STRING", "REQUIRED", "A SKU, or a pattern with {size} / {plug}"),
             ("qty_per_bundle", "INT64", "REQUIRED", ""),
             ("split_by", "STRING", "REQUIRED", "NONE, SIZE or PLUG: how the SKU is chosen per recipient"),
+            ("suggested_per_person", "FLOAT64", "NULLABLE", "Bundles we suggest per campaign guest (blank: not by headcount)"),
         ],
     },
     "guests": {
@@ -97,6 +99,25 @@ TABLES = {
             ("vendor_name", "STRING", "REQUIRED", ""),
             ("home_region", "STRING", "REQUIRED", "Where it ships from"),
             ("active", "BOOL", "REQUIRED", "Only active vendors are planned"),
+        ],
+    },
+    "venues": {
+        "description": "Where a campaign can be held, and the region that serves it (vendors, warehouse, shipping lanes).",
+        "columns": [
+            ("venue_id", "STRING", "REQUIRED", ""),
+            ("venue_name", "STRING", "REQUIRED", "What the user says: USA, Canada, London, Singapore"),
+            ("country", "STRING", "NULLABLE", ""),
+            ("region", "STRING", "REQUIRED", "US, EMEA or APAC: the region that serves it"),
+            ("served_from", "STRING", "NULLABLE", "Plain words: where the goods come from"),
+        ],
+    },
+    "vendor_date_pricing": {
+        "description": "Vendor price by how many days ahead the order is placed: early-bird discounts and rush charges.",
+        "columns": [
+            ("vendor_id", "STRING", "REQUIRED", "A vendor id, or * for every vendor that has no rows of its own"),
+            ("min_days_ahead", "INT64", "REQUIRED", "Applies when the in-hand date is at least this many days away"),
+            ("price_factor", "FLOAT64", "REQUIRED", "Multiplies the unit price: 0.95 = 5% off, 1.10 = 10% rush charge"),
+            ("label", "STRING", "NULLABLE", "Plain words for the user"),
         ],
     },
     "vendor_offers": {

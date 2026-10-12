@@ -6,6 +6,8 @@ BigQuery, and the wording is the same every time.
 import re
 from datetime import date, timedelta
 
+from .planner import price_factor
+
 ICON = {"FULL_NEW": "🛒", "REBALANCE": "♻️", "ECO": "🌱"}
 _UNITS = {"GUEST_KIT": "kits", "VENUE_DISPLAY": "stands", "SALES_PACK": "folders"}
 
@@ -33,32 +35,26 @@ def spare(hours, min_buffer=24) -> str:
 # ---------------------------------------------------------------------------- the first hello
 def capabilities_card() -> str:
     return """## 👋 Hi! I am your Campaign Procurement Assistant
-> I help you **set up a campaign and buy everything it needs**, and I only place orders when you are happy.
+> Tell me about your campaign. I show you what we have, compare vendors, find the best date, and place the orders once the right person says OK.
 
 | | I can | In simple words |
 |---|---|---|
-| 🛍️ | Show you **what we offer** | Our stock, best vendor prices, ready-by dates. You pick |
+| 📍 | Show **where we can deliver** | Vendors and warehouses in the USA, Canada, London and Singapore |
+| 🛍️ | Show **what we offer** | Our stock, best prices, ready-by dates, a plan for your headcount |
 | 🧾 | Make your **shopping list** | Exact items, amounts and places |
 | 💡 | Spot **what you may be missing** | Spares, extra items, dates that are too tight |
-| ♻️ | Check **our stock** | Use what we own before buying |
 | 🏭 | Compare **vendors** | Prices, ready-by dates, late vendors |
-| 🎯 | Give you **3 choices** | Price, arrival date, spare time |
+| 📅 | Find the **best date** | Vendors charge less when you order early, more for a rush |
 | ✍️ | Get the **right OK** | Small = automatic · bigger = manager · biggest = CMO |
 | 📦 | **Place all the orders** | At once, with a clear summary |
 
-### 🧭 Two ways to start
-| | You want to... | Good to know |
-|---|---|---|
-| 🅰️ | **Plan a whole campaign** ⭐ | Best: more stock to reuse, more vendors to compare, a stronger case for better rates |
-| 🅱️ | **Buy selected items** | Works too: for a campaign, or just a quick purchase |
+**Just talk to me.** For example: *"Hi, I am looking for a campaign for 300 people on 31st Oct."* Only need a few items? Tell me which. I will ask for anything that is missing.
+
+**💡 Planning the whole campaign is best:** more stock to reuse, more vendors to compare, a stronger case for better rates.
 
 ### 👉 First question
-**Do you want to plan a whole campaign, or buy selected items?**
+**Tell me about your campaign:** how many people, and on which date?
 """
-
-
-_ITEMS_TIP = ("💡 **Good to know:** planning the **whole campaign** is better. More stock to reuse, more vendors to compare, a "
-              "stronger case for better rates. Want that instead? Say *plan the whole campaign*. Otherwise we carry on with your items.")
 
 
 def _fits(ready: date, deadline: date | None) -> str:
@@ -68,14 +64,61 @@ def _fits(ready: date, deadline: date | None) -> str:
     return "🔴 too late" if gap < 0 else ("🟡 tight" if gap < 3 else "🟢 fits")
 
 
-def catalog_markdown(repo, deadline: date | None = None, focus: str = "campaign", today: date | None = None) -> str:
-    """What we can offer: ready-made packs and single items, with our stock, the best vendor price and ready-by dates."""
+def _ceil(x: float) -> int:
+    return int(-(-x // 1)) if x > 0 else 0
+
+
+def suggested_plan(repo, people: int, region: str = "") -> dict:
+    """A starter plan for this many guests from the suggested_per_person columns: {bundles: [...], items: [...]}."""
+    if not people:
+        return {"bundles": [], "items": []}
+    assets = {a["sku"]: a for a in repo.list_assets()}
+    bundles, items = [], []
+    for btype in repo.list_bundle_types():
+        ratios = [t.get("suggested_per_person") for t in repo.get_bundle_templates(btype) if t.get("suggested_per_person")]
+        if ratios:
+            bundles.append({"bundle_type": btype, "quantity": max(1, _ceil(people * float(ratios[0]))), "region": region})
+    for sku, a in assets.items():
+        if a.get("suggested_per_person"):
+            items.append({"item": a["name"], "quantity": max(1, _ceil(people * float(a["suggested_per_person"]))), "region": region})
+    return {"bundles": bundles, "items": items}
+
+
+def venues_markdown(repo, people: int = 0, date_text: str = "") -> str:
+    """Where a campaign can be held, the vendors that serve each place and what we have in the warehouse there."""
+    assets = {a["sku"]: a for a in repo.list_assets()}
+    vendors = repo.list_vendors()
+    depots = {}
+    for d in repo.list_depot_free():
+        if int(d["free"]) > 0:
+            e = depots.setdefault(d["region"], {"name": d["depot_name"], "skus": set()})
+            e["skus"].add(_item_label(assets, d["sku"]))
+    names = sorted({_item_label(assets, k) for k in assets})
+    head = (f"For **{people} people**" if people else "For your campaign") + (f" on **{date_text}**" if date_text else "")
+    out = [f"### 📍 {head}: where can we deliver?", "",
+           f"🧩 **What we have in place:** {', '.join(names)}.", "",
+           "| 📍 Where | 🏭 Vendors based there | 🏢 Our warehouse and stock | 🚚 How it is served |", "|---|---|---|---|"]
+    for v in repo.list_venues():
+        local = ", ".join(x["vendor_name"] for x in vendors if x["home_region"] == v["region"]) or "-"
+        dep = depots.get(v["region"])
+        stock = f"{dep['name']}: {len(dep['skus'])} kinds of items" if dep else "none"
+        out.append(f"| **{v['venue_name']}** | {local} | {stock} | {v.get('served_from') or ''} |")
+    out += ["", "Vendors from other regions can ship in too. I compare them all for you."]
+    return "\n".join(out)
+
+
+def catalog_markdown(repo, deadline: date | None = None, focus: str = "campaign", today: date | None = None,
+                     people: int = 0, region: str = "") -> str:
+    """What we can offer: ready-made packs and single items, with our stock, the best vendor price for the date and
+    ready-by dates, and (for a headcount) what we suggest."""
     today = today or date.today()
+    window = (deadline - today).days if deadline else None
+    rules = repo.list_date_pricing()
     assets = {a["sku"]: a for a in repo.list_assets()}
     offers = repo.list_vendor_offers_all()
     stock: dict = {}
     for d in repo.list_depot_free():
-        if int(d["free"]) > 0:
+        if int(d["free"]) > 0 and (not region or d["region"] == region):
             stock.setdefault(d["sku"], []).append((d["depot_name"].split(" ")[0], int(d["free"])))
     groups: dict = {}
     for sku in assets:
@@ -84,18 +127,24 @@ def catalog_markdown(repo, deadline: date | None = None, focus: str = "campaign"
     def ready(o):
         return today + timedelta(days=int(o["lead_days"]) + int(o["delay_days"]))
 
+    def price(o):
+        f = price_factor(rules, o["vendor_id"], window)[0] if window is not None else 1.0
+        return float(o["unit_price"]) * f
+
+    sug = suggested_plan(repo, people, region)
+    sug_item = {i["item"]: i["quantity"] for i in sug["items"]}
     info = {}
     for label, skus in groups.items():
         mine = [o for o in offers if o["sku"] == skus[0]]
         std = [o for o in mine if o["variant"] == "STANDARD"]
         eco = [o for o in mine if o["variant"] == "ECO"]
-        best = min(std, key=lambda o: (float(o["unit_price"]), int(o["lead_days"]))) if std else None
-        fast = min(mine, key=lambda o: (int(o["lead_days"]) + int(o["delay_days"]), float(o["unit_price"]))) if mine else None
+        best = min(std, key=lambda o: (price(o), int(o["lead_days"]))) if std else None
+        fast = min(mine, key=lambda o: (int(o["lead_days"]) + int(o["delay_days"]), price(o))) if mine else None
         free = {}
         for k in skus:
             for place, n in stock.get(k, []):
                 free[place] = free.get(place, 0) + n
-        info[label] = {"skus": skus, "best": best, "fast": fast, "eco": min(eco, key=lambda o: float(o["unit_price"])) if eco else None,
+        info[label] = {"skus": skus, "best": best, "fast": fast, "eco": min(eco, key=price) if eco else None,
                        "free": free, "free_total": sum(free.values())}
 
     packs = []
@@ -108,72 +157,122 @@ def catalog_markdown(repo, deadline: date | None = None, focus: str = "campaign"
                 parts.append((_item_label(assets, sku), int(t["qty_per_bundle"])))
         if not parts:
             continue
-        price = sum(q * float(info[l]["best"]["unit_price"]) for l, q in parts if info[l]["best"])
+        cost = sum(q * price(info[l]["best"]) for l, q in parts if info[l]["best"])
         ready_by = max((ready(info[l]["best"]) for l, _ in parts if info[l]["best"]), default=None)
         in_stock = ", ".join(f"{l} {info[l]['free_total']}" for l, _ in parts if info[l]["free_total"])
-        packs.append((templates[0]["description"], ", ".join(l for l, _ in parts), in_stock, price, ready_by))
-    out = ["### 🛍️ What we can offer you", f"Prices are per unit. *Ready by* is when the vendor finishes; shipping time comes on top. Today is **{day(today)}**"
-           + (f" and your date is **{day(deadline)}**." if deadline else "."), ""]
-    pack_md = ["**🎁 Ready-made packs** (the easy way)", "", "| 🎁 Pack | 🧩 What is inside | ♻️ Part of it in our stock | 💰 From (per pack) | 📅 Ready by | 🚦 |",
-               "|---|---|---|---|---|---|"]
-    pack_md += [f"| **{n}** | {inside} | {fs or '-'} | {money(pr)} | {day(rb) if rb else '-'} | {_fits(rb, deadline) if rb else ''} |"
-                for n, inside, fs, pr, rb in packs]
+        qty = next((b["quantity"] for b in sug["bundles"] if b["bundle_type"] == btype), 0)
+        packs.append((templates[0]["description"], ", ".join(l for l, _ in parts), in_stock, cost, ready_by, qty))
+    band = price_factor(rules, "*", window)[1] if window is not None else ""
+    out = ["### 🛍️ What we can offer you",
+           f"Prices are per unit" + (f" **for your date** ({band.lower()})" if band else "") + ". *Ready by* is when the vendor finishes; "
+           f"shipping time comes on top. Today is **{day(today)}**" + (f" and your date is **{day(deadline)}**." if deadline else ".")
+           + (f" 💡 *For {people} people* shows what we suggest." if people else ""), ""]
+    sug_col = f" | 💡 For {people} people" if people else ""
+    sug_sep = "|---" if people else ""
+    pack_md = ["**🎁 Ready-made packs** (the easy way)", "",
+               "| 🎁 Pack | 🧩 What is inside | ♻️ Part of it in our stock | 💰 From (per pack) | 📅 Ready by | 🚦" + sug_col + " |",
+               "|---|---|---|---|---|---" + sug_sep + "|"]
+    for n, inside, ins, pr, rb, qty in packs:
+        pack_md.append(f"| **{n}** | {inside} | {ins or '-'} | {money(pr)} | {day(rb) if rb else '-'} | {_fits(rb, deadline) if rb else ''}"
+                       + (f" | {qty or '-'}" if people else "") + " |")
     item_md = ["**🧩 Single items** (pick only what you need)", "",
-               "| 🧩 Item | ♻️ In our stock | 💰 Best price | 🏭 Vendor | 📅 Ready by | 🚦 | ⚡ Faster option | 🌱 Eco |", "|---|---|---|---|---|---|---|---|"]
+               "| 🧩 Item | ♻️ In our stock | 💰 Best price | 🏭 Vendor | 📅 Ready by | 🚦 | ⚡ Faster option | 🌱 Eco" + sug_col + " |",
+               "|---|---|---|---|---|---|---|---" + sug_sep + "|"]
     for label, v in info.items():
         b, f, e = v["best"], v["fast"], v["eco"]
         stock_txt = ", ".join(f"{n} {p}" for p, n in v["free"].items()) or "-"
         if b:
             rb = ready(b)
-            faster = (f"{f['vendor_name']} {money(f['unit_price'])}, {day(ready(f))}" if f["vendor_id"] != b["vendor_id"]
+            faster = (f"{f['vendor_name']} {money(price(f))}, {day(ready(f))}" if f["vendor_id"] != b["vendor_id"]
                       and ready(f) < rb else "-")
-            row = (money(b["unit_price"]), b["vendor_name"], day(rb), _fits(rb, deadline), faster,
-                   money(e["unit_price"]) if e else "-")
+            row = (money(price(b)), b["vendor_name"], day(rb), _fits(rb, deadline), faster, money(price(e)) if e else "-")
         else:
             row = ("-", "-", "-", "", "-", "-")
-        item_md.append(f"| {label} | {stock_txt} | " + " | ".join(row) + " |")
+        item_md.append(f"| {label} | {stock_txt} | " + " | ".join(row) + (f" | {sug_item.get(label, '-')}" if people else "") + " |")
     first, second = (pack_md, item_md) if focus != "items" else (item_md, pack_md)
     out += first + [""] + second
-    out += ["", "👉 **Pick what you want.** Say how many, for example *150 VIP guest welcome kits* or *5 venue display stands for the US*. "
-                "You can mix packs and items. I will show your shopping list and tell you what you may be missing."]
+    out += ["", "👉 **Pick what you want.** " + ("Say **use the suggested plan**, or " if people else "") +
+            "say how many, for example *150 VIP guest welcome kits* or *5 venue display stands*. You can mix packs and items. "
+            "I will show your shopping list and tell you what you may be missing."]
     return "\n".join(out)
 
 
-def intake_checklist(mode: str = "", campaign: str = "", date_text: str = "", needs: str = "", catalog: str = "",
-                     date_on_file: date | None = None) -> str:
-    """The four things to close on, with what we have so far and the ONE next question."""
-    m = (mode or "").lower()
-    kind = "items" if any(w in m for w in ("item", "select", "single", "few", "just")) else (
-        "campaign" if any(w in m for w in ("campaign", "whole", "plan", "event", "full")) else "")
+def date_options_markdown(rows: list[dict], policies: list[dict]) -> str:
+    """Could another date save money? One row per date: the best total, the difference and the spare time."""
+    if len(rows) < 2:
+        return ""
+    base = next((r for r in rows if r["offset"] == 0), rows[0])["best"]["total_cost"]
+    cheapest = min(rows, key=lambda r: r["best"]["total_cost"])
+    out = ["### 📅 Could another date save you money?",
+           "Vendors charge less when you order well ahead, and more for a rush. Same list, different date:", "",
+           "| 📅 In hand by | 🏷️ Price band | 💰 Best total | 💸 Compared with your date | ⏳ Spare time | ✍️ OK from |", "|---|---|---|---|---|---|"]
+    for r in rows:
+        b = r["best"]
+        diff = float(b["total_cost"]) - float(base)
+        cmp_txt = "👈 **your date**" if r["offset"] == 0 else (f"**Save {money(-diff)}**" if diff < -0.005 else (f"Pay {money(diff)} more" if diff > 0.005 else "Same"))
+        who = _band(policies, float(b["total_cost"]))[1] or "nobody ✅"
+        spare_txt = spare(b["buffer_hours"]) if b["feasible"] else "🔴 too late for some items"
+        out.append(f"| **{day(r['deadline'])}** | {r['band'] or '-'} | {money(b['total_cost'])} | {cmp_txt} | {spare_txt} | {who} |")
+    if cheapest["offset"] != 0 and float(base) - float(cheapest["best"]["total_cost"]) > 0.005:
+        out += ["", f"💡 The cheapest is **{day(cheapest['deadline'])}**: you would save **{money(float(base) - float(cheapest['best']['total_cost']))}**. "
+                    f"Want that? Say *move it to {day(cheapest['deadline'])}*."]
+    else:
+        out += ["", "💡 Your date is a good one. Want to try another? Say *move it to* and a date."]
+    return "\n".join(out)
+
+
+_STEPS = {"mode": "🧭", "campaign": "🎪", "people": "👥", "date": "📅", "venue": "📍", "picks": "🛒"}
+
+
+def intake_checklist(mode: str = "", campaign: str = "", people: int = 0, date_text: str = "", venue: str = "",
+                     picks: str = "", venues_md: str = "", catalog_md: str = "", venue_unknown: str = "",
+                     date_note: str = "", suggested: dict | None = None) -> str:
+    """What we have so far (✅/⬜) and the ONE next question. Shows where we deliver once the date is known, and our
+    offer once the place is known."""
     quick = (campaign or "").strip().lower() in ("quick purchase", "no campaign", "none")
+    items_mode = (mode or "").lower().startswith("item")
+    camp_mode = (mode or "").lower().startswith("camp")
     try:
         shown_date = day(date.fromisoformat(date_text)) if date_text else ""
     except ValueError:
         shown_date = date_text
-    rows = [("🧭 What you want to do", {"campaign": "Plan a whole campaign ⭐", "items": "Buy selected items"}.get(kind, "")),
-            ("🎪 Campaign name", "No campaign (quick purchase)" if quick else campaign),
-            ("📅 Date it must be in hand", shown_date), ("🛒 What you pick", needs)]
-    out = ["### 📝 Let's close on 4 things", "", "| | What | Your answer |", "|---|---|---|"]
+    rows = []
+    if camp_mode or not items_mode:
+        rows.append(("🎪 Campaign name", campaign))
+        rows.append(("👥 How many people", f"{people}" if people else ""))
+    elif campaign and not quick:
+        rows.append(("🎪 Campaign name", campaign))
+    rows += [("📅 Date it must be in hand", shown_date), ("📍 Where", venue), ("🛒 What you pick", picks)]
+    out = ["### 📝 Where we are", "", "| | What | Your answer |", "|---|---|---|"]
     out += [f"| {'✅' if v else '⬜'} | {k} | {v or ''} |" for k, v in rows]
-    after = ""
-    if not kind:
-        ask = ("**Do you want to plan a whole campaign, or buy selected items?**\n\n"
-               "🅰️ **Whole campaign** ⭐ best: I help you set it up.\n\n🅱️ **Selected items**: for a campaign or just a quick purchase.")
-    elif not campaign:
-        ask = ("**What is your campaign called?**" if kind == "campaign" else
-               "**Is this for a campaign?** Tell me its name, or say *no campaign*.\n\n" + _ITEMS_TIP)
+    after, ask = "", ""
+    if not (camp_mode or items_mode):
+        ask = ("**Tell me about your campaign:** how many people, and on which date?\n\n"
+               "Or tell me the items you need. Just talk to me, I will ask for anything that is missing.")
+    elif camp_mode and not people:
+        ask = "**How many people will come to your campaign?**"
     elif not date_text:
-        ask = ("**By what date must everything be in hand?** *(Please give day, month and year.)*" if not date_on_file else
-               f"**Your campaign is on file with the date {day(date_on_file)}.** Say *use that date*, or give a new full date.")
-    elif not needs:
+        ask = "**On which date must everything be in hand?** *(Please give day and month, and the year if it is not this year.)*"
+        if date_note:
+            ask = f"{date_note}\n\n" + ask
+    elif not venue:
+        ask = ("**Where is your campaign?** " + (f"*(I do not serve '{venue_unknown}' yet.)* " if venue_unknown else "")
+               + "Pick a place from the table: " + ", ".join(f"**{n}**" for n in _venue_names(venues_md)) + ".")
+        after = venues_md
+    elif camp_mode and not campaign:
+        ask = "**What would you like to call your campaign?**"
+    elif not picks:
         ask = "**What would you like from our offer?**"
-        after = catalog
-    else:
-        ask = ""
-    out += ["", "### 👉 Next question" if ask else "### ✅ All 4 closed. Let me look at your list.", ask]
+        after = catalog_md
+    out += ["", "### 👉 Next question" if ask else "### ✅ All closed. Let me look at your list.", ask]
     if after:
         out += ["", after]
     return "\n".join(out).rstrip()
+
+
+def _venue_names(venues_md: str) -> list[str]:
+    import re
+    return re.findall(r"^\| \*\*([^*|]+)\*\* \|", venues_md or "", flags=re.M)
 
 
 def advice_markdown(items: list[dict]) -> str:
@@ -283,7 +382,7 @@ def decision_card(request_id: str, launch: dict, scenarios: list[dict], policies
         ("✍️ Who has to say OK", [who(float(s["total_cost"])) for s in scenarios]),
     ]
     out = [f"### 🎯 Step 4: Your 3 choices for the {launch['launch_name']}",
-           f"📅 Deadline (in our hands): **{day(launch['in_hand_by'])}** · 📣 Press embargo: **{day(launch['embargo_date'])}**",
+           f"📅 Deadline (in our hands): **{day(launch['in_hand_by'])}**",
            f"🧾 Request number: `{request_id}`", "",
            "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     out += ["| " + " | ".join([label] + vals) + " |" for label, vals in rows]

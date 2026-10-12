@@ -57,6 +57,12 @@ class MemoryRepository(Repository):
     def get_asset(self, sku):
         return next((dict(a) for a in self.t["assets"] if a["sku"] == sku), None)
 
+    def list_venues(self):
+        return [dict(v) for v in self.t["venues"]]
+
+    def list_date_pricing(self):
+        return [dict(r) for r in self.t["vendor_date_pricing"]]
+
     def list_assets(self):
         return [dict(a) for a in self.t["assets"]]
 

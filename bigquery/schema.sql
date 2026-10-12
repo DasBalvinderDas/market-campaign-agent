@@ -13,8 +13,9 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.launches` (
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.assets` (
   sku STRING NOT NULL,
   name STRING NOT NULL,
-  component_type STRING NOT NULL OPTIONS(description="BOX, APPAREL, POWER, PERSONALISATION, DISPLAY, FOLIO, PRINT"),
-  ship_factor FLOAT64 NOT NULL OPTIONS(description="Relative size/weight: multiplies the shipping lane cost")
+  component_type STRING NOT NULL OPTIONS(description="BOX, APPAREL, POWER, PERSONALISATION, DISPLAY, FOLDER, PRINT"),
+  ship_factor FLOAT64 NOT NULL OPTIONS(description="Relative size/weight: multiplies the shipping lane cost"),
+  suggested_per_person FLOAT64 OPTIONS(description="Units we suggest per campaign guest (blank: not by headcount)")
 ) OPTIONS(description="Launch collateral catalog (one row per sellable item).");
 
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.bundle_templates` (
@@ -22,7 +23,8 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.bundle_templates` (
   description STRING,
   sku_pattern STRING NOT NULL OPTIONS(description="A SKU, or a pattern with {size} / {plug}"),
   qty_per_bundle INT64 NOT NULL,
-  split_by STRING NOT NULL OPTIONS(description="NONE, SIZE or PLUG: how the SKU is chosen per recipient")
+  split_by STRING NOT NULL OPTIONS(description="NONE, SIZE or PLUG: how the SKU is chosen per recipient"),
+  suggested_per_person FLOAT64 OPTIONS(description="Bundles we suggest per campaign guest (blank: not by headcount)")
 ) OPTIONS(description="What goes into one bundle (guest welcome kit, venue display stand, sales folder).");
 
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.guests` (
@@ -33,7 +35,7 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.guests` (
   size STRING NOT NULL OPTIONS(description="S, M, L, XL"),
   region STRING NOT NULL OPTIONS(description="US, EMEA, APAC"),
   plug_type STRING NOT NULL OPTIONS(description="US-A, UK-G, EU-C, JP-A, AU-I")
-) OPTIONS(description="VIP creator seeding list: size and power-plug per recipient (personalisation).");
+) OPTIONS(description="VIP guest list: size and power-plug per recipient (personalisation).");
 
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.regional_split` (
   bundle_type STRING NOT NULL,
@@ -66,6 +68,21 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.vendors` (
   home_region STRING NOT NULL OPTIONS(description="Where it ships from"),
   active BOOL NOT NULL OPTIONS(description="Only active vendors are planned")
 ) OPTIONS(description="Approved manufacturers.");
+
+CREATE TABLE IF NOT EXISTS `{project}.{dataset}.venues` (
+  venue_id STRING NOT NULL,
+  venue_name STRING NOT NULL OPTIONS(description="What the user says: USA, Canada, London, Singapore"),
+  country STRING,
+  region STRING NOT NULL OPTIONS(description="US, EMEA or APAC: the region that serves it"),
+  served_from STRING OPTIONS(description="Plain words: where the goods come from")
+) OPTIONS(description="Where a campaign can be held, and the region that serves it (vendors, warehouse, shipping lanes).");
+
+CREATE TABLE IF NOT EXISTS `{project}.{dataset}.vendor_date_pricing` (
+  vendor_id STRING NOT NULL OPTIONS(description="A vendor id, or * for every vendor that has no rows of its own"),
+  min_days_ahead INT64 NOT NULL OPTIONS(description="Applies when the in-hand date is at least this many days away"),
+  price_factor FLOAT64 NOT NULL OPTIONS(description="Multiplies the unit price: 0.95 = 5% off, 1.10 = 10% rush charge"),
+  label STRING OPTIONS(description="Plain words for the user")
+) OPTIONS(description="Vendor price by how many days ahead the order is placed: early-bird discounts and rush charges.");
 
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.vendor_offers` (
   vendor_id STRING NOT NULL,
@@ -107,7 +124,7 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.requirement_lines` (
   request_id STRING NOT NULL,
   line_no INT64 NOT NULL,
   bundle_type STRING NOT NULL,
-  channel STRING NOT NULL OPTIONS(description="CREATOR, SHOWROOM, SALES"),
+  channel STRING NOT NULL OPTIONS(description="GUESTS, VENUES, SALES"),
   sku STRING NOT NULL,
   region STRING NOT NULL OPTIONS(description="Destination region"),
   quantity INT64 NOT NULL,

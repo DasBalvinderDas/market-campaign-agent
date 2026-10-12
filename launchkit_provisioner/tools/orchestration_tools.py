@@ -1,5 +1,6 @@
 """Read-only tools of the root agent."""
 from .. import presentation
+from ..dates import parse_date
 from ..repositories import get_repo
 
 
@@ -58,35 +59,52 @@ def get_vendor_report(request_id: str) -> dict:
             + presentation.vendor_report(repo, request_id)}
 
 
-def show_checklist(mode: str = "", campaign: str = "", date: str = "", needs: str = "") -> dict:
-    """Show the four things to close on (what the user wants to do, the campaign name, the date, what they pick) with what
-    we know so far and the ONE next question. When it is time to pick, it also shows what we can offer: ready-made packs and
-    single items with our stock, best vendor prices and ready-by dates. Call it on every question turn, passing what the
-    user has told you so far (leave the rest empty).
+def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: str = "", venue: str = "",
+                   picks: str = "") -> dict:
+    """The interviewer. Shows what we know so far (✅/⬜) and the ONE next question. When the date is known it also shows
+    where we can deliver (vendors and warehouses), and when the place is known it shows our offer with a suggested plan
+    for the headcount. Call it on EVERY question turn with everything the user has said so far (leave the rest empty).
+    Users talk naturally ("a campaign for 300 people on 31st Oct"): pass what you can read from their words.
 
     Args:
-        mode: "campaign" if they want to plan a whole campaign, "items" if they want to buy selected items.
-        campaign: The campaign name the user chose. "Quick purchase" if the items are not for a campaign.
-        date: The date everything must be in hand as YYYY-MM-DD (for a campaign on file, the date on file if the user said to use it).
-        needs: A short summary of what they picked and how many.
+        mode: "campaign" for a whole campaign, "items" if they only want some items. Leave empty if not clear yet.
+        campaign: The campaign name the user gave (not needed for items).
+        people: How many people come (campaigns).
+        date: The date everything must be in hand, as the user said it ("31st Oct") or as YYYY-MM-DD.
+        venue: Where the campaign is: USA, Canada, London or Singapore (or a city in one of them).
+        picks: A short summary of what they picked, once they pick.
+    Returns date_iso, region and venue_name when known, and `suggested` (bundles and items for the headcount) for
+    "use the suggested plan". Use date_iso as deadline_date and region for every pick.
     """
     from datetime import date as _date
 
     repo = get_repo()
-    on_file = None
-    if campaign and not date:
-        known = next((x for x in repo.list_launches() if campaign.strip().lower() in
-                      (x["launch_id"].lower(), x["launch_name"].lower())), None)
-        on_file = known["in_hand_by"] if known else None
-    deadline = None
-    if date:
-        try:
-            deadline = _date.fromisoformat(date)
-        except ValueError:
-            deadline = None
-    catalog = presentation.catalog_markdown(repo, deadline, "items" if "item" in (mode or "").lower() else "campaign") \
-        if (mode and campaign and date and not needs) else ""
-    out = {"status": "ok", "display_markdown": presentation.intake_checklist(mode, campaign, date, needs, catalog, on_file)}
-    if on_file:
-        out["date_on_file"] = str(on_file)
+    d = parse_date(date) if date else None
+    note = ""
+    if date and not d:
+        note = f"I could not read the date '{date}'."
+    elif d and d <= _date.today():
+        note, d = f"{d} is not in the future.", None
+    v = None
+    unknown = ""
+    if venue:
+        t = venue.strip().lower()
+        v = next((x for x in repo.list_venues() if t in (x["venue_name"].lower(), x["country"].lower(), x["venue_id"].lower())
+                  or x["venue_name"].lower() in t or t in x["country"].lower()), None)
+        unknown = "" if v else venue
+    iso = d.isoformat() if d else ""
+    region = v["region"] if v else ""
+    venues_md = presentation.venues_markdown(repo, people, presentation.day(d) if d else "") if (d and not v) else ""
+    catalog = (presentation.catalog_markdown(repo, d, "items" if (mode or "").lower().startswith("item") else "campaign",
+                                              people=people, region=region)
+               if (d and v and not picks and (campaign or (mode or "").lower().startswith("item"))) else "")
+    md = presentation.intake_checklist(mode, campaign, people, iso, v["venue_name"] if v else "", picks, venues_md, catalog,
+                                       unknown, note)
+    out = {"status": "ok", "display_markdown": md}
+    if iso:
+        out["date_iso"] = iso
+    if v:
+        out.update(region=region, venue_name=v["venue_name"])
+        if people and (mode or "").lower().startswith("camp"):
+            out["suggested"] = presentation.suggested_plan(repo, people, region)
     return out
