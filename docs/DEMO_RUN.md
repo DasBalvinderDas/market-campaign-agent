@@ -171,10 +171,46 @@ Engine for the run time and errors, and run `python scripts/agent_engine_logs.py
 | No final answer in Gemini Enterprise | Check the session's Traces tab and `agent_engine_logs.py --errors-only`; the agent deliberately writes no text between steps |
 | Old numbers or old request ids | Open a new chat after every reset |
 
-## 9. Talking points
+## 9. The agent pitch
+
+**One line:** LaunchKit Provisioner turns a launch brief into a deadline-safe, costed plan, reuses surplus stock before buying anything,
+and only asks an executive to sign off on the option that was chosen.
+
+**The problem.** A global launch needs hundreds of personalised kits, displays and folios in hand before an embargo date. Today people
+work out quantities in spreadsheets, guess at depot stock, discover a late vendor too late, and approve a number they cannot compare.
+
+**What it does**
+
+1. **Reads the brief** and expands it into per-creator, per-region requirement lines (hoodie size, power plug, region).
+2. **Plans three options** from live data: full new production, smart depot rebalance (surplus first, nearest depot first), and a certified eco launch.
+   Each option has cost, delivery date, safety buffer against the in-hand date, carbon and risk, all computed.
+3. **Recommends one** (cheapest option that still keeps the safety buffer) and holds the surplus stock it relies on.
+4. **Routes the sign-off by the amount of the chosen option**: autopilot up to $5,000, VP Product Marketing up to $50,000, CMO above.
+   The executive approves or rejects from an email (Application Integration).
+5. **Carries it out** once approved: purchase orders and depot transfers in parallel, then a tracking update to the launch team.
+6. **Re-plans when a vendor slips** and keeps a readiness board and a full audit trail.
+
+**How it differs from a budget-approval agent**
+
+| Budget approval | LaunchKit Provisioner |
+|---|---|
+| Question: "is there budget for this?" | Question: "what is the best way to be ready in time, and what does each way cost?" |
+| Approves or rejects one request | Compares three computed options, then approves the chosen one |
+| Approval is the product | Approval is the last gate; planning and fulfilment are the product |
+| Checks a number against a budget | Checks stock, lead times, shipping lanes, vendor offers and the deadline |
+| Stops when approved | Places the orders and transfers, tracks them, re-plans on delays |
+| Money only | Time (buffer), cost, carbon and risk together |
+
+**Why it is trustworthy.** Every number comes from BigQuery, not from the model. The code refuses orders without an approved sign-off,
+beyond the approved amount, or twice. Everything is created and reset by scripts, and the audit trail records every step.
+
+**Why it fits Gemini Enterprise.** One root agent writes every reply and calls its three specialists (Brief Analyst, Sourcing Planner,
+Fulfilment) as tools, so it is easy to steer and shows up correctly in Gemini Enterprise. No public endpoint is needed.
+
+**Talking points**
 
 - It plans the launch against the deadline; approval is the last gate, on a chosen option.
-- Every number on the card is computed from BigQuery; change a vendor price, a depot stock or a planning rule and the card changes.
+- Change a vendor price, a depot stock or a planning rule and the card changes.
 - Surplus is reused before new spend, and held while a sign-off is pending.
-- The root agent is the only one that can authorise spend; the code refuses orders without an approved sign-off, beyond the amount, or twice.
-- Everything is created and reset by scripts; Application Integration runs the purchase orders, transfers, the executive email and the tracking update.
+- The root agent is the only one that can authorise spend.
+- Application Integration runs the orders, transfers, the executive email and the tracking update.
