@@ -42,7 +42,7 @@ tables, views and demo data and the Application Integration workflows. Full step
 
 ## How a request flows
 
-1. **Talk** (chat): the user says it naturally, for example *"a campaign for 300 people on 31st Oct"*. The assistant reads what it can and asks only for what is missing, one thing at a time, with a ✅/⬜ table: people, date, **where** (USA, Canada, London or Singapore, with the vendors and warehouses that serve each), a campaign name, then **what we can offer** (packs and items, our stock, best prices for the date, ready-by dates and a suggested plan for the headcount). Selected items work too.
+1. **Talk** (chat): the user says it naturally, for example *"a campaign for 300 people on 31st Oct"*. The assistant reads what it can and asks only for what is missing, one thing at a time, with a ✅/⬜ table: people, date, **where** (USA, Canada, London or Singapore, with the vendors and warehouses that serve each), a campaign name (with four name ideas to pick from; the campaign is created as soon as it is named), then **what we can offer** (packs and items, our stock, best prices for the date, ready-by dates and a suggested plan for the headcount). Selected items work too.
 2. **Plan**: the Brief Analyst and the Sourcing Planner compute the requirement lines and three options from BigQuery. Vendors price by date (early-bird and rush), so the plan ends with **📅 could another date save you money?**. One reply,
    in simple words with tables and icons: the **shopping list (BOM)**, the **vendor comparison**, and a **3-choices table** (price, saving,
    arrival date, spare time, pollution, who has to say OK).

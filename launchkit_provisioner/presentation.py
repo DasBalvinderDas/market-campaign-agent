@@ -221,12 +221,42 @@ def date_options_markdown(rows: list[dict], policies: list[dict]) -> str:
     return "\n".join(out)
 
 
+_SEASON = {12: "Winter", 1: "Winter", 2: "Winter", 3: "Spring", 4: "Spring", 5: "Spring", 6: "Summer", 7: "Summer", 8: "Summer",
+           9: "Autumn", 10: "Autumn", 11: "Autumn"}
+
+
+def name_suggestions(people: int = 0, deadline: date | None = None, venue: str = "") -> list[str]:
+    """Four campaign names to pick from, built from the season, the place and the size. The same input gives the same names."""
+    when = deadline or date.today()
+    season = _SEASON[when.month]
+    size = "Meetup" if 0 < people < 50 else ("Summit" if 0 < people < 500 else "Festival")
+    place = (venue or "").strip()
+    names = [f"{season} {size} {when.year}",
+             f"{place} {season} Showcase" if place else f"{season} Showcase {when.year}",
+             f"{when:%B} {place} Launch".replace("  ", " ") if place else f"{when:%B} Launch {when.year}",
+             f"The {people}-Guest {season} Celebration" if people else f"The {season} Celebration {when.year}"]
+    return list(dict.fromkeys(n.strip() for n in names))
+
+
+def campaign_created_markdown(launch: dict, how: str, people: int = 0, venue: str = "") -> str:
+    head = {"created": "### 🎉 Your campaign is created!", "date_updated": "### ✅ Campaign found, date updated",
+            "found": "### ✅ Campaign found"}.get(how, "### ✅ Campaign ready")
+    rows = [("🎪 Campaign", f"**{launch['launch_name']}**"), ("🆔 Reference", f"`{launch['launch_id']}`"),
+            ("📅 In hand by", day(launch["in_hand_by"]))]
+    if people:
+        rows.append(("👥 People", f"{people:,}"))
+    if venue:
+        rows.append(("📍 Where", venue))
+    return "\n".join([head, "", "| | |", "|---|---|"] + [f"| {a} | {b} |" for a, b in rows]
+                     + ["", "Next, let's see what we can offer you."])
+
+
 _STEPS = {"mode": "🧭", "campaign": "🎪", "people": "👥", "date": "📅", "venue": "📍", "picks": "🛒"}
 
 
 def intake_checklist(mode: str = "", campaign: str = "", people: int = 0, date_text: str = "", venue: str = "",
                      picks: str = "", venues_md: str = "", catalog_md: str = "", venue_unknown: str = "",
-                     date_note: str = "", suggested: dict | None = None) -> str:
+                     date_note: str = "", names: list[str] | None = None) -> str:
     """What we have so far (✅/⬜) and the ONE next question. Shows where we deliver once the date is known, and our
     offer once the place is known."""
     quick = (campaign or "").strip().lower() in ("quick purchase", "no campaign", "none")
@@ -260,7 +290,10 @@ def intake_checklist(mode: str = "", campaign: str = "", people: int = 0, date_t
                + "Pick a place from the table: " + ", ".join(f"**{n}**" for n in _venue_names(venues_md)) + ".")
         after = venues_md
     elif camp_mode and not campaign:
-        ask = "**What would you like to call your campaign?**"
+        ask = "**What would you like to call your campaign?** Pick one of these, or type your own:"
+        if names:
+            after = "\n".join(["| # | 💡 Name ideas |", "|---|---|"] + [f"| {i} | **{n}** |" for i, n in enumerate(names, 1)]
+                              + ["", "Say a number, or give me your own name. I will create the campaign right away."])
     elif not picks:
         ask = "**What would you like from our offer?**"
         after = catalog_md

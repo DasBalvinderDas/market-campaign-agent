@@ -9,26 +9,16 @@ from ..repositories import get_repo
 from .audit import audit
 
 
-def register_launch_request(campaign: str, summary: str, deadline_date: str = "") -> dict:
-    """Register a new request for a campaign (or a quick purchase) and get its request id. The campaign is found by id or
-    name (for example "Spring Product Launch Event"). A new campaign name is created when a deadline_date is given, so
-    this is also how a new campaign is set up. If the campaign exists and a different deadline_date is given, its date
-    is updated.
-
-    Args:
-        campaign: The campaign name the user chose. For items that are not for a campaign use "Quick purchase".
-        summary: One line describing what is needed.
-        deadline_date: The date everything must be in hand, as YYYY-MM-DD. Leave empty to use the date on file.
-    """
-    repo = get_repo()
+def _ensure_campaign(repo, campaign: str, deadline_date: str):
+    """Find the campaign by id or name, or create it (a new name needs a date). Returns (launch, how, error)."""
     deadline = None
     if deadline_date:
         try:
             deadline = date.fromisoformat(deadline_date.strip())
         except ValueError:
-            return {"status": "error", "message": f"'{deadline_date}' is not a date. Ask for the date as day, month and year."}
+            return None, "", f"'{deadline_date}' is not a date. Ask for the date as day, month and year."
         if deadline <= date.today():
-            return {"status": "error", "message": f"{deadline} is not in the future. Ask for a later date."}
+            return None, "", f"{deadline} is not in the future. Ask for a later date."
     launch, how = _find_event(repo, campaign), "found"
     if launch and deadline and launch["in_hand_by"] != deadline:
         gap = (launch["embargo_date"] - launch["in_hand_by"]).days
@@ -39,13 +29,55 @@ def register_launch_request(campaign: str, summary: str, deadline_date: str = ""
     if not launch:
         if not deadline:
             known = [x["launch_name"] for x in repo.list_launches()]
-            return {"status": "error", "message": f"I do not know a campaign called '{campaign}' (known: {known}). Ask the user "
-                                                  "for the date everything must be in hand, then call this again."}
-        launch = {"launch_id": "EVT-" + re.sub(r"[^A-Z0-9]+", "-", campaign.upper()).strip("-")[:30],
-                  "launch_name": campaign.strip(), "product_name": campaign.strip(), "cost_center": "CC-EVENTS-GENERAL",
-                  "owner": "Marketing", "in_hand_by": deadline, "embargo_date": deadline + timedelta(days=7)}
+            return None, "", (f"I do not know a campaign called '{campaign}' (known: {known}). Ask the user for the date "
+                              "everything must be in hand, then call this again.")
+        launch_id = "EVT-" + re.sub(r"[^A-Z0-9]+", "-", campaign.upper()).strip("-")[:30]
+        while repo.get_launch(launch_id):
+            launch_id += "-2"
+        launch = {"launch_id": launch_id, "launch_name": campaign.strip(), "product_name": campaign.strip(),
+                  "cost_center": "CC-EVENTS-GENERAL", "owner": "Marketing", "in_hand_by": deadline,
+                  "embargo_date": deadline + timedelta(days=7)}
         repo.create_launch(launch)
         how = "created"
+    return launch, how, ""
+
+
+def create_campaign(campaign: str, deadline_date: str, people: int = 0, venue: str = "") -> dict:
+    """Create the campaign as soon as the user has given or picked its name. Shows a confirmation. Call it once the name
+    is known (campaigns only), then carry on with show_checklist. If the campaign already exists it is found, not
+    duplicated.
+
+    Args:
+        campaign: The campaign name the user gave or picked.
+        deadline_date: The date everything must be in hand, as YYYY-MM-DD (date_iso from show_checklist).
+        people: How many people come.
+        venue: The place (venue_name from show_checklist).
+    """
+    repo = get_repo()
+    launch, how, err = _ensure_campaign(repo, campaign, deadline_date)
+    if err:
+        return {"status": "error", "message": err}
+    audit(None, "orchestrator", "campaign_created" if how == "created" else "campaign_found", launch_id=launch["launch_id"],
+          name=launch["launch_name"], people=people, venue=venue, in_hand_by=str(launch["in_hand_by"]))
+    return {"status": "ok", "campaign_status": how, "launch_id": launch["launch_id"], "launch_name": launch["launch_name"],
+            "in_hand_by": str(launch["in_hand_by"]),
+            "display_markdown": presentation.campaign_created_markdown(launch, how, people, venue)}
+
+
+def register_launch_request(campaign: str, summary: str, deadline_date: str = "") -> dict:
+    """Register a new request for a campaign (or a quick purchase) and get its request id. The campaign is found by id or
+    name (for example "Spring Product Launch Event"). A new campaign name is created when a deadline_date is given. If
+    the campaign exists and a different deadline_date is given, its date is updated.
+
+    Args:
+        campaign: The campaign name the user chose. For items that are not for a campaign use "Quick purchase".
+        summary: One line describing what is needed.
+        deadline_date: The date everything must be in hand, as YYYY-MM-DD. Leave empty to use the date on file.
+    """
+    repo = get_repo()
+    launch, how, err = _ensure_campaign(repo, campaign, deadline_date)
+    if err:
+        return {"status": "error", "message": err}
     request_id = repo.create_request(launch["launch_id"], summary)
     audit(request_id, "orchestrator", "request_registered", launch_id=launch["launch_id"], summary=summary, campaign_status=how)
     return {"status": "ok", "request_id": request_id, "launch_name": launch["launch_name"], "campaign_status": how,

@@ -200,3 +200,26 @@ def test_the_plan_starts_with_an_in_short_box(repo):
 
 def test_bar_is_a_tiny_picture():
     assert presentation.bar(50) == "🟩🟩🟩🟩🟩⬜⬜⬜⬜⬜" and presentation.bar(0) == "⬜" * 10 and presentation.bar(100) == "🟩" * 10
+
+
+def test_the_name_question_comes_with_ideas_built_from_the_season_place_and_size():
+    out = orchestration_tools.show_checklist("campaign", "", 300, _iso(25), "Singapore")
+    names = out["name_suggestions"]
+    assert len(names) == 4 and any("Singapore" in n for n in names) and any("300-Guest" in n for n in names)
+    md = out["display_markdown"]
+    assert "Pick one of these, or type your own" in md and "| 1 | **" + names[0] + "** |" in md and "create the campaign right away" in md
+
+
+def test_name_ideas_are_the_same_every_time_and_follow_the_season_and_size():
+    from datetime import date
+    a = presentation.name_suggestions(300, date(2026, 10, 31), "London")
+    assert a == presentation.name_suggestions(300, date(2026, 10, 31), "London")
+    assert a == ["Autumn Summit 2026", "London Autumn Showcase", "October London Launch", "The 300-Guest Autumn Celebration"]
+    assert presentation.name_suggestions(20, date(2027, 1, 5), "USA")[0] == "Winter Meetup 2027"
+    assert presentation.name_suggestions(2000, date(2027, 7, 1), "USA")[0] == "Summer Festival 2027"
+    assert presentation.name_suggestions(0, date(2027, 4, 1))[1] == "Spring Showcase 2027"
+
+
+def test_no_name_ideas_once_a_name_is_given():
+    out = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
+    assert "name_suggestions" not in out and "What we can offer you" in out["display_markdown"]

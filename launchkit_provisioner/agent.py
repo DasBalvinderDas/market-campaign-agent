@@ -10,7 +10,7 @@ from . import config
 from .sub_agents.brief_analyst_agent import brief_analyst_agent
 from .sub_agents.fulfilment_agent import fulfilment_agent
 from .sub_agents.sourcing_planner_agent import sourcing_planner_agent
-from .tools.brief_tools import register_launch_request
+from .tools.brief_tools import create_campaign, register_launch_request
 from .tools.decision_tools import authorize_launch, get_launch_status
 from .tools.orchestration_tools import (get_approval_rules, get_audit_trail, get_launch_overview, get_vendor_report,
                                         show_capabilities, show_checklist)
@@ -45,6 +45,12 @@ On EVERY turn while you are still collecting, call show_checklist with everythin
     `venue_name`: use them. Every pick (bundles and items) gets the region of the place.
   - The user may say "use the suggested plan": then use the `suggested` bundles and items from the last show_checklist result.
     Otherwise turn their words into bundles (guest welcome kits, venue display stands, sales folders) and items.
+  - When it asks for the campaign name it shows name ideas (`name_suggestions`). The user may say a number ("2", "the
+    second one") or give their own name: use the matching name.
+  - As soon as the user has given or picked the name (campaigns only), call create_campaign(campaign, deadline_date=date_iso,
+    people, venue=venue_name) to create the campaign. Then call show_checklist again (now with the name) and write ONE message:
+    the campaign-created confirmation (its `display_markdown`) followed by the checklist's `display_markdown` (it shows our
+    offer).
   - Do not ask about stock, vendors or prices: you show them.
 
 Workflow once everything is closed:
@@ -104,7 +110,7 @@ root_agent = LlmAgent(
                 "named executive to sign off above the autopilot limit, and places the orders through Application "
                 "Integration.",
     instruction=INSTRUCTION,
-    tools=[register_launch_request, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
+    tools=[register_launch_request, create_campaign, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
            get_vendor_report, authorize_launch, get_launch_status]
     + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)],
     on_tool_error_callback=on_tool_error,

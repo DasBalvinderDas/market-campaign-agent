@@ -80,7 +80,7 @@ You do not have to answer in a fixed order. Say what you have, in your own words
 | Step | The assistant shows | You say |
 |---|---|---|
 | 1 | ✅ people, ✅ date. **📍 Where can we deliver?**: USA, Canada, London, Singapore, with the vendors based there, our warehouse and stock, and how it is served | `USA` |
-| 2 | **What would you like to call your campaign?** | `Summer Sale Campaign` |
+| 2 | **What would you like to call your campaign?** with **💡 four name ideas** (for example *Autumn Summit 2026*, *USA Autumn Showcase*, *November USA Launch*, *The 300-Guest Autumn Celebration*) | `2` (the number of an idea), or your own name such as `Summer Sale Campaign`. **🎉 Your campaign is created!** appears at once |
 | 3 | **🛍️ What we can offer you**: packs and items, our stock, best prices for your date, ready-by dates, and **💡 for 300 people** (a suggested plan) | `Use the suggested plan` (or your own picks) |
 
 Dates are understood the way people say them: `31st Oct`, `31 October 2026`, `Oct 31`, `31/10`. A year that is left out is the next one. Places are `USA`, `Canada` (served from the US), `London`, `Singapore`.

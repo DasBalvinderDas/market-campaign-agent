@@ -73,7 +73,8 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
         date: The date everything must be in hand, as the user said it ("31st Oct") or as YYYY-MM-DD.
         venue: Where the campaign is: USA, Canada, London or Singapore (or a city in one of them).
         picks: A short summary of what they picked, once they pick.
-    Returns date_iso, region and venue_name when known, and `suggested` (bundles and items for the headcount) for
+    Returns date_iso, region and venue_name when known, `name_suggestions` (when it asks for a name: the user may say a
+    number to pick one, use the matching name), and `suggested` (bundles and items for the headcount) for
     "use the suggested plan". Use date_iso as deadline_date and region for every pick.
     """
     from datetime import date as _date
@@ -98,9 +99,13 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
     catalog = (presentation.catalog_markdown(repo, d, "items" if (mode or "").lower().startswith("item") else "campaign",
                                               people=people, region=region)
                if (d and v and not picks and (campaign or (mode or "").lower().startswith("item"))) else "")
+    names = (presentation.name_suggestions(people, d, v["venue_name"] if v else "")
+             if (d and v and not campaign and (mode or "").lower().startswith("camp")) else [])
     md = presentation.intake_checklist(mode, campaign, people, iso, v["venue_name"] if v else "", picks, venues_md, catalog,
-                                       unknown, note)
+                                       unknown, note, names)
     out = {"status": "ok", "display_markdown": md}
+    if names:
+        out["name_suggestions"] = names
     if iso:
         out["date_iso"] = iso
     if v:

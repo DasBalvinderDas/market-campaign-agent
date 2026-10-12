@@ -43,13 +43,24 @@ Approval levels used in both stories: **up to $5,000 automatic · $5,000 to $50,
 
 *(Try `Hi` first if you like: you get the hello card, with the first question, "how many people and which date?")*
 
-### 2. Say where
+### 2. Say where, then pick a name
 
 > USA
 
-It confirms the place and asks the last open question: **What would you like to call your campaign?**
+It confirms the place and asks the last open question, with **💡 name ideas** built from the season, the place and the size of your campaign:
+
+| # | 💡 Name ideas |
+|---|---|
+| 1 | Autumn Summit 2026 |
+| 2 | USA Autumn Showcase |
+| 3 | November USA Launch |
+| 4 | The 300-Guest Autumn Celebration |
+
+Say a number, or type your own:
 
 > Summer Sale Campaign
+
+**🎉 Your campaign is created!** (as soon as the name is picked): name, reference (`EVT-SUMMER-SALE-CAMPAIGN`), date, people, place. Then, in the same message, it goes on to our offer.
 
 ### 3. See what we have and pick
 

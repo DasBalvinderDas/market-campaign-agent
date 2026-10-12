@@ -74,3 +74,26 @@ def test_a_single_item_needs_a_region_and_a_known_item(repo):
     assert no_region["status"] == "error" and "region" in no_region["message"]
     nothing = brief_tools.build_requirements(rid)
     assert nothing["status"] == "error" and "Nothing to plan" in nothing["message"]
+
+
+def test_the_campaign_is_created_as_soon_as_the_name_is_given(repo):
+    out = brief_tools.create_campaign("Autumn Summit 2026", _future(25), 300, "USA")
+    assert out["status"] == "ok" and out["campaign_status"] == "created" and out["launch_id"] == "EVT-AUTUMN-SUMMIT-2026"
+    assert repo.get_launch("EVT-AUTUMN-SUMMIT-2026")["in_hand_by"] == date.today() + timedelta(days=25)
+    md = out["display_markdown"]
+    assert "Your campaign is created!" in md and "**Autumn Summit 2026**" in md and "| 👥 People | 300 |" in md and "| 📍 Where | USA |" in md
+    assert any(a["action"] == "campaign_created" for a in repo.list_audit())
+
+
+def test_creating_it_again_finds_it_and_the_request_uses_the_same_campaign(repo):
+    first = brief_tools.create_campaign("Autumn Summit 2026", _future(25), 300, "USA")
+    again = brief_tools.create_campaign("autumn summit 2026", _future(25), 300, "USA")
+    assert again["campaign_status"] == "found" and again["launch_id"] == first["launch_id"]
+    req = brief_tools.register_launch_request("Autumn Summit 2026", "x", _future(25))
+    assert req["campaign_status"] == "found" and len([x for x in repo.list_launches() if x["launch_name"] == "Autumn Summit 2026"]) == 1
+
+
+def test_creating_a_campaign_needs_a_future_date(repo):
+    assert "not in the future" in brief_tools.create_campaign("X", "2020-01-01")["message"]
+    assert "not a date" in brief_tools.create_campaign("X", "soon")["message"]
+    assert "I do not know a campaign" in brief_tools.create_campaign("X", "")["message"]
