@@ -40,6 +40,41 @@ ROOT  launchkit_provisioner  (Vertex AI Agent Engine)
     holds, orders, audit)            request_approval (human), send_launch_update
 ```
 
+### The diagram in plain business English
+
+Think of the agent as a **launch coordinator with three specialist colleagues**.
+
+- You talk to **one person only**, the coordinator (the root agent). Everything you read in the chat comes from them.
+- Behind the coordinator are three specialists. The **brief analyst** turns your request into a shopping list (what, how many, for which
+  region). The **sourcing planner** works out the three ways to get it done and what each costs. The **fulfilment** specialist places the
+  orders, but only once a decision has been signed off.
+- The specialists never speak to you and never approve spending. They report back to the coordinator, who decides what happens next.
+- The coordinator relies on two company systems. The **database** (BigQuery) is the filing cabinet: stock levels, vendor prices,
+  delivery times, who may approve what, and a record of every step. The **workflow system** (Application Integration) is the back office:
+  it raises the purchase orders, moves stock between depots, sends the approval email to the executive, and sends the update to the
+  launch team.
+- The coordinator is the only one allowed to ask for a sign-off, so spending always goes through the same door.
+
+**In one sentence:** one coordinator talks to you, three specialists do the preparation, and two company systems hold the facts and do the
+paperwork. Nothing is ordered until the right person has said yes.
+
+### The diagram in plain technical English
+
+- The agent runs as a single deployment on Google's agent hosting service (Vertex AI Agent Engine). Gemini Enterprise sends your chat
+  message to it and shows whatever the **root agent** answers.
+- The three specialists are **not separate deployments**. They are wrapped as tools of the root agent. When the root "calls" one, that
+  specialist runs its own short prompt, calls its own single tool, and returns text to the root. This is why Gemini Enterprise always
+  shows one clean answer: only the root writes to the chat.
+- Each specialist's tool is an ordinary Python function. The functions do the real work (cost, delivery date, buffer, savings), so the
+  language model never does any arithmetic. It decides which tool to call and writes the final wording.
+- The Python code reads and writes **BigQuery** (dataset `launchkit`) using the agent's service account.
+- For anything that must happen outside the agent (purchase order, transfer, approval email, tracking email) the code calls the
+  **Application Integration** REST API and gets back a number or an answer.
+- The approval workflow waits for the executive's click. The agent does not receive a callback. It reads the answer from the workflow the
+  next time you ask for the status, so no public web address is needed.
+- The rules (no order without approval, never above the approved amount, never twice) are in the Python code, so they hold even if the
+  language model were asked to break them.
+
 **Who does what**
 
 | Layer | Role | Decides the numbers? |
@@ -123,6 +158,8 @@ that is already sitting in depots.
 **What the user sees:** Option 1 full new $46,075.50 (0 h buffer), Option 2 depot rebalance $37,399.50 recommended (saves $8,676, 72 h
 buffer), Option 3 eco $51,905.50 (48 h buffer).
 
+**In plain English (technical).** The coordinator first files the request and gets a reference number. It then briefs the analyst, who looks up the creator list and the regional split and writes one line per item and region. Next the planner reads current stock, vendor prices and delivery times and works out three plans, applying simple rules: use surplus stock first and from the nearest depot, buy from the cheapest vendor that still arrives with a safety margin, and prefer certified eco material where it makes the date. Everything is saved, the coordinator shows the card and waits.
+
 **Say:** "The model did not calculate any of this. It called three tools; the Python planner computed the numbers from BigQuery. Change a
 vendor price or a depot stock and the card changes."
 
@@ -146,6 +183,8 @@ waits. Nothing is ordered yet.
 | 4 | Code | Creates the decision as `PENDING` with an expiry, and **holds** the depot stock so nobody else can take it | writes `decisions`, `depot_holds` (ACTIVE) | none |
 | 5 | Code | Starts the approval workflow with the amount, role and a message listing the option, savings, buffer | writes `audit_log` | **`request_approval`** starts; email with Approve / Reject goes to the approvers; execution suspends. The execution id is stored on the decision |
 | 6 | Root | Replies starting with **HUMAN APPROVAL REQUIRED** (the exact `announce` text), then tells the user to ask for the status after the click. It does **not** call Fulfilment | | none |
+
+**In plain English (technical).** The coordinator passes your choice to the sign-off tool. The tool checks the choice is valid and the stock is still there, looks up who must approve for that amount, saves the decision as waiting, and puts a hold on the surplus stock so no other request can take it. It then asks the workflow system to email the executive. The workflow pauses until the executive clicks. The coordinator tells you, in bold, that approval is required and nothing has been ordered.
 
 **Say:** "Approval is the last gate, on a chosen option, not the product. The root is the only agent with `authorize_launch`, so no
 specialist can approve spend."
@@ -177,6 +216,8 @@ gives the order numbers, total, savings, delivery date and buffer.
 
 **Expected:** 27 purchase orders and 7 depot transfers for option 2 on the starting data.
 
+**In plain English (technical).** When you ask for the status, the tool asks the workflow system whether the executive has clicked and what they chose. If approved, the decision is marked approved and the coordinator hands over to the fulfilment specialist. Fulfilment checks again that the decision is approved and that the amount is not exceeded, then sends all the purchase orders and stock transfers to the workflow system at the same time, collects the numbers it gets back, saves them in one go, and finally sends an update email to the launch team.
+
 **Say:** "Why two steps? Gemini Enterprise has no way for the approval email to call back into the agent. So the workflow waits, and
 the agent reads its answer when asked. No public endpoint, nothing to secure."
 
@@ -193,6 +234,8 @@ the agent reads its answer when asked. No public endpoint, nothing to secure."
 **Technical.** Identical to prompt 2 except the tier is `CMO_SIGNOFF` and `approver_role` is "CMO"; `request_approval` emails the CMO addresses.
 This proves the routing is data (`approval_policy`), not prompt text: change the limits in the table and the routing changes.
 
+**In plain English (technical).** The amount decides who signs. The limits live in a table, not in the agent's instructions, so the business can change them without touching the agent.
+
 ---
 
 ### Prompt 4: the executive rejects
@@ -202,6 +245,8 @@ to re-plan.
 
 **Technical.** `sync` sees the approval record `REJECTED`, sets the decision `REJECTED`, calls `release_holds` (`depot_holds` -> RELEASED)
 and writes `launch_rejected` to `audit_log`. Fulfilment is never called. Check with `v_depot_available`: the stock is back.
+
+**In plain English (technical).** A rejection is a full undo: the decision is closed, the held stock goes back on the shelf, and no order is ever placed.
 
 ---
 
@@ -215,6 +260,8 @@ approves it by policy and places the orders in the same turn. The reply says it 
 **Technical flow.** Steps 1 to 6 as prompt 1, but the planner returns `decision_mode: AUTOPILOT`. Root then calls `authorize_launch(request, "recommended")`:
 the decision is created directly as `APPROVED` (decided_by `autopilot`), holds are created, and **no** `request_approval` workflow starts.
 Root calls Fulfilment immediately: 22 orders through `create_purchase_order` / `create_depot_transfer`, then `send_launch_update`.
+
+**In plain English (technical).** The same steps run, but because the amount is under the limit the tool approves it itself and records "autopilot" as the approver. No email is sent and the coordinator moves straight on to fulfilment.
 
 **Say:** "Humans only see what needs a human."
 
@@ -238,6 +285,8 @@ on that vendor lose buffer or switch to another vendor; the recommendation may c
 
 If the request is **already signed off**, the plan is not re-planned: the tool returns the impact on the buffer (`delay_impact`) and the root reports it.
 
+**In plain English (technical).** The delay is saved against the vendor. Every vendor offer is then read with those extra days added, so arrival dates and safety margins shift, and the three plans are built again. If the decision is already signed off, nothing is re-planned; you are only told what the delay does to the margin.
+
 **Say:** "The plan reacts to the real world. A budget check cannot do that."
 
 ---
@@ -252,6 +301,8 @@ If the request is **already signed off**, the plan is not re-planned: the tool r
 were talked into calling Fulfilment anyway, `execute_plan` returns `BLOCKED` because the decision is not `APPROVED`, writing
 `execution_blocked` to `audit_log`. The guard is in code, not in the prompt.
 
+**In plain English (technical).** Even if someone talks the assistant into trying, the ordering tool looks at the decision, sees it is not approved, refuses, and writes the attempt to the audit log.
+
 ---
 
 ### Prompt 8: readiness board and audit
@@ -264,6 +315,8 @@ buffer and a GREEN / AMBER / RED readiness, plus free surplus per depot. The aud
 
 **Technical.** Root calls `get_launch_overview` (reads view `v_launch_readiness` and `v_depot_available`, plus `launches`) and
 `get_audit_trail` (reads `audit_log`). Read-only; no specialist and no Application Integration call.
+
+**In plain English (technical).** These are look-ups only. The coordinator reads two ready-made summaries and the history log and describes them; nothing is changed.
 
 ---
 
