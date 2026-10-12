@@ -165,6 +165,56 @@ vendor price or a depot stock and the card changes."
 
 ---
 
+### The three options: what changes and why they differ
+
+Prompt 1 always produces the same three options for the same brief. The brief does not change between them; **where the items come from,
+when they arrive and what they cost** does. Business language first:
+
+| | **Option 1: Full new production** | **Option 2: Smart depot rebalance** (recommended) | **Option 3: Certified eco launch** |
+|---|---|---|---|
+| **The idea** | Buy everything new from the cheapest vendors | Use stock already sitting in our regional depots first, buy only the rest | Buy certified sustainable material wherever it can make the date |
+| **What we do** | 1,210 units manufactured new | 240 units moved from depots, 970 bought | 1,034 units on eco material, 176 on standard where eco cannot make the date |
+| **Cost** | $46,075.50 | **$37,399.50** (saves $8,676) | $51,905.50 (about $5,830 more than option 1) |
+| **Arrives** | 2026-11-06, the day of the deadline | 2026-11-03 | 2026-11-04 |
+| **Safety buffer before the in-hand date** | **0 hours** | **72 hours** | 48 hours |
+| **Carbon** | 4,200 kg | 3,702 kg | **2,378 kg** (lowest) |
+| **Risk** | MODERATE: any slip misses the deadline | LOW | LOW |
+| **Who signs off** | VP Product Marketing (over $5,000) | VP Product Marketing (over $5,000) | **CMO** (over $50,000) |
+| **Business message** | Simple, but no room for error and money spent on stock we already own | Cheapest, safest and greenest than option 1: we stop buying what we already have | Best for sustainability, at a premium, and a more senior approver |
+
+**Why the numbers move**
+
+- **Option 2 is cheaper** because 240 units are not bought at all; the only cost is moving them between depots, and the nearest depot is used first.
+- **Option 2 is safer** because a depot transfer is faster than manufacturing, so the goods arrive earlier and the buffer grows from 0 to 72 hours.
+- **Option 3 costs more** because certified eco material is priced higher. It still has to make the date, so where an eco vendor
+  cannot, the plan uses a standard vendor for those 176 units. That is why it shows "eco" and "standard" together.
+- **The recommendation is a rule, not an opinion:** the cheapest option that still keeps at least the minimum safety buffer
+  (24 hours, a data setting). Option 1 is cheaper than option 3 but has no buffer, and option 2 beats both.
+- **The approver changes with the amount.** The sign-off level comes from the approval table, so choosing option 3 sends the email to
+  the CMO while options 1 and 2 go to the VP. A very small brief would not need anyone (autopilot, up to $5,000).
+
+**Technical, in plain English.** All three options are built from the same requirement lines, using the same data. For each line the
+planner asks: is there free depot stock, and how far away is it? what does each vendor charge, how long do they take, are they
+delayed? Then it adds up cost (items plus shipping), works out the arrival date from the slowest line, and subtracts it from the
+in-hand date to get the buffer. The three options only differ in the rule applied at the "where does this line come from" step:
+cheapest vendor, depot stock first, or certified eco first.
+
+**How to demo "Option 1 / Option 2 / Option 3"**
+
+Once you choose, the choice is **final for that request**: while a sign-off is pending or approved, the agent will not switch to
+another option (it says a sign-off already exists). That is deliberate, so nobody can change a decision after an executive has been emailed.
+So to show the three side by side:
+
+| You want to show | What to do |
+|---|---|
+| The comparison | Stay on the prompt 1 reply. Read the card aloud; do not choose yet |
+| Option 2 end to end | In the same chat: "Go with option 2." -> click Approve -> ask the status |
+| Option 3 and the CMO | `python scripts/setup_bigquery.py --reset-demo`, **new chat**, send prompt 1, then "Go with option 3, the eco launch." |
+| Option 1 | Same: reset, new chat, prompt 1, then "Go with option 1." |
+| Change your mind after a **Reject** | Reject releases the held stock; ask to re-plan and choose again in the same chat |
+
+So you do not need to keep re-running prompt 1 inside one chat. Run it once per fresh demo, then continue with the follow-up prompts in the same conversation.
+
 ### Prompt 2: choose an option (human in the loop)
 
 > Go with option 2.
