@@ -180,7 +180,7 @@ when they arrive and what they cost** does. Business language first:
 | **Carbon** | 4,200 kg | 3,702 kg | **2,378 kg** (lowest) |
 | **Risk** | MODERATE: any slip misses the deadline | LOW | LOW |
 | **Who signs off** | VP Product Marketing (over $5,000) | VP Product Marketing (over $5,000) | **CMO** (over $50,000) |
-| **Business message** | Simple, but no room for error and money spent on stock we already own | Cheapest, safest and greenest than option 1: we stop buying what we already have | Best for sustainability, at a premium, and a more senior approver |
+| **Business message** | Simple, but no room for error and money spent on stock we already own | Cheapest and safest, and greener than option 1: we stop buying what we already have | Best for sustainability, at a premium, and a more senior approver |
 
 **Why the numbers move**
 
