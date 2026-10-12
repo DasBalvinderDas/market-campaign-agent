@@ -39,7 +39,7 @@ def run(args, project=""):
     print("\nSurplus stock in regional depots (free units)")
     for d in repo.list_depot_free():
         print(f"  {d['depot_name']:<28} {d['sku']:<20} {d['free']:>4}")
-    print("\nCreators on the seeding list:", sum(m["n"] for m in repo.creator_mix(launches[0]["launch_id"])))
+    print("\nGuests on the seeding list:", sum(m["n"] for m in repo.guest_mix(launches[0]["launch_id"])))
     print("Planning rules:", ", ".join(f"{k}={v:g}" for k, v in sorted(repo.get_planning_rules().items())))
     print("\nSign-off tiers")
     for p in repo.list_policies():

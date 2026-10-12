@@ -18,15 +18,15 @@ CREATE TABLE IF NOT EXISTS `{project}.{dataset}.assets` (
 ) OPTIONS(description="Launch collateral catalog (one row per sellable item).");
 
 CREATE TABLE IF NOT EXISTS `{project}.{dataset}.bundle_templates` (
-  bundle_type STRING NOT NULL OPTIONS(description="CREATOR_KIT, SHOWROOM_DISPLAY, SALES_FOLIO"),
+  bundle_type STRING NOT NULL OPTIONS(description="GUEST_KIT, VENUE_DISPLAY, SALES_PACK"),
   description STRING,
   sku_pattern STRING NOT NULL OPTIONS(description="A SKU, or a pattern with {size} / {plug}"),
   qty_per_bundle INT64 NOT NULL,
   split_by STRING NOT NULL OPTIONS(description="NONE, SIZE or PLUG: how the SKU is chosen per recipient")
-) OPTIONS(description="What goes into one bundle (creator kit, showroom display, sales folio).");
+) OPTIONS(description="What goes into one bundle (guest welcome kit, venue display stand, sales folder).");
 
-CREATE TABLE IF NOT EXISTS `{project}.{dataset}.creators` (
-  creator_id STRING NOT NULL,
+CREATE TABLE IF NOT EXISTS `{project}.{dataset}.guests` (
+  guest_id STRING NOT NULL,
   launch_id STRING NOT NULL,
   handle STRING NOT NULL,
   name STRING,

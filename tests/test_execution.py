@@ -55,7 +55,7 @@ def test_executing_twice_never_orders_twice(repo, aurora):
 
 def test_a_failing_line_is_reported_and_retried_later(repo, aurora):
     ex = approve(repo, aurora)
-    ex.fail_on = lambda t, i: t == config.PO_TRIGGER and i["sku"] == "DISPLAY-COUNTER-AURORA"
+    ex.fail_on = lambda t, i: t == config.PO_TRIGGER and i["sku"] == "DISPLAY-STAND"
     out = execution.execute_plan(repo, ex, aurora)
     assert out["status"] == "partial" and out["failed"] and out["update_sent_to"] == []        # no update until all is placed
     ex.fail_on = None

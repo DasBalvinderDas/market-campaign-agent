@@ -13,32 +13,32 @@ def bundles(*pairs):
 
 
 def test_register_validates_the_launch(repo):
-    out = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")
-    assert out["status"] == "ok" and out["request_id"].startswith("REQ-") and out["launch_name"].startswith("Project Aurora")
+    out = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")
+    assert out["status"] == "ok" and out["request_id"].startswith("REQ-") and out["launch_name"].startswith("Spring Product Launch Event")
     bad = brief_tools.register_launch_request("LAUNCH-NOPE", "x")
-    assert bad["status"] == "error" and "LAUNCH-AURORA" in bad["message"]
+    assert bad["status"] == "error" and "LAUNCH-SPRING" in bad["message"]
 
 
-def test_build_requirements_in_one_call_with_a_creator_breakdown(repo):
-    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
-    out = brief_tools.build_requirements(rid, bundles(("CREATOR_KIT", 150, ""), ("SHOWROOM_DISPLAY", 10, ""), ("SALES_FOLIO", 300, "")))
-    assert out["status"] == "ok" and set(out["channels"]) == {"CREATOR", "SHOWROOM", "SALES"}
-    assert out["channels"]["SHOWROOM"]["units"] == 10 and out["creator_hoodie_sizes"] == {"S": 20, "M": 45, "L": 60, "XL": 25}
-    assert out["creator_power_plugs"]["US-A"] == 85 and out["requirement_lines"] == len(repo.get_requirement_lines(rid))
-    again = brief_tools.build_requirements(rid, bundles(("SALES_FOLIO", 20, "EMEA")))     # a new brief replaces the old lines
+def test_build_requirements_in_one_call_with_a_guest_breakdown(repo):
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
+    out = brief_tools.build_requirements(rid, bundles(("GUEST_KIT", 150, ""), ("VENUE_DISPLAY", 10, ""), ("SALES_PACK", 300, "")))
+    assert out["status"] == "ok" and set(out["channels"]) == {"GUESTS", "VENUES", "SALES"}
+    assert out["channels"]["VENUES"]["units"] == 10 and out["guest_hoodie_sizes"] == {"S": 20, "M": 45, "L": 60, "XL": 25}
+    assert out["guest_power_plugs"]["US-A"] == 85 and out["requirement_lines"] == len(repo.get_requirement_lines(rid))
+    again = brief_tools.build_requirements(rid, bundles(("SALES_PACK", 20, "EMEA")))     # a new brief replaces the old lines
     assert again["total_units"] == 40 and len(repo.get_requirement_lines(rid)) == 2
 
 
 def test_build_requirements_errors_are_explained(repo):
-    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
     assert "Valid types" in brief_tools.build_requirements(rid, bundles(("TENT", 3, "")))["message"]
-    assert brief_tools.build_requirements("REQ-NOPE", bundles(("SALES_FOLIO", 1, "")))["status"] == "error"
+    assert brief_tools.build_requirements("REQ-NOPE", bundles(("SALES_PACK", 1, "")))["status"] == "error"
 
 
 def test_build_scenarios_returns_the_card_and_the_decision_mode(repo):
-    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
     assert sourcing_tools.build_scenarios(rid)["status"] == "error"          # no requirements yet
-    brief_tools.build_requirements(rid, bundles(("CREATOR_KIT", 150, ""), ("SHOWROOM_DISPLAY", 10, ""), ("SALES_FOLIO", 300, "")))
+    brief_tools.build_requirements(rid, bundles(("GUEST_KIT", 150, ""), ("VENUE_DISPLAY", 10, ""), ("SALES_PACK", 300, "")))
     out = sourcing_tools.build_scenarios(rid)
     assert out["status"] == "ok" and out["decision_mode"] == "CHOOSE" and out["autopilot_limit_usd"] == 5000.0
     assert [o["option"] for o in out["options"]] == [1, 2, 3] and out["recommended_option"] == "Smart depot rebalance"
@@ -47,14 +47,14 @@ def test_build_scenarios_returns_the_card_and_the_decision_mode(repo):
 
 
 def test_a_small_brief_is_autopilot(repo):
-    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "20 folios")["request_id"]
-    brief_tools.build_requirements(rid, bundles(("SALES_FOLIO", 20, "EMEA")))
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "20 folders")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("SALES_PACK", 20, "EMEA")))
     assert sourcing_tools.build_scenarios(rid)["decision_mode"] == "AUTOPILOT"
 
 
 def test_vendor_delay_before_a_decision_asks_for_a_re_plan(repo):
-    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
-    brief_tools.build_requirements(rid, bundles(("SHOWROOM_DISPLAY", 10, "")))
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("VENUE_DISPLAY", 10, "")))
     before = sourcing_tools.build_scenarios(rid)
     out = sourcing_tools.report_vendor_delay(rid, "rapiddisplay", 8, "late")
     assert out["status"] == "ok" and out["vendor"] == "RapidDisplay" and out["delay_days"] == 8 and "build_scenarios" in out["next_step"]
@@ -64,15 +64,15 @@ def test_vendor_delay_before_a_decision_asks_for_a_re_plan(repo):
 
 
 def test_vendor_delay_errors(repo):
-    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
     assert "vendors" in sourcing_tools.report_vendor_delay(rid, "nobody", 3)
     assert sourcing_tools.report_vendor_delay(rid, "PrintCo", 0)["status"] == "error"
 
 
 def test_delay_after_sign_off_reports_the_impact_and_does_not_replan(repo, monkeypatch):
     monkeypatch.setattr(decision_tools, "IntegrationExecutor", lambda: FakeExecutor())
-    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
-    brief_tools.build_requirements(rid, bundles(("CREATOR_KIT", 150, ""), ("SHOWROOM_DISPLAY", 10, ""), ("SALES_FOLIO", 300, "")))
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("GUEST_KIT", 150, ""), ("VENUE_DISPLAY", 10, ""), ("SALES_PACK", 300, "")))
     sourcing_tools.build_scenarios(rid)
     assert decision_tools.authorize_launch(rid, "2", "go")["status"] == "pending_approval"
     out = sourcing_tools.report_vendor_delay(rid, "RapidDisplay", 12)
@@ -87,8 +87,8 @@ def test_the_gate_and_the_status_tools_go_through_the_flow(repo, monkeypatch):
     monkeypatch.setattr(fulfilment_tools, "IntegrationExecutor", lambda: ex)
     import launchkit_provisioner.decision_flow as flow
     monkeypatch.setattr(flow, "_default_executor", lambda: ex)
-    rid = brief_tools.register_launch_request("LAUNCH-AURORA", "kits")["request_id"]
-    brief_tools.build_requirements(rid, bundles(("CREATOR_KIT", 150, ""), ("SHOWROOM_DISPLAY", 10, ""), ("SALES_FOLIO", 300, "")))
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("GUEST_KIT", 150, ""), ("VENUE_DISPLAY", 10, ""), ("SALES_PACK", 300, "")))
     sourcing_tools.build_scenarios(rid)
     assert fulfilment_tools.execute_plan(rid)["status"] == "error"                 # nothing signed off yet
     assert decision_tools.authorize_launch(rid, "Option 2", "saves 19%")["status"] == "pending_approval"
@@ -102,7 +102,7 @@ def test_the_gate_and_the_status_tools_go_through_the_flow(repo, monkeypatch):
     assert done["status"] == "executed" and done["purchase_orders"] and done["depot_transfers"]
     board = orchestration_tools.get_launch_overview()
     assert board["requests"][0]["readiness"] == "GREEN" and board["requests"][0]["lines_executed"] == board["requests"][0]["lines_total"]
-    assert not any(d["sku"] == "PKG-LUX-BOX-BLACK" and d["free"] for d in board["depot_surplus"])     # all 60 boxes used up
+    assert not any(d["sku"] == "GIFT-BOX-BLACK" and d["free"] for d in board["depot_surplus"])     # all 60 boxes used up
     trail = [e["action"] for e in orchestration_tools.get_audit_trail(rid)["events"]]
     for expected in ("request_registered", "scenarios_built", "approval_requested", "launch_approved", "po_created",
                      "transfer_created"):
@@ -111,5 +111,5 @@ def test_the_gate_and_the_status_tools_go_through_the_flow(repo, monkeypatch):
 
 def test_overview_lists_launches_and_surplus(repo):
     out = orchestration_tools.get_launch_overview()
-    assert out["launches"][0]["launch_id"] == "LAUNCH-AURORA" and out["requests"] == []
+    assert out["launches"][0]["launch_id"] == "LAUNCH-SPRING" and out["requests"] == []
     assert {"London EMEA Marketing Hub", "Dallas Marketing Depot"} <= {d["depot"] for d in out["depot_surplus"]}

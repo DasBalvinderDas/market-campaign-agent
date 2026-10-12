@@ -58,17 +58,17 @@ UPDATE_OUT = {"status": S}
 
 SAMPLE = {
     PO_TRIGGER: {"request_id": {"stringValue": "SETUP-TEST"}, "plan_line_id": {"stringValue": "SETUP-TEST-L01"},
-                 "vendor_id": {"stringValue": "V-DISPLAYCO"}, "sku": {"stringValue": "DISPLAY-COUNTER-AURORA"},
+                 "vendor_id": {"stringValue": "V-DISPLAYCO"}, "sku": {"stringValue": "DISPLAY-STAND"},
                  "quantity": {"intValue": "1"}, "total_amount": {"doubleValue": 1400},
                  "destination_region": {"stringValue": "US"}},
     TRANSFER_TRIGGER: {"request_id": {"stringValue": "SETUP-TEST"}, "plan_line_id": {"stringValue": "SETUP-TEST-L02"},
-                       "depot_id": {"stringValue": "DEPOT-LON-01"}, "sku": {"stringValue": "PKG-LUX-BOX-BLACK"},
+                       "depot_id": {"stringValue": "DEPOT-LON-01"}, "sku": {"stringValue": "GIFT-BOX-BLACK"},
                        "quantity": {"intValue": "1"}, "destination_region": {"stringValue": "EMEA"}},
 }
 
 
 def update_sample(email):
-    return {"request_id": {"stringValue": "SETUP-TEST"}, "launch_id": {"stringValue": "LAUNCH-AURORA"},
+    return {"request_id": {"stringValue": "SETUP-TEST"}, "launch_id": {"stringValue": "LAUNCH-SPRING"},
             "recipient_email": {"stringValue": email},
             "email_subject": {"stringValue": "LaunchKit Provisioner setup test (please ignore)"},
             "email_body": {"stringValue": "This is a test of the launch tracking update email. No action needed."}}

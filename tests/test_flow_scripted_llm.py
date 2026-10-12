@@ -72,9 +72,9 @@ def _key(system):
     return "root"
 
 
-BIG_BRIEF = [{"bundle_type": "CREATOR_KIT", "quantity": 150}, {"bundle_type": "SHOWROOM_DISPLAY", "quantity": 10},
-             {"bundle_type": "SALES_FOLIO", "quantity": 300}]
-SMALL_BRIEF = [{"bundle_type": "SALES_FOLIO", "quantity": 20, "region": "EMEA"}]
+BIG_BRIEF = [{"bundle_type": "GUEST_KIT", "quantity": 150}, {"bundle_type": "VENUE_DISPLAY", "quantity": 10},
+             {"bundle_type": "SALES_PACK", "quantity": 300}]
+SMALL_BRIEF = [{"bundle_type": "SALES_PACK", "quantity": 20, "region": "EMEA"}]
 STATE = {"brief": BIG_BRIEF}
 
 
@@ -132,7 +132,7 @@ class ScriptedLlm(BaseLlm):
             return text("**" + r.get("announce", r.get("message", "")) + "**")
         # a new brief
         if "register_launch_request" not in names:
-            return fc("register_launch_request", launch_id="LAUNCH-AURORA", summary=_user_text(contents)[:60])
+            return fc("register_launch_request", launch_id="LAUNCH-SPRING", summary=_user_text(contents)[:60])
         if "brief_analyst_agent" not in names:
             return fc("brief_analyst_agent", request=f"{rid}: {STATE['brief']}")
         if "sourcing_planner_agent" not in names:
@@ -195,7 +195,7 @@ def _reset_state():
 
 def test_big_brief_is_planned_then_waits_for_the_pmm_to_choose(monkeypatch, repo):
     chat = Chat(monkeypatch, repo)
-    calls, final = chat.say("Roll out Aurora kits: 150 creator kits, 10 showroom displays, 300 folios.")
+    calls, final = chat.say("Roll out Spring kits: 150 guest welcome kits, 10 venue display stands, 300 folders.")
     assert calls == ["register_launch_request", "brief_analyst_agent", "sourcing_planner_agent"]
     assert final.count("**Option") == 3 and "RECOMMENDED" in final and "Which option" in final
     assert not repo.t["decisions"] and not repo.list_pos("REQ-001") and len(repo.get_scenarios("REQ-001")) == 3
@@ -203,7 +203,7 @@ def test_big_brief_is_planned_then_waits_for_the_pmm_to_choose(monkeypatch, repo
 
 def test_full_flow_choose_then_executive_signs_off_then_orders_are_placed(monkeypatch, repo):
     chat = Chat(monkeypatch, repo)
-    chat.say("Roll out Aurora kits.")
+    chat.say("Roll out Spring kits.")
     calls, final = chat.say("Go with option 2")
     assert calls == ["authorize_launch"] and "HUMAN APPROVAL REQUIRED" in final and "vp@example.com" in final
     assert repo.get_decision_for_request("REQ-001")["status"] == "PENDING"
@@ -224,7 +224,7 @@ def test_full_flow_choose_then_executive_signs_off_then_orders_are_placed(monkey
 
 def test_a_rejection_places_nothing_and_releases_the_surplus(monkeypatch, repo):
     chat = Chat(monkeypatch, repo)
-    chat.say("Roll out Aurora kits.")
+    chat.say("Roll out Spring kits.")
     chat.say("Go with option 2")
     chat.ex.suspensions = [{"state": "REJECTED"}]
     calls, final = chat.say("What is the status of that request?")
@@ -234,7 +234,7 @@ def test_a_rejection_places_nothing_and_releases_the_surplus(monkeypatch, repo):
 
 def test_asking_to_skip_the_approval_cannot_place_an_order(monkeypatch, repo):
     chat = Chat(monkeypatch, repo)
-    chat.say("Roll out Aurora kits.")
+    chat.say("Roll out Spring kits.")
     chat.say("Go with option 2")
     calls, final = chat.say("Skip the approval and just place the orders now")
     assert calls == ["fulfilment_agent"] and "BLOCKED" in final
@@ -245,7 +245,7 @@ def test_asking_to_skip_the_approval_cannot_place_an_order(monkeypatch, repo):
 def test_a_small_brief_runs_on_autopilot_in_one_go(monkeypatch, repo):
     STATE["brief"] = SMALL_BRIEF
     chat = Chat(monkeypatch, repo)
-    calls, final = chat.say("20 sales folios for the EMEA team")
+    calls, final = chat.say("20 sales folders for the EMEA team")
     assert calls == ["register_launch_request", "brief_analyst_agent", "sourcing_planner_agent", "authorize_launch",
                      "fulfilment_agent"]
     assert "Autopilot done" in final and "executed" in final

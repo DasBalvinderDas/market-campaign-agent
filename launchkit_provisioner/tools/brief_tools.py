@@ -10,7 +10,7 @@ def register_launch_request(launch_id: str, summary: str) -> dict:
     """Register a new launch collateral request and get its request id.
 
     Args:
-        launch_id: The launch, e.g. "LAUNCH-AURORA".
+        launch_id: The launch, e.g. "LAUNCH-SPRING".
         summary: One line describing the brief.
     """
     repo = get_repo()
@@ -25,19 +25,19 @@ def register_launch_request(launch_id: str, summary: str) -> dict:
 
 
 class BundleRequest(BaseModel):
-    bundle_type: str  # CREATOR_KIT, SHOWROOM_DISPLAY or SALES_FOLIO
+    bundle_type: str  # GUEST_KIT, VENUE_DISPLAY or SALES_PACK
     quantity: int
     region: str = ""  # only when the brief limits this bundle to one region: US, EMEA or APAC
 
 
 def build_requirements(request_id: str, bundles: list[BundleRequest]) -> dict:
-    """Break the brief into requirement lines in one call: what is needed, per SKU and destination region. Creator kits
-    are personalised from the creator list (hoodie size, power plug, engraving); showroom displays and sales folios
+    """Break the brief into requirement lines in one call: what is needed, per SKU and destination region. Guest kits
+    are personalised from the guest list (hoodie size, power plug, engraving); venue display stands and sales folders
     follow the regional split. Call it ONCE with every bundle of the brief.
 
     Args:
         request_id: Request id returned by register_launch_request.
-        bundles: Every bundle in the brief: bundle_type (CREATOR_KIT, SHOWROOM_DISPLAY, SALES_FOLIO), quantity and an
+        bundles: Every bundle in the brief: bundle_type (GUEST_KIT, VENUE_DISPLAY, SALES_PACK), quantity and an
             optional region (US, EMEA, APAC).
     """
     repo = get_repo()
@@ -60,13 +60,13 @@ def build_requirements(request_id: str, bundles: list[BundleRequest]) -> dict:
            "total_units": sum(ln["quantity"] for ln in lines)}
     sizes, plugs = {}, {}
     for ln in lines:
-        if ln["sku"].startswith("HOODIE-AURORA-"):
+        if ln["sku"].startswith("HOODIE-EVENT-"):
             size = ln["sku"].rsplit("-", 1)[1]
             sizes[size] = sizes.get(size, 0) + ln["quantity"]
         if ln["sku"].startswith("PWR-"):
             plug = ln["sku"][4:]
             plugs[plug] = plugs.get(plug, 0) + ln["quantity"]
     if sizes:
-        out["creator_hoodie_sizes"] = sizes
-        out["creator_power_plugs"] = plugs
+        out["guest_hoodie_sizes"] = sizes
+        out["guest_power_plugs"] = plugs
     return out

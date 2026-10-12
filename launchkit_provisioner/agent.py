@@ -22,8 +22,8 @@ computed options, and have the orders placed. You do not do the specialist work 
 enforce the rules and aggregate the outcome. All data comes from BigQuery through your tools.
 
 Workflow for a new brief:
-1. Collect: the launch (LAUNCH-AURORA is the launch in the data) and the bundles with quantities (creator kits,
-   showroom displays, sales folios; a region only if the brief limits one). Ask if missing. Never invent a launch id.
+1. Collect: the launch (LAUNCH-SPRING is the launch in the data) and the bundles with quantities (guest welcome kits,
+   venue display stands, sales folders; a region only if the brief limits one). Ask if missing. Never invent a launch id.
 2. register_launch_request -> request_id.
 3. Call the brief_analyst_agent tool with the request_id and the full brief (every bundle, quantity and region).
 4. Call the sourcing_planner_agent tool with the request_id. It computes three options and saves them.
@@ -60,7 +60,7 @@ quantities and regions, vendor and delay days) and use what it returns.
 root_agent = LlmAgent(
     name="launchkit_provisioner",
     model=config.MODEL,
-    description="Autonomous product-launch collateral planner: breaks a brief into creator, showroom and sales bundles, "
+    description="Autonomous product-launch collateral planner: breaks a brief into guest, venue and sales bundles, "
                 "reuses surplus depot stock, computes three sourcing options against the embargo deadline, gets a "
                 "named executive to sign off above the autopilot limit, and places the orders through Application "
                 "Integration.",

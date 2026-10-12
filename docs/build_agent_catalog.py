@@ -22,10 +22,10 @@ AGENTS = [
      "decision and has the orders placed (Approved) or releases the held depot stock (Rejected). It writes every reply the user sees.",
      "BigQuery (requests, decisions, audit log, readiness board); Application Integration (request_approval); Vertex AI Agent Engine; Gemini Enterprise chat"),
     ("Sub Agent", "Brief Analyst Agent",
-     "The brief analyst turns the free-text brief into requirement lines in one call: creator unboxing kits (hoodie size, power plug and "
-     "engraving from the creator list), showroom counter displays and executive sales folios, spread over the regions. It reports the "
+     "The brief analyst turns the free-text brief into requirement lines in one call: guest welcome kits (hoodie size, power plug and "
+     "engraving from the guest list), venue display stands and executive sales folders, spread over the regions. It reports the "
      "channel totals and the size and plug breakdown. It never invents a bundle type.",
-     "BigQuery: bundle_templates, creators, regional_split, requirement_lines, audit_log"),
+     "BigQuery: bundle_templates, guests, regional_split, requirement_lines, audit_log"),
     ("Sub Agent", "Sourcing Planner Agent",
      "The sourcing planner computes three options for the request from BigQuery data: full brand-new production, smart depot rebalance "
      "(reuses surplus stock from regional depots, nearest first, and picks vendors that keep the safety buffer) and a certified eco launch. "
@@ -47,7 +47,7 @@ TOOLS = [
     ("Root Agent", "get_launch_status", "Python tool", "Reads the sign-off. If the approver decided in Application Integration it records it (first decision wins): Approved unlocks fulfilment, Rejected releases the held stock.", "decisions, scenario_lines, purchase_orders, depot_transfers", "decisions (status), depot_holds (RELEASED), audit_log", "Reads the execution and its approval record (LIFTED = approved, REJECTED = rejected)", "Atomic update: a decision is recorded once"),
     ("Root Agent", "get_launch_overview", "Python tool", "Launch readiness board (GREEN / AMBER / RED, buffer, orders placed) and free surplus stock per depot.", "v_launch_readiness, launches, v_depot_available", "-", "-", "Read only"),
     ("Root Agent", "get_audit_trail", "Python tool", "Ordered audit events for a request.", "audit_log", "-", "-", "Read only"),
-    ("Brief Analyst Agent", "build_requirements", "Python tool (batch)", "Expands every bundle of the brief into requirement lines per SKU and region; creator kits personalised from the creator list.", "bundle_templates, creators, regional_split, launch_requests", "requirement_lines, audit_log", "-", "Unknown bundle type returns the valid types"),
+    ("Brief Analyst Agent", "build_requirements", "Python tool (batch)", "Expands every bundle of the brief into requirement lines per SKU and region; guest welcome kits personalised from the guest list.", "bundle_templates, guests, regional_split, launch_requests", "requirement_lines, audit_log", "-", "Unknown bundle type returns the valid types"),
     ("Sourcing Planner Agent", "build_scenarios", "Python tool (batch)", "Computes and stores the three options with cost, delivery date, buffer, savings, carbon, risk; returns the decision card and whether autopilot applies.", "requirement_lines, vendor_offers, vendors, vendor_disruptions, v_depot_available, transit_lanes, assets, planning_rules, approval_policy", "scenarios, scenario_lines, audit_log", "-", "Refuses to re-plan once a sign-off is pending or approved"),
     ("Sourcing Planner Agent", "report_vendor_delay", "Python tool", "Records a vendor delay (by id or name). Before a sign-off: re-plan. After: reports the impact on the buffer.", "vendors, decisions, scenario_lines", "vendor_disruptions, audit_log", "-", "Ambiguous vendor names are refused"),
     ("Fulfilment Agent", "execute_plan", "Python tool (batch)", "Places every line of the approved option: purchase orders, depot transfers (in parallel), then the tracking update; writes the results in bulk.", "decisions, scenario_lines, launches, approvers", "purchase_orders, depot_transfers, scenario_lines (EXECUTED), depot_holds (CONSUMED), audit_log", "create_purchase_order, create_depot_transfer, send_launch_update", "BLOCKED unless APPROVED; never beyond the authorised amount; idempotent"),
@@ -56,9 +56,9 @@ TOOLS = [
 BQ = [
     ("launches", "Table", "The launch with its in-hand deadline and press embargo (re-based to today by --reset-demo).", "Planner, tools", "Setup script"),
     ("assets", "Table", "Collateral catalog with ship factor (size / weight).", "Planner", "Setup script"),
-    ("bundle_templates", "Table", "What goes into one creator kit, showroom display or sales folio.", "Brief analyst", "Setup script"),
-    ("creators", "Table", "150 creators: hoodie size, region and power plug (personalisation).", "Brief analyst", "Setup script"),
-    ("regional_split", "Table", "How showroom and sales bundles spread over regions.", "Brief analyst", "Setup script"),
+    ("bundle_templates", "Table", "What goes into one guest welcome kit, venue display stand or sales folder.", "Brief analyst", "Setup script"),
+    ("guests", "Table", "150 guests: hoodie size, region and power plug (personalisation).", "Brief analyst", "Setup script"),
+    ("regional_split", "Table", "How venue and sales bundles spread over regions.", "Brief analyst", "Setup script"),
     ("depots", "Table", "Regional marketing depots (London, Dallas, Singapore).", "v_depot_available", "Setup script"),
     ("depot_stock", "Table", "Surplus units on hand per depot and SKU.", "v_depot_available", "Setup script"),
     ("v_depot_available", "View", "Free surplus = on hand minus active and consumed holds.", "Planner, sign-off, overview", "-"),
@@ -89,9 +89,9 @@ AI = [
 ]
 
 FLOW = [
-    (1, "PMM", "Sends the brief in Gemini Enterprise: 150 creator kits, 10 showroom displays, 300 sales folios.", "-", "-", "-"),
+    (1, "PMM", "Sends the brief in Gemini Enterprise: 150 guest welcome kits, 10 venue display stands, 300 sales folders.", "-", "-", "-"),
     (2, "Root Agent", "register_launch_request", "Reads launches; writes launch_requests, audit_log", "-", "Request id REQ-xxxx"),
-    (3, "Brief Analyst", "build_requirements (one call)", "Reads bundle_templates, creators, regional_split; writes requirement_lines", "-", "31 requirement lines, 1,210 units; hoodie sizes 20/45/60/25; plugs by region"),
+    (3, "Brief Analyst", "build_requirements (one call)", "Reads bundle_templates, guests, regional_split; writes requirement_lines", "-", "31 requirement lines, 1,210 units; hoodie sizes 20/45/60/25; plugs by region"),
     (4, "Sourcing Planner", "build_scenarios (one call)", "Reads offers, depot stock, lanes, rules; writes scenarios, scenario_lines", "-", "Option 1 $46,075.50 | Option 2 $37,399.50 (saves $8,676, 72 h buffer, recommended) | Option 3 $51,905.50 (eco)"),
     (5, "Root Agent", "Shows the decision card and asks which option", "-", "-", "Waits for the manager"),
     (6, "PMM", "Replies: go with option 2", "-", "-", "-"),
@@ -151,8 +151,8 @@ SUMMARY = [
      "approved it has the orders placed; if rejected it releases the held depot stock.",
      "BigQuery, Application Integration", 150),
     ("Sub Agent", "Brief Analyst Agent",
-     "The brief analyst agent turns the free-text brief into requirement lines in one call: creator kits personalised by hoodie size and "
-     "power plug from the BigQuery creator list, showroom displays and sales folios spread over the regions.",
+     "The brief analyst agent turns the free-text brief into requirement lines in one call: guest welcome kits personalised by hoodie size and "
+     "power plug from the BigQuery guest list, venue display stands and sales folders spread over the regions.",
      "BigQuery", 95),
     ("Sub Agent", "Sourcing Planner Agent",
      "The sourcing planner agent audits regional depot surplus and vendor lead times and computes three options (full new, smart depot "

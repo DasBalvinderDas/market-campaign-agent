@@ -24,7 +24,7 @@ class Repository:
     # ---- brief decomposition
     def list_bundle_types(self) -> list[str]: raise NotImplementedError
     def get_bundle_templates(self, bundle_type: str) -> list[dict]: raise NotImplementedError
-    def creator_mix(self, launch_id: str) -> list[dict]: raise NotImplementedError          # size, region, plug_type, n
+    def guest_mix(self, launch_id: str) -> list[dict]: raise NotImplementedError          # size, region, plug_type, n
     def get_regional_split(self, bundle_type: str) -> list[dict]: raise NotImplementedError  # region, share_pct
     def get_asset(self, sku: str) -> dict | None: raise NotImplementedError
     def list_assets(self) -> list[dict]: raise NotImplementedError

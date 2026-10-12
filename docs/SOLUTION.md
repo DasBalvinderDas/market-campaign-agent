@@ -2,12 +2,12 @@
 
 ## 1. The problem
 
-A flagship launch has to equip several channels at once before a hard date: VIP creators (unboxing kits with the right hoodie
-size and power plug), flagship showrooms (counter displays) and enterprise sales teams (folios and brochures), in several regions,
+A flagship launch has to equip several channels at once before a hard date: VIP guests (unboxing kits with the right hoodie
+size and power plug), venues (display stands) and enterprise sales teams (folders and brochures), in several regions,
 **in hand before the in-hand deadline, which sits before the global press embargo**. The people planning it face:
 
-- a long list of personalised items to work out from a creator list;
-- surplus packaging and folios sitting in regional depots that nobody checks before new manufacturing is ordered;
+- a long list of personalised items to work out from a guest list;
+- surplus packaging and folders sitting in regional depots that nobody checks before new manufacturing is ordered;
 - vendor lead times and regional shipping that decide whether the date is made, with a delay at one vendor changing everything;
 - finance seeing only "approve this spend?" with no view of the alternatives.
 
@@ -55,8 +55,8 @@ calls instead of one per item.
 
 Everything the manager sees is computed from BigQuery data by deterministic code; the model never types a number.
 
-1. **Requirement lines.** `bundle_templates` say what is in a creator kit (box, hoodie by size, power adapter by plug, engraved
-   plaque), a showroom display and a sales folio. Creator kits follow the `creators` list (sizes and plugs per region, scaled to the
+1. **Requirement lines.** `bundle_templates` say what is in a guest welcome kit (box, hoodie by size, power adapter by plug, engraved
+   plaque), a venue display stand and a sales folder. Guest kits follow the `guests` list (sizes and plugs per region, scaled to the
    quantity with largest-remainder rounding, so totals are exact); other bundles follow `regional_split` or a region the brief names.
 2. **Three options.**
    - *Full new*: every line from the cheapest standard vendor offer, ignoring the deadline.
@@ -72,7 +72,7 @@ Everything the manager sees is computed from BigQuery data by deterministic code
 5. **Decision mode.** If the recommended option is within the autopilot limit the root agent runs it by itself; otherwise it shows the
    decision card and waits for the manager's choice.
 
-With the demo data (Project Aurora, 150 creator kits, 10 displays, 300 folios) the options come out as: Full new $46,075.50 with
+With the demo data (Spring Launch Event, 150 guest welcome kits, 10 displays, 300 folders) the options come out as: Full new $46,075.50 with
 0 hours of buffer; **Smart depot rebalance $37,399.50, saves $8,676.00, 72 hours of buffer (recommended)**; Eco launch $51,905.50 with
 48 hours of buffer and 1,822 kg less carbon than full new. Choosing eco crosses $50,000, so the CMO signs off instead of the VP.
 
@@ -105,7 +105,7 @@ Full DDL: [`bigquery/schema.sql`](../bigquery/schema.sql) (generated from `launc
 
 | Group | Tables and views |
 |---|---|
-| Reference data | `launches`, `assets`, `bundle_templates`, `creators`, `regional_split`, `depots`, `depot_stock`, `transit_lanes`, `vendors`, `vendor_offers`, `planning_rules`, `approval_policy`, `approvers` |
+| Reference data | `launches`, `assets`, `bundle_templates`, `guests`, `regional_split`, `depots`, `depot_stock`, `transit_lanes`, `vendors`, `vendor_offers`, `planning_rules`, `approval_policy`, `approvers` |
 | Plan and decision | `launch_requests`, `requirement_lines`, `scenarios`, `scenario_lines`, `decisions`, `depot_holds`, `vendor_disruptions` |
 | Orders and audit | `purchase_orders`, `depot_transfers`, `audit_log` |
 | Views | `v_depot_available` (free surplus = on hand minus active and consumed holds), `v_launch_readiness` (per request: chosen option, sign-off, buffer, GREEN / AMBER / RED, lines executed) |
@@ -151,7 +151,7 @@ The first sketch of this solution (a sequential agent pipeline with hard-coded s
 
 ## 11. Assumptions and limitations
 
-- **Demo data** is fictional (Project Aurora, vendors, prices, depots, creators). Currency is USD; no tax, duties or partial deliveries.
+- **Demo data** is fictional (Spring Launch Event, vendors, prices, depots, guests). Currency is USD; no tax, duties or partial deliveries.
 - **SAP S/4HANA, Slack and Teams** are not connected. The purchase order and depot transfer are Application Integration workflows that
   create a number (`PO-<line id>`, `TR-<line id>`); tracking updates go by email. Connecting a real ERP or chat tool is the next step
   and only changes the workflows, not the agents.

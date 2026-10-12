@@ -35,7 +35,7 @@ EOF
 source scripts/env_setup.sh --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
 ```
 
-This creates the dataset, tables, views and Project Aurora demo data, and the workflows `create_purchase_order`,
+This creates the dataset, tables, views and Spring Launch Event demo data, and the workflows `create_purchase_order`,
 `create_depot_transfer`, `request_approval`, `send_launch_update`. Several approvers go in one comma-separated list. Every step can be repeated.
 
 ```bash
@@ -57,7 +57,7 @@ source scripts/env_setup.sh        # only in a new Cloud Shell tab
 python scripts/setup_bigquery.py --reset-demo
 ```
 
-`--reset-demo` clears requests, plans, decisions, holds, orders, transfers and the audit log, and moves the Aurora launch dates
+`--reset-demo` clears requests, plans, decisions, holds, orders, transfers and the audit log, and moves the Spring launch dates
 (in-hand day = today + 25) so buffers are right. It keeps reference data and approvers, creates any missing table, and needs no
 redeploy. Then open a **new chat** and follow `docs/DEMO_RUN.md`: send the prompt, click Approve/Reject in the email, ask for status.
 

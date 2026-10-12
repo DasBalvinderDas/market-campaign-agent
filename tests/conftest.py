@@ -17,16 +17,16 @@ def repo():
     set_repo(None)
 
 
-BRIEF = [{"bundle_type": "CREATOR_KIT", "quantity": 150}, {"bundle_type": "SHOWROOM_DISPLAY", "quantity": 10},
-         {"bundle_type": "SALES_FOLIO", "quantity": 300}]
+BRIEF = [{"bundle_type": "GUEST_KIT", "quantity": 150}, {"bundle_type": "VENUE_DISPLAY", "quantity": 10},
+         {"bundle_type": "SALES_PACK", "quantity": 300}]
 
 
 @pytest.fixture
 def aurora(repo):
-    """A request for the full Project Aurora brief with its scenarios computed."""
+    """A request for the full Spring Launch Event brief with its scenarios computed."""
     from launchkit_provisioner import planner
-    rid = repo.create_request("LAUNCH-AURORA", "Project Aurora kits")
-    repo.replace_requirement_lines(rid, planner.expand_bundles(repo, "LAUNCH-AURORA", BRIEF))
+    rid = repo.create_request("LAUNCH-SPRING", "Spring Launch Event kits")
+    repo.replace_requirement_lines(rid, planner.expand_bundles(repo, "LAUNCH-SPRING", BRIEF))
     scenarios, lines = planner.plan_scenarios(repo, rid)
     repo.replace_scenarios(rid, scenarios, lines)
     return rid

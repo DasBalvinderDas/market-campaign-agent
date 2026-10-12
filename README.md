@@ -1,7 +1,7 @@
 # The LaunchKit Provisioner
 
 An autonomous Google ADK agent that plans product-launch collateral against a deadline. A Product Marketing Manager gives it a
-brief ("150 VIP creator kits, 10 showroom displays, 300 sales folios for Project Aurora"); it works out what is needed in which
+brief ("150 VIP guest welcome kits, 10 venue display stands, 300 sales folders for Spring Launch Event"); it works out what is needed in which
 region, reuses surplus stock from regional depots, **computes three sourcing options** against the in-hand date and the press
 embargo, lets the manager choose, gets a named executive to sign off above the autopilot limit, and has the purchase orders and
 depot transfers placed. It is built for **Gemini Enterprise** (the root agent writes every reply) and runs on Vertex AI Agent Engine.
@@ -12,10 +12,10 @@ and risk per option), and approval is only the last gate for the chosen option.
 | Part | What it does | Where it lives |
 |---|---|---|
 | **Root agent** | Takes the brief, calls the three specialists as tools, shows the decision card, holds the sign-off gate, answers status questions | `launchkit_provisioner/agent.py` |
-| **Brief Analyst** | Breaks the brief into requirement lines (creator kits personalised by size and plug, showroom displays, sales folios) | `sub_agents/brief_analyst_agent.py` |
+| **Brief Analyst** | Breaks the brief into requirement lines (guest welcome kits personalised by size and plug, venue display stands, sales folders) | `sub_agents/brief_analyst_agent.py` |
 | **Sourcing Planner** | Computes the 3 options (full new, smart depot rebalance, eco launch) with cost, delivery date, safety buffer, savings, carbon, risk; re-plans on a vendor delay | `sub_agents/sourcing_planner_agent.py`, `planner.py` |
 | **Fulfilment** | Places the orders of the approved option in one batch: POs, depot transfers, tracking update | `sub_agents/fulfilment_agent.py`, `execution.py` |
-| **Google BigQuery** | All data: launches, creators, depots and stock, lanes, vendors and offers, rules, policy, the computed plan, decisions, orders, audit log | dataset `launchkit` (`bigquery/schema.sql`) |
+| **Google BigQuery** | All data: launches, guests, depots and stock, lanes, vendors and offers, rules, policy, the computed plan, decisions, orders, audit log | dataset `launchkit` (`bigquery/schema.sql`) |
 | **Google Application Integration** | Four workflows: `create_purchase_order`, `create_depot_transfer`, `request_approval` (native Approve / Reject email) and `send_launch_update` | integration `launchkit-workflows` |
 | **Service account** | One account (`AGENT_SERVICE_ACCOUNT`) with BigQuery + Application Integration access runs the deployed agent | `.env` |
 | **Vertex AI Agent Engine / Gemini Enterprise** | Where the agent runs and is used | `scripts/deploy_agent_engine.py` |

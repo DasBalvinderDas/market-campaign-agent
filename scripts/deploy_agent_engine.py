@@ -311,8 +311,8 @@ def run(args, project=""):
         if smoke.returncode != 0:
             sys.exit("\nThe agent was deployed but did not answer (details and logs above).")
     print("\nTalk to it (the sign-off is the email; then ask for the status):\n"
-          '  python scripts/query_agent_engine.py "Roll out launch kits for Project Aurora: 150 VIP creator kits, '
-          '10 showroom displays and 300 sales folios."')
+          '  python scripts/query_agent_engine.py "Roll out launch kits for Spring Launch Event: 150 VIP guest welcome kits, '
+          '10 venue display stands and 300 sales folders."')
 
 
 class _Http:

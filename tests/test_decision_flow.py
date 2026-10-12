@@ -28,12 +28,12 @@ def test_above_the_limit_a_human_must_sign_off_and_nothing_is_ordered(repo, auro
     assert "HUMAN APPROVAL REQUIRED" in out["announce"] and "vp@example.com" in out["announce"]
     trig, inputs = ex.calls[0]
     reb = option(repo, aurora, "REBALANCE")
-    assert trig == config.APPROVAL_TRIGGER and inputs["amount"] == reb["total_cost"] and inputs["launch_id"] == "LAUNCH-AURORA"
+    assert trig == config.APPROVAL_TRIGGER and inputs["amount"] == reb["total_cost"] and inputs["launch_id"] == "LAUNCH-SPRING"
     assert "Smart depot rebalance" in inputs["approval_message"] and "Approve to place" in inputs["approval_message"]
     assert repo.get_decision_for_request(aurora)["status"] == "PENDING"
     assert not repo.list_pos(aurora) and not repo.list_transfers(aurora)
     holds = [h for h in repo.t["depot_holds"] if h["status"] == "ACTIVE"]
-    assert holds and sum(h["quantity"] for h in holds if h["sku"] == "PKG-LUX-BOX-BLACK") == 60   # surplus is held while waiting
+    assert holds and sum(h["quantity"] for h in holds if h["sku"] == "GIFT-BOX-BLACK") == 60   # surplus is held while waiting
 
 
 def test_choosing_eco_pushes_the_sign_off_to_the_cmo(repo, aurora):
@@ -43,9 +43,9 @@ def test_choosing_eco_pushes_the_sign_off_to_the_cmo(repo, aurora):
 
 
 def test_small_amounts_run_on_autopilot(repo):
-    rid = repo.create_request("LAUNCH-AURORA", "20 folios")
+    rid = repo.create_request("LAUNCH-SPRING", "20 folders")
     repo.replace_requirement_lines(rid, planner.expand_bundles(
-        repo, "LAUNCH-AURORA", [{"bundle_type": "SALES_FOLIO", "quantity": 20, "region": "EMEA"}]))
+        repo, "LAUNCH-SPRING", [{"bundle_type": "SALES_PACK", "quantity": 20, "region": "EMEA"}]))
     sc, lines = planner.plan_scenarios(repo, rid)
     repo.replace_scenarios(rid, sc, lines)
     ex = FakeExecutor()
@@ -76,9 +76,9 @@ def test_an_option_that_misses_the_deadline_cannot_be_authorised(repo, aurora):
 
 def test_stock_taken_by_someone_else_is_detected(repo, aurora):
     repo.create_holds([{"request_id": "REQ-OTHER", "scenario_id": "S", "line_id": "L", "depot_id": "DEPOT-LON-01",
-                        "sku": "PKG-LUX-BOX-BLACK", "quantity": 50}])
+                        "sku": "GIFT-BOX-BLACK", "quantity": 50}])
     out = decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "")
-    assert out["status"] == "error" and "surplus stock changed" in out["message"] and "PKG-LUX-BOX-BLACK" in out["message"]
+    assert out["status"] == "error" and "surplus stock changed" in out["message"] and "GIFT-BOX-BLACK" in out["message"]
 
 
 def test_unknown_request_option_and_missing_scenarios(repo, aurora):
@@ -86,7 +86,7 @@ def test_unknown_request_option_and_missing_scenarios(repo, aurora):
     assert decision_flow.authorize(repo, ex, "REQ-NOPE", "2")["status"] == "error"
     bad = decision_flow.authorize(repo, ex, aurora, "option 7")
     assert bad["status"] == "error" and "Valid" in bad["message"]
-    rid = repo.create_request("LAUNCH-AURORA", "empty")
+    rid = repo.create_request("LAUNCH-SPRING", "empty")
     assert "sourcing" in decision_flow.authorize(repo, ex, rid, "1")["message"]
 
 

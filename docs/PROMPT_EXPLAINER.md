@@ -16,15 +16,15 @@ Test prompts and expected numbers are in [`DEMO_RUN.md`](DEMO_RUN.md); the desig
 
 ### Monday, 25 days before the launch
 
-Priya runs launch marketing for **Project Aurora**, a global product launch. In 25 days the product is in customers' hands and a few days later
+Priya runs launch marketing for **Spring Launch Event**, a global product launch. In 25 days the product is in customers' hands and a few days later
 the press embargo lifts. Between now and then, three groups need physical things in their hands:
 
-- **150 VIP creators** each get an unboxing kit, personalised: their hoodie size, the right power plug for their country.
-- **10 flagship showrooms** need counter displays.
-- **300 sales executives** need leather folios for customer meetings.
+- **150 VIP guests** each get an unboxing kit, personalised: their hoodie size, the right power plug for their country.
+- **10 flagship venues** need counter displays.
+- **300 sales executives** need leather folders for customer meetings.
 
-That is about 1,500 items, from seven vendors, to three regions. Miss the date and a creator posts the unboxing a week late, a showroom
-opens with an empty counter, or a sales team walks into a meeting without a folio. A launch only happens once.
+That is about 1,500 items, from seven vendors, to three regions. Miss the date and a guest posts the unboxing a week late, a venue
+opens with an empty counter, or a sales team walks into a meeting without a folder. A launch only happens once.
 
 ### How this used to go
 
@@ -42,9 +42,9 @@ It does not do the specialist work. It makes sure the right person does each ste
 only one allowed to ask for money to be spent. It never skips a step, even if she asks it to.
 
 **2. The Brief Analyst: the person who turns a wish into a shopping list.**
-*Prompt 1: "Roll out the global launch kits for Project Aurora..."* The analyst reads the creator list and produces exact lines: 38 hoodies in
-size M for US creators with the US plug, 12 in size XL for Europe with the EU plug, and so on, plus the showroom and folio quantities split by
-region. No guessing: it uses the creator data and the regional split.
+*Prompt 1: "Roll out the global launch kits for Spring Launch Event..."* The analyst reads the guest list and produces exact lines: 38 hoodies in
+size M for US guests with the US plug, 12 in size XL for Europe with the EU plug, and so on, plus the venue and folder quantities split by
+region. No guessing: it uses the guest data and the regional split.
 
 **3. The Sourcing Planner: the procurement lead who checks stock before spending.**
 It looks at what is already in the depots and asks the question people forget: *"why buy what we already own?"* It then builds three
@@ -98,7 +98,7 @@ a limit of the design. In a real company the same facts live in the company's ow
 |---|---|
 | `depot_stock`, `depots` | Inventory in the ERP or warehouse system (for example SAP) |
 | `vendors`, `vendor_offers`, `vendor_disruptions` | The procurement platform and supplier contracts, with delivery-delay alerts from vendors |
-| `creators`, `regional_split`, `launches` | The influencer or CRM platform and the launch plan in the marketing system |
+| `guests`, `regional_split`, `launches` | The influencer or CRM platform and the launch plan in the marketing system |
 | `approval_policy`, `approvers` | Delegation-of-authority rules and the corporate directory (who is VP, who is CMO) |
 | `purchase_orders`, `depot_transfers` (simulated by workflows) | Real purchase orders and stock transfers raised in the ERP |
 | Approval email and tracking update | Approvals and notifications in Slack, Teams or the approval tool people already use |
@@ -221,7 +221,7 @@ the option chosen, and places the orders, with every number computed and every s
 ## Technical proof: the data, and what each agent adds
 
 *(Companion to the sales pitch. Every table below is real: the starting data is what `setup_bigquery.py` loads into dataset
-`launchkit`, and the plan and order rows are what the code produces for the Project Aurora brief. Request ids and timestamps differ per run.)*
+`launchkit`, and the plan and order rows are what the code produces for the Spring Launch Event brief. Request ids and timestamps differ per run.)*
 
 ### A. Where the data is
 
@@ -232,14 +232,14 @@ Nothing the agent says comes from anywhere else.
 
 | launch_id | launch_name | in_hand_by | embargo_date | cost_center |
 |---|---|---|---|---|
-| LAUNCH-AURORA | Project Aurora Global Launch | 2026-11-06 | 2026-11-13 | CC-PROD-MKTG-8820 |
+| LAUNCH-SPRING | Spring Product Launch Event | 2026-11-06 | 2026-11-13 | CC-PROD-MKTG-8820 |
 
 **2. Surplus stock: `depot_stock` (read through view `v_depot_available`, on hand minus active holds)**
 
 | depot | region | sku | free |
 |---|---|---|---|
-| Dallas Marketing Depot | US | FOLIO-LEATHER-EXEC | 120 |
-| London EMEA Marketing Hub | EMEA | PKG-LUX-BOX-BLACK | 60 |
+| Dallas Marketing Depot | US | FOLDER-LEATHER | 120 |
+| London EMEA Marketing Hub | EMEA | GIFT-BOX-BLACK | 60 |
 | London EMEA Marketing Hub | EMEA | PWR-EU-C / PWR-UK-G | 10 / 40 |
 | Singapore APAC Depot | APAC | PWR-AU-I / PWR-JP-A | 10 / 15 |
 
@@ -247,10 +247,10 @@ Nothing the agent says comes from anywhere else.
 
 | vendor | sku | variant | unit_price | lead_days | carbon_kg |
 |---|---|---|---|---|---|
-| PrintCo | BROCHURE-AURORA | STANDARD / ECO | 3.00 / 3.50 | 6 / 7 | 0.30 / 0.10 |
-| EngraveWorks | CARD-ENGRAVED | STANDARD / ECO | 6.00 / 7.00 | 5 / 6 | 0.20 / 0.08 |
-| DisplayCo | DISPLAY-COUNTER-AURORA | STANDARD / ECO | 1,400 / 1,560 | 17 / 19 | 120 / 70 |
-| RapidDisplay | DISPLAY-COUNTER-AURORA | STANDARD | 1,650 | 10 (faster, dearer) | 135 |
+| PrintCo | BROCHURE-PRODUCT | STANDARD / ECO | 3.00 / 3.50 | 6 / 7 | 0.30 / 0.10 |
+| EngraveWorks | NAME-CARD | STANDARD / ECO | 6.00 / 7.00 | 5 / 6 | 0.20 / 0.08 |
+| DisplayCo | DISPLAY-STAND | STANDARD / ECO | 1,400 / 1,560 | 17 / 19 | 120 / 70 |
+| RapidDisplay | DISPLAY-STAND | STANDARD | 1,650 | 10 (faster, dearer) | 135 |
 
 **4. Rules the business can edit: `planning_rules` and `approval_policy`**
 
@@ -260,7 +260,7 @@ Nothing the agent says comes from anywhere else.
 | TARGET_BUFFER_HOURS | 48 | | VP_SIGNOFF | up to $50,000 | VP Product Marketing |
 | DEPOT_HANDLING_DAYS | 1 | | CMO_SIGNOFF | above $50,000 | CMO |
 
-**5. People and places:** `creators` (150 rows: hoodie size, region, power-plug type), `regional_split`, `transit_lanes` (days and cost per
+**5. People and places:** `guests` (150 rows: hoodie size, region, power-plug type), `regional_split`, `transit_lanes` (days and cost per
 region pair, for example US to EMEA 5 days, $4 per unit), `approvers` (emails per role), `vendors`, `assets`, `bundle_templates`.
 
 **Transaction tables (written by the agents):** `launch_requests`, `requirement_lines`, `scenarios`, `scenario_lines`, `decisions`,
@@ -272,13 +272,13 @@ region pair, for example US to EMEA 5 days, $4 per unit), `approvers` (emails pe
 
 | bundle | sku | region | quantity |
 |---|---|---|---|
-| CREATOR_KIT | CARD-ENGRAVED | APAC / EMEA / US | 20 / 45 / 85 |
-| CREATOR_KIT | HOODIE-AURORA-L | APAC / EMEA / US | 10 / 15 / 35 |
-| ... | (sizes S, M, L, XL and each power plug from the creator list) | | |
-| SHOWROOM_DISPLAY | DISPLAY-COUNTER-AURORA | APAC / EMEA / US | 2 / 4 / 4 |
-| SALES_FOLIO | FOLIO-LEATHER-EXEC | APAC / EMEA / US | 50 / 100 / 150 |
+| GUEST_KIT | NAME-CARD | APAC / EMEA / US | 20 / 45 / 85 |
+| GUEST_KIT | HOODIE-EVENT-L | APAC / EMEA / US | 10 / 15 / 35 |
+| ... | (sizes S, M, L, XL and each power plug from the guest list) | | |
+| VENUE_DISPLAY | DISPLAY-STAND | APAC / EMEA / US | 2 / 4 / 4 |
+| SALES_PACK | FOLDER-LEATHER | APAC / EMEA / US | 50 / 100 / 150 |
 
-*Value added:* "150 kits with personalised hoodie size and plug" became exact per-SKU, per-region quantities taken from the creator table,
+*Value added:* "150 kits with personalised hoodie size and plug" became exact per-SKU, per-region quantities taken from the guest table,
 not an estimate. A person would have built this by hand.
 
 **Step 2, Sourcing Planner builds three plans and saves them (`scenarios`)**
@@ -294,7 +294,7 @@ Each option is stored line by line in `scenario_lines` (31 lines for FULL_NEW, *
 *Value added:* a decision instead of a number. The three options, the deadline margin and the recommendation are all computed and saved,
 so the approver and the auditor can see exactly what was chosen from.
 
-**Proof 1, why REBALANCE is cheaper: the folio lines (`scenario_lines`)**
+**Proof 1, why REBALANCE is cheaper: the folder lines (`scenario_lines`)**
 
 | option | region | qty | source | line_total | days to deliver |
 |---|---|---|---|---|---|
@@ -302,7 +302,7 @@ so the approver and the auditor can see exactly what was chosen from.
 | REBALANCE | US | **120** | **Dallas depot** | **$144.00** | **3** |
 | REBALANCE | US | 30 | PrintCo (vendor) | $894.00 | 14 |
 
-Same 150 US folios. Buying all of them costs $4,470. Using the 120 already in Dallas and buying only 30 costs $144 + $894 = $1,038, a
+Same 150 US folders. Buying all of them costs $4,470. Using the 120 already in Dallas and buying only 30 costs $144 + $894 = $1,038, a
 $3,432 saving on one line, and 120 of them arrive in 3 days. Repeat across luxury boxes (60 in London) and power adapters and you reach the
 $8,676 total.
 
@@ -322,7 +322,7 @@ at work. No prompt contains it.
 | table | row | proves |
 |---|---|---|
 | `decisions` | option REBALANCE, amount 37,399.50, tier **VP_SIGNOFF**, approver_role VP Product Marketing, status **PENDING**, `decision_note` = `execution:<id>` | The amount selected the tier from `approval_policy`; the workflow execution id is stored to read the answer later |
-| `depot_holds` | one ACTIVE hold per depot line (7), for example London / PKG-LUX-BOX-BLACK / 45 | The stock is reserved while the executive decides; `v_depot_available` now shows it as not free |
+| `depot_holds` | one ACTIVE hold per depot line (7), for example London / GIFT-BOX-BLACK / 45 | The stock is reserved while the executive decides; `v_depot_available` now shows it as not free |
 | `audit_log` | `orchestrator` / `approval_requested` | Who asked for the sign-off, for what amount |
 
 **Step 4, after Approve and "What is the status?"**
@@ -330,8 +330,8 @@ at work. No prompt contains it.
 | table | rows | proves |
 |---|---|---|
 | `decisions` | status **APPROVED**, decided_by "Application Integration approval" | The answer was read from the approval record |
-| `purchase_orders` | **27** rows, e.g. `PO-REQ-xxxx-RB-L01`, V-ENGRAVE, CARD-ENGRAVED, APAC, 20, $125.00, CREATED | One order per vendor line, number returned by the workflow |
-| `depot_transfers` | **7** rows, e.g. `TR-REQ-xxxx-RB-L16`, DEPOT-LON-01, PKG-LUX-BOX-BLACK, EMEA, 45 | One transfer per depot line |
+| `purchase_orders` | **27** rows, e.g. `PO-REQ-xxxx-RB-L01`, V-ENGRAVE, NAME-CARD, APAC, 20, $125.00, CREATED | One order per vendor line, number returned by the workflow |
+| `depot_transfers` | **7** rows, e.g. `TR-REQ-xxxx-RB-L16`, DEPOT-LON-01, GIFT-BOX-BLACK, EMEA, 45 | One transfer per depot line |
 | `depot_holds` | the 7 holds become **CONSUMED** | The reserved stock was actually used |
 | `scenario_lines` | `execution_status` = EXECUTED on all 34 | Idempotent: running again would skip them |
 | `audit_log` | 27 `po_created`, 7 `transfer_created`, 1 `launch_update_sent` | Full trail by `fulfilment_agent` |
@@ -344,7 +344,7 @@ Application Integration calls made in that turn: **27 x `create_purchase_order`,
 | Agent | Without it | What it adds (and proof in the data) |
 |---|---|---|
 | **Coordinator** | A user would have to know which step comes next, and anyone could trigger spending | Fixed order of steps, the one reply, and the sole `authorize_launch` door. Proof: `decisions` rows exist only through it; a "skip approval" request is answered with a refusal |
-| **Brief Analyst** | Hand-built per-size, per-region lists from a spreadsheet | 31 exact `requirement_lines` from `creators`, `regional_split`, `bundle_templates`. Proof: hoodie quantities per size and plug match the creator table |
+| **Brief Analyst** | Hand-built per-size, per-region lists from a spreadsheet | 31 exact `requirement_lines` from `guests`, `regional_split`, `bundle_templates`. Proof: hoodie quantities per size and plug match the guest table |
 | **Sourcing Planner** | Guessing stock, picking a vendor on price alone | Three costed plans, deadline buffers, surplus reuse, re-plan on delay. Proof: `scenarios` and `scenario_lines` (Proofs 1 and 2 above); `vendor_disruptions` rows change the next plan |
 | **Fulfilment** | Someone keying 34 orders into a procurement system | 27 POs and 7 transfers in parallel, once, only if APPROVED. Proof: `purchase_orders`, `depot_transfers`, EXECUTED lines, `execution_blocked` in `audit_log` when not approved |
 | **Application Integration** | Manual emails and ERP entries | Approval email and suspension, PO and transfer numbers, tracking email. Proof: `integration_execution_id` on every order row; approval record `LIFTED` / `REJECTED` |
@@ -385,8 +385,8 @@ That is the technical answer to "is the AI making this up?": the answer is in th
 
 ## 1. The picture in one page
 
-**Business.** A global product launch (Project Aurora) needs 1,500+ personalised items in hand before an in-hand date and a press
-embargo: creator unboxing kits, showroom displays, sales folios. The agent turns a launch brief into three costed, deadline-checked
+**Business.** A global product launch (Spring Launch Event) needs 1,500+ personalised items in hand before an in-hand date and a press
+embargo: guest welcome kits, venue display stands, sales folders. The agent turns a launch brief into three costed, deadline-checked
 options, reuses surplus depot stock before buying, gets an executive to sign off on the chosen option, and places the orders.
 
 **Technical.** One **root agent** plus three **specialist agents that the root calls as tools** (ADK `AgentTool`). The root writes every
@@ -475,7 +475,7 @@ root writes the one final message. The root's prompt also says: no narration bet
 | Agent | Prompt in one line | Tools | Reads | Writes |
 |---|---|---|---|---|
 | **Root** `launchkit_provisioner` | Collect the brief, call specialists in a fixed order, show the card, wait for the user's choice, gate spend, summarise. No narration. Never skip approval | `register_launch_request`, `authorize_launch`, `get_launch_status`, `get_launch_overview`, `get_audit_trail`, + the 3 specialists | `launches`, `approval_policy`, `approvers`, `decisions`, views | `launch_requests`, `decisions`, `depot_holds`, `audit_log` |
-| **Brief Analyst** | Call `build_requirements` once with every bundle (CREATOR_KIT, SHOWROOM_DISPLAY, SALES_FOLIO) and quantity; report totals. Never invent a bundle or quantity | `build_requirements` | `bundle_templates`, `creators`, `regional_split`, `assets`, `launch_requests` | `requirement_lines`, `audit_log` |
+| **Brief Analyst** | Call `build_requirements` once with every bundle (GUEST_KIT, VENUE_DISPLAY, SALES_PACK) and quantity; report totals. Never invent a bundle or quantity | `build_requirements` | `bundle_templates`, `guests`, `regional_split`, `assets`, `launch_requests` | `requirement_lines`, `audit_log` |
 | **Sourcing Planner** | Call `build_scenarios` once; on a vendor delay call `report_vendor_delay` first. Return the decision card exactly; never recompute | `build_scenarios`, `report_vendor_delay` | `requirement_lines`, `v_depot_available`, `vendor_offers`, `vendors`, `vendor_disruptions`, `transit_lanes`, `planning_rules`, `assets`, `approval_policy` | `scenarios`, `scenario_lines`, `vendor_disruptions`, `audit_log` |
 | **Fulfilment** | Call `execute_plan` once; report orders, transfers, total, savings, delivery date, buffer. If BLOCKED say so and do not retry | `execute_plan` | `decisions`, `scenarios`, `scenario_lines`, `approvers` (Launch Team) | `purchase_orders`, `depot_transfers`, `scenario_lines` (status), `depot_holds` (consumed), `audit_log` |
 
@@ -506,11 +506,11 @@ That is why the demo is two steps: send the prompt, click the email, ask for the
 
 ## 4. Prompt by prompt
 
-Each prompt: **Business** (say this first), then **Technical** (the flow). Numbers are from the seeded Project Aurora data.
+Each prompt: **Business** (say this first), then **Technical** (the flow). Numbers are from the seeded Spring Launch Event data.
 
 ### Prompt 1: the launch brief
 
-> Roll out the global launch kits for Project Aurora. I need 150 VIP creator unboxing kits (personalised hoodie size and power plug for each creator), 10 showroom counter displays for our flagship spaces, and 300 executive folios for the sales team. Everything has to be in hand before the in-hand deadline.
+> Roll out the global launch kits for Spring Launch Event. I need 150 VIP guest welcome kits (personalised hoodie size and power plug for each guest), 10 venue display stands for our flagship spaces, and 300 sales folders for the sales team. Everything has to be in hand before the in-hand deadline.
 
 **Business.** The launch lead describes the whole rollout in one sentence. They get back, in about a minute, three ways to do it, each with
 cost, arrival date and safety margin before the deadline, plus a recommendation. They can see where money is saved by reusing stock
@@ -520,9 +520,9 @@ that is already sitting in depots.
 
 | # | Who | Action | Table | Application Integration |
 |---|---|---|---|---|
-| 1 | Root | `register_launch_request("LAUNCH-AURORA", summary)` | reads `launches`; writes `launch_requests`, `audit_log` | none |
+| 1 | Root | `register_launch_request("LAUNCH-SPRING", summary)` | reads `launches`; writes `launch_requests`, `audit_log` | none |
 | 2 | Root -> **Brief Analyst** | Prompt tells it to call `build_requirements` once with all three bundles | | none |
-| 3 | Brief Analyst | `expand_bundles`: creator kits become one line per size / plug / region from the real creator list; displays and folios follow the regional split | reads `bundle_templates`, `creators`, `regional_split`, `assets`; writes `requirement_lines`, `audit_log` | none |
+| 3 | Brief Analyst | `expand_bundles`: guest welcome kits become one line per size / plug / region from the real guest list; displays and folders follow the regional split | reads `bundle_templates`, `guests`, `regional_split`, `assets`; writes `requirement_lines`, `audit_log` | none |
 | 4 | Root -> **Sourcing Planner** | `build_scenarios(request_id)` | | none |
 | 5 | Sourcing Planner | `plan_scenarios`: prefetches vendor offers, assets and free depot stock in bulk, then builds three options. **Depot rebalance** takes surplus nearest-depot first; **new** picks the cheapest vendor that makes the date (target buffer 48 h, minimum 24 h); **eco** prefers certified material, standard where eco cannot make the date. Recommends the cheapest option with buffer of at least 24 h | reads `requirement_lines`, `v_depot_available`, `vendor_offers`, `vendors`, `vendor_disruptions`, `transit_lanes`, `planning_rules`, `launches`; writes `scenarios`, `scenario_lines`, `audit_log` | none |
 | 6 | Sourcing Planner | Returns the formatted `decision_card` and `decision_mode` (AUTOPILOT if the recommended option is within $5,000, else CHOOSE) | reads `approval_policy` | none |
@@ -531,7 +531,7 @@ that is already sitting in depots.
 **What the user sees:** Option 1 full new $46,075.50 (0 h buffer), Option 2 depot rebalance $37,399.50 recommended (saves $8,676, 72 h
 buffer), Option 3 eco $51,905.50 (48 h buffer).
 
-**In plain English (technical).** The coordinator first files the request and gets a reference number. It then briefs the analyst, who looks up the creator list and the regional split and writes one line per item and region. Next the planner reads current stock, vendor prices and delivery times and works out three plans, applying simple rules: use surplus stock first and from the nearest depot, buy from the cheapest vendor that still arrives with a safety margin, and prefer certified eco material where it makes the date. Everything is saved, the coordinator shows the card and waits.
+**In plain English (technical).** The coordinator first files the request and gets a reference number. It then briefs the analyst, who looks up the guest list and the regional split and writes one line per item and region. Next the planner reads current stock, vendor prices and delivery times and works out three plans, applying simple rules: use surplus stock first and from the nearest depot, buy from the cheapest vendor that still arrives with a safety margin, and prefer certified eco material where it makes the date. Everything is saved, the coordinator shows the card and waits.
 
 **Say:** "The model did not calculate any of this. It called three tools; the Python planner computed the numbers from BigQuery. Change a
 vendor price or a depot stock and the card changes."
@@ -675,7 +675,7 @@ and writes `launch_rejected` to `audit_log`. Fulfilment is never called. Check w
 
 ### Prompt 5: small brief, autopilot
 
-> We need 40 VIP creator unboxing kits for the early-access creators.
+> We need 40 VIP guest welcome kits for the early-access guests.
 
 **Business.** A small request does not need an executive. The agent plans it, sees the recommended cost is $2,319.50 (within $5,000),
 approves it by policy and places the orders in the same turn. The reply says it was approved by autopilot.
@@ -747,7 +747,7 @@ buffer and a GREEN / AMBER / RED readiness, plus free surplus per depot. The aud
 
 | Group | Tables | Purpose |
 |---|---|---|
-| Launch and demand | `launches`, `launch_requests`, `requirement_lines`, `bundle_templates`, `assets`, `creators`, `regional_split` | What must be delivered and to whom |
+| Launch and demand | `launches`, `launch_requests`, `requirement_lines`, `bundle_templates`, `assets`, `guests`, `regional_split` | What must be delivered and to whom |
 | Supply | `depots`, `depot_stock`, `vendors`, `vendor_offers`, `transit_lanes`, `vendor_disruptions` | Where it can come from and how long it takes |
 | Rules and people | `planning_rules`, `approval_policy`, `approvers` | Buffers, tiers and the signing roles (all editable data) |
 | Plan and decision | `scenarios`, `scenario_lines`, `decisions`, `depot_holds` | The three options, the chosen one, who signed off, stock held |

@@ -4,7 +4,7 @@ Used by ``scripts/setup_bigquery.py`` to create the dataset, tables and views, a
 documented in ``bigquery/schema.sql``. Columns are (name, type, mode, description).
 
 Design notes
-- Reference data (launches, assets, bundle templates, creators, depots and their stock, transit lanes, vendors and
+- Reference data (launches, assets, bundle templates, guests, depots and their stock, transit lanes, vendors and
   their offers, planning rules, approval policy, approvers) is plain tables, changed without a release.
 - Sourcing scenarios are COMPUTED from that data and stored (scenarios, scenario_lines): the numbers shown to a
   decision maker are never typed in by the model.
@@ -31,24 +31,24 @@ TABLES = {
         "columns": [
             ("sku", "STRING", "REQUIRED", ""),
             ("name", "STRING", "REQUIRED", ""),
-            ("component_type", "STRING", "REQUIRED", "BOX, APPAREL, POWER, PERSONALISATION, DISPLAY, FOLIO, PRINT"),
+            ("component_type", "STRING", "REQUIRED", "BOX, APPAREL, POWER, PERSONALISATION, DISPLAY, FOLDER, PRINT"),
             ("ship_factor", "FLOAT64", "REQUIRED", "Relative size/weight: multiplies the shipping lane cost"),
         ],
     },
     "bundle_templates": {
-        "description": "What goes into one bundle (creator kit, showroom display, sales folio).",
+        "description": "What goes into one bundle (guest welcome kit, venue display stand, sales folder).",
         "columns": [
-            ("bundle_type", "STRING", "REQUIRED", "CREATOR_KIT, SHOWROOM_DISPLAY, SALES_FOLIO"),
+            ("bundle_type", "STRING", "REQUIRED", "GUEST_KIT, VENUE_DISPLAY, SALES_PACK"),
             ("description", "STRING", "NULLABLE", ""),
             ("sku_pattern", "STRING", "REQUIRED", "A SKU, or a pattern with {size} / {plug}"),
             ("qty_per_bundle", "INT64", "REQUIRED", ""),
             ("split_by", "STRING", "REQUIRED", "NONE, SIZE or PLUG: how the SKU is chosen per recipient"),
         ],
     },
-    "creators": {
-        "description": "VIP creator seeding list: size and power-plug per recipient (personalisation).",
+    "guests": {
+        "description": "VIP guest list: size and power-plug per recipient (personalisation).",
         "columns": [
-            ("creator_id", "STRING", "REQUIRED", ""),
+            ("guest_id", "STRING", "REQUIRED", ""),
             ("launch_id", "STRING", "REQUIRED", ""),
             ("handle", "STRING", "REQUIRED", ""),
             ("name", "STRING", "NULLABLE", ""),
@@ -152,7 +152,7 @@ TABLES = {
             ("request_id", "STRING", "REQUIRED", ""),
             ("line_no", "INT64", "REQUIRED", ""),
             ("bundle_type", "STRING", "REQUIRED", ""),
-            ("channel", "STRING", "REQUIRED", "CREATOR, SHOWROOM, SALES"),
+            ("channel", "STRING", "REQUIRED", "GUESTS, VENUES, SALES"),
             ("sku", "STRING", "REQUIRED", ""),
             ("region", "STRING", "REQUIRED", "Destination region"),
             ("quantity", "INT64", "REQUIRED", ""),

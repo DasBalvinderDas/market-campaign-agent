@@ -19,26 +19,26 @@ To try the agent locally instead of on Agent Engine: `adk web` from the repo roo
 
 | Piece | Where | Created by |
 |---|---|---|
-| Launch, creators, depots and surplus, lanes, vendors and offers, rules, tiers | BigQuery dataset `launchkit` | `setup_bigquery.py` (via `env_setup.sh`) |
+| Launch, guests, depots and surplus, lanes, vendors and offers, rules, tiers | BigQuery dataset `launchkit` | `setup_bigquery.py` (via `env_setup.sh`) |
 | Who signs off and who gets updates | BigQuery table `approvers` | `--approver-email` |
 | Purchase order, depot transfer, sign-off and update workflows | Application Integration `launchkit-workflows` | `setup_application_integration.py` |
 | The agent | Vertex AI Agent Engine, run as `AGENT_SERVICE_ACCOUNT` | `deploy_agent_engine.py` |
 
 Nothing is mocked and nothing is built by hand: re-running a script is safe.
 
-## 3. The starting data (Project Aurora, all fictional)
+## 3. The starting data (Spring Launch Event, all fictional)
 
 | Launch | In-hand deadline | Press embargo |
 |---|---|---|
-| Project Aurora Global Launch (`LAUNCH-AURORA`) | setup day + 25 | setup day + 32 (`--reset-demo` moves both to today) |
+| Spring Product Launch Event (`LAUNCH-SPRING`) | setup day + 25 | setup day + 32 (`--reset-demo` moves both to today) |
 
 | Depot | Surplus stock |
 |---|---|
 | London EMEA Marketing Hub | 60 luxury presentation boxes, 40 UK adapters, 10 EU adapters |
-| Dallas Marketing Depot | 120 executive folios |
+| Dallas Marketing Depot | 120 sales folders |
 | Singapore APAC Depot | 15 JP adapters, 10 AU adapters |
 
-150 creators (hoodie sizes S20 / M45 / L60 / XL25, regions US 85 / EMEA 45 / APAC 20, five plug types). Sign-off tiers: up to $5,000
+150 guests (hoodie sizes S20 / M45 / L60 / XL25, regions US 85 / EMEA 45 / APAC 20, five plug types). Sign-off tiers: up to $5,000
 **autopilot**, up to $50,000 **VP Product Marketing**, above that **CMO**. Planning rules: minimum buffer 24 h, target buffer 48 h.
 
 ## 4. How a request flows
@@ -60,7 +60,7 @@ in Gemini Enterprise; the "Working on the request" panel lists the steps.
 
 ### Case 1: plan a launch and choose (the decision card)
 
-> Roll out the global launch kits for Project Aurora. I need 150 VIP creator unboxing kits (personalised hoodie size and power plug for each creator), 10 showroom counter displays for our flagship spaces, and 300 executive folios for the sales team. Everything has to be in hand before the in-hand deadline.
+> Roll out the global launch kits for Spring Launch Event. I need 150 VIP guest welcome kits (personalised hoodie size and power plug for each guest), 10 venue display stands for our flagship spaces, and 300 sales folders for the sales team. Everything has to be in hand before the in-hand deadline.
 
 **Expected:** one message with the decision card and the question which option to go with. Nothing is ordered.
 
@@ -70,7 +70,7 @@ in Gemini Enterprise; the "Working on the request" panel lists the steps.
 | 2. Smart depot rebalance (RECOMMENDED) | $37,399.50 | saves $8,676.00 | 72 h | 3,702 kg | LOW |
 | 3. Certified eco launch | $51,905.50 | costs $5,830.00 more | 48 h | 2,378 kg | LOW |
 
-Option 2 reuses 240 units from the depots (60 boxes from London, 120 folios from Dallas, adapters) and buys 970. **Shows:** the options are
+Option 2 reuses 240 units from the depots (60 boxes from London, 120 folders from Dallas, adapters) and buys 970. **Shows:** the options are
 computed against the deadline, with the savings and the buffer visible.
 
 ### Case 2: executive sign-off, the two-step flow (HITL)
@@ -102,11 +102,11 @@ chosen option and is a BigQuery row.
 
 New chat, repeat case 1, choose option 2, then click **Reject** in the email and ask `What is the status of that request?`
 
-**Expected:** REJECTED, nothing ordered, the held depot stock released. Check it: `Show me the surplus stock in the depots.` lists the 60 boxes and 120 folios free again, and the manager can choose another option.
+**Expected:** REJECTED, nothing ordered, the held depot stock released. Check it: `Show me the surplus stock in the depots.` lists the 60 boxes and 120 folders free again, and the manager can choose another option.
 
 ### Case 5: small brief, autopilot (no human)
 
-> We need 40 VIP creator unboxing kits for the early-access creators.
+> We need 40 VIP guest welcome kits for the early-access guests.
 
 **Expected:** no decision card and no email: the recommended option ($2,319.50, saves $3,526.70 against $5,846.20 for all-new) is within the
 $5,000 autopilot limit, so it is approved by policy and 22 orders (15 purchase orders, 7 depot transfers) are placed in the same turn.
@@ -176,12 +176,12 @@ Engine for the run time and errors, and run `python scripts/agent_engine_logs.py
 **One line:** LaunchKit Provisioner turns a launch brief into a deadline-safe, costed plan, reuses surplus stock before buying anything,
 and only asks an executive to sign off on the option that was chosen.
 
-**The problem.** A global launch needs hundreds of personalised kits, displays and folios in hand before an embargo date. Today people
+**The problem.** A global launch needs hundreds of personalised kits, displays and folders in hand before an embargo date. Today people
 work out quantities in spreadsheets, guess at depot stock, discover a late vendor too late, and approve a number they cannot compare.
 
 **What it does**
 
-1. **Reads the brief** and expands it into per-creator, per-region requirement lines (hoodie size, power plug, region).
+1. **Reads the brief** and expands it into per-guest, per-region requirement lines (hoodie size, power plug, region).
 2. **Plans three options** from live data: full new production, smart depot rebalance (surplus first, nearest depot first), and a certified eco launch.
    Each option has cost, delivery date, safety buffer against the in-hand date, carbon and risk, all computed.
 3. **Recommends one** (cheapest option that still keeps the safety buffer) and holds the surplus stock it relies on.

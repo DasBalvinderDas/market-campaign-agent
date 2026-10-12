@@ -90,8 +90,8 @@ class BigQueryRepository(Repository):
         return self._run("SELECT bundle_type, description, sku_pattern, qty_per_bundle, split_by "
                          "FROM `{ds}.bundle_templates` WHERE bundle_type = @bt ORDER BY sku_pattern", bt=bundle_type)
 
-    def creator_mix(self, launch_id):
-        return self._run("SELECT size, region, plug_type, COUNT(*) AS n FROM `{ds}.creators` WHERE launch_id = @lid "
+    def guest_mix(self, launch_id):
+        return self._run("SELECT size, region, plug_type, COUNT(*) AS n FROM `{ds}.guests` WHERE launch_id = @lid "
                          "GROUP BY size, region, plug_type ORDER BY region, size, plug_type", lid=launch_id)
 
     def get_regional_split(self, bundle_type):

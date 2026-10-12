@@ -20,7 +20,7 @@ from .repositories.base import Repository
 OPTIONS = [("FULL_NEW", "FN", "Full brand-new production"),
            ("REBALANCE", "RB", "Smart depot rebalance"),
            ("ECO", "EC", "Certified eco launch")]
-CHANNEL = {"CREATOR_KIT": "CREATOR", "SHOWROOM_DISPLAY": "SHOWROOM", "SALES_FOLIO": "SALES"}
+CHANNEL = {"GUEST_KIT": "GUESTS", "VENUE_DISPLAY": "VENUES", "SALES_PACK": "SALES"}
 
 
 class PlanError(ValueError):
@@ -51,10 +51,10 @@ def expand_bundles(repo: Repository, launch_id: str, bundles: list[dict]) -> lis
         if qty <= 0:
             raise PlanError(f"The quantity for {btype} must be positive.")
         templates = repo.get_bundle_templates(btype)
-        if btype == "CREATOR_KIT":
-            mix = [m for m in repo.creator_mix(launch_id) if not only_region or m["region"] == only_region]
+        if btype == "GUEST_KIT":
+            mix = [m for m in repo.guest_mix(launch_id) if not only_region or m["region"] == only_region]
             if not mix:
-                raise PlanError(f"No creators on the list for launch {launch_id}" + (f" in {only_region}." if only_region else "."))
+                raise PlanError(f"No guests on the list for launch {launch_id}" + (f" in {only_region}." if only_region else "."))
             kits = _scale({(m["size"], m["region"], m["plug_type"]): m["n"] for m in mix}, qty)
             for (size, region, plug), n in kits.items():
                 for t in templates:

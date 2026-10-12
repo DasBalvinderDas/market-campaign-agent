@@ -66,8 +66,8 @@ def test_multi_row_insert_is_one_typed_parameterised_statement():
 
 def test_insert_of_several_rows_numbers_the_parameters():
     r, c = repo()
-    r.replace_requirement_lines("REQ-1", [{"bundle_type": "SALES_FOLIO", "channel": "SALES", "sku": "A", "region": "US", "quantity": 1},
-                                          {"bundle_type": "SALES_FOLIO", "channel": "SALES", "sku": "B", "region": "US", "quantity": 2}])
+    r.replace_requirement_lines("REQ-1", [{"bundle_type": "SALES_PACK", "channel": "SALES", "sku": "A", "region": "US", "quantity": 1},
+                                          {"bundle_type": "SALES_PACK", "channel": "SALES", "sku": "B", "region": "US", "quantity": 2}])
     sql, params = next((s, p) for s, p in c.calls if s.startswith("INSERT"))
     assert sql.count("(@request_id_") == 2 and params["line_no_1"] == ("INT64", 2) and params["sku_1"] == ("STRING", "B")
 
@@ -88,7 +88,7 @@ def test_every_query_is_valid_bigquery_sql():
                   "from_region": "US", "to_region": "US", "days": 1, "cost_per_unit": 1.0, "email": "a@x.com"}])
     ts = datetime(2027, 1, 1, tzinfo=timezone.utc)
     r.list_launches(); r.get_launch("L"); r.create_request("L", "s"); r.get_request("R")
-    r.list_bundle_types(); r.get_bundle_templates("B"); r.creator_mix("L"); r.get_regional_split("B"); r.get_asset("S")
+    r.list_bundle_types(); r.get_bundle_templates("B"); r.guest_mix("L"); r.get_regional_split("B"); r.get_asset("S")
     r.replace_requirement_lines("R", [{"bundle_type": "B", "channel": "C", "sku": "S", "region": "US", "quantity": 1}])
     r.get_requirement_lines("R"); r.get_planning_rules(); r.get_lanes(); r.list_vendor_offers("S"); r.depot_free("S")
     r.get_vendor("V"); r.list_vendors(); r.list_depot_free(); r.add_disruption("V", 2, "r"); r.list_disruptions()

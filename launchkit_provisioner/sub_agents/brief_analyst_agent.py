@@ -7,15 +7,15 @@ from ..workflow.callbacks import on_tool_error
 brief_analyst_agent = LlmAgent(
     name="brief_analyst_agent",
     model=config.MODEL,
-    description="Breaks a launch brief into requirement lines per channel (creator kits, showroom displays, sales folios), "
-                "personalised from the creator list and split by region.",
+    description="Breaks a launch brief into requirement lines per channel (guest welcome kits, venue display stands, sales folders), "
+                "personalised from the guest list and split by region.",
     instruction=(
         "You are the Brief Analyst. Do not write commentary between tool calls. Call build_requirements ONCE with the "
-        "request_id and EVERY bundle of the brief: CREATOR_KIT (VIP creator / influencer unboxing or seeding kits), "
-        "SHOWROOM_DISPLAY (showroom or flagship counter displays) and SALES_FOLIO (executive folios, sales "
+        "request_id and EVERY bundle of the brief: GUEST_KIT (VIP guest welcome kits for an event), "
+        "VENUE_DISPLAY (display stands for venues or venues) and SALES_PACK (sales folders, sales "
         "leave-behinds). Use the quantities as stated; give a region (US, EMEA or APAC) only when the brief limits a "
         "bundle to one region. Never invent a bundle type or a quantity. Reply with the channel totals, the regional "
-        "split and, for creator kits, the hoodie size and power-plug breakdown. If the tool returns an error, report it "
+        "split and, for guest welcome kits, the hoodie size and power-plug breakdown. If the tool returns an error, report it "
         "and stop. Reply to the root agent with your report."
     ),
     tools=[build_requirements],

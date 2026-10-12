@@ -39,8 +39,8 @@ class MemoryRepository(Repository):
     def get_bundle_templates(self, bundle_type):
         return [dict(b) for b in self.t["bundle_templates"] if b["bundle_type"] == bundle_type]
 
-    def creator_mix(self, launch_id):
-        c = Counter((x["size"], x["region"], x["plug_type"]) for x in self.t["creators"] if x["launch_id"] == launch_id)
+    def guest_mix(self, launch_id):
+        c = Counter((x["size"], x["region"], x["plug_type"]) for x in self.t["guests"] if x["launch_id"] == launch_id)
         return [{"size": s, "region": r, "plug_type": p, "n": n} for (s, r, p), n in sorted(c.items())]
 
     def get_regional_split(self, bundle_type):

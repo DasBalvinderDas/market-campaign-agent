@@ -13,13 +13,13 @@ s.addNotes('Title slide. Replace with your own template title slide and copy the
 s = p.addSlide(); s.background = {color:'FFFFFF'};
 s.addText('The LaunchKit Provisioner', {x:0.6,y:0.4,w:7,h:0.7,fontFace:F,fontSize:30,color:INK,margin:0,isTextBox:true});
 s.addText([
- {text:'A flagship launch has to equip creators, showrooms and sales teams in several regions before a hard in-hand date and the press embargo. Teams juggle sizes, plugs, vendor lead times and surplus stock in different regional depots, and the only question finance sees is "approve this spend?".', options:{bullet:true,breakLine:true,paraSpaceAfter:14}},
+ {text:'A flagship launch has to equip guests, venues and sales teams in several regions before a hard in-hand date and the press embargo. Teams juggle sizes, plugs, vendor lead times and surplus stock in different regional depots, and the only question finance sees is "approve this spend?".', options:{bullet:true,breakLine:true,paraSpaceAfter:14}},
  {text:'The agent plans the launch against the deadline. A central orchestrator breaks the brief into bundles (Brief Analyst), computes three sourcing options from BigQuery data (Sourcing Planner: full new production, smart depot rebalance, certified eco launch), lets the Product Marketing Manager choose, gets a named executive to sign off above the autopilot limit, and has the orders placed (Fulfilment). Purchase orders, depot transfers, the sign-off email and the tracking update run as Google Application Integration workflows. The orchestrator is the only agent that can authorise spend.', options:{bullet:true}}
 ], {x:0.6,y:1.4,w:6.2,h:5.2,fontFace:F,fontSize:15,color:INK,valign:'top',margin:0,isTextBox:true});
 s.addShape(p.ShapeType.rect,{x:7.2,y:0,w:6.13,h:7.5,fill:{color:'2B4BD8'},line:{color:'2B4BD8'}});
 const pillars = [
  ['1','Deadline-first planning','Every option is costed against the in-hand date: cost, delivery date, safety buffer in hours, risk and carbon are computed from BigQuery, never typed in. Vendor delays re-plan the options in seconds.'],
- ['2','Surplus before new spend','Spare packaging, folios and adapters in regional depots are reused first, nearest depot first, and held while a sign-off is pending. The rebalance option saves cost and often arrives earlier.'],
+ ['2','Surplus before new spend','Spare packaging, folders and adapters in regional depots are reused first, nearest depot first, and held while a sign-off is pending. The rebalance option saves cost and often arrives earlier.'],
  ['3','A decision, not a yes / no','The manager picks one of three computed options. Small spend runs on autopilot; above the limit a VP (or the CMO for the largest option) signs off by email. Orders, transfers and the audit trail follow automatically.']];
 pillars.forEach((q,i)=>{ const y=0.7+i*2.15;
  s.addText(q[0],{x:7.5,y:y+0.35,w:0.6,h:0.8,fontFace:F,fontSize:40,color:'FFFFFF',margin:0,isTextBox:true});
@@ -27,7 +27,7 @@ pillars.forEach((q,i)=>{ const y=0.7+i*2.15;
  s.addText(q[2],{x:8.2,y:y+0.5,w:4.7,h:1.4,fontFace:F,fontSize:12,color:'FFFFFF',valign:'top',margin:0,isTextBox:true});
  if(i<2) s.addShape(p.ShapeType.line,{x:8.2,y:y+1.98,w:4.7,h:0,line:{color:'FFFFFF',width:1}});
 });
-s.addNotes('Overview slide: the problem, how the agent works, and the three capability pillars. Fictional demo launch: Project Aurora. All data is demo data.');
+s.addNotes('Overview slide: the problem, how the agent works, and the three capability pillars. Fictional demo launch: Spring Launch Event. All data is demo data.');
 
 // ---------- Slide 3: reference architecture (all native, editable shapes) ----------
 s = p.addSlide(); s.background = {color:'FFFFFF'};
@@ -69,7 +69,7 @@ txt([{text:'Responsibilities of this single agent:  ',options:{bold:true,color:N
 // specialist agents
 box(3.1,2.8,7.1,2.05,{fill:'E8F0FF',line:LINE,dash:'dash'});
 s.addShape(p.ShapeType.roundRect,{x:3.15,y:2.73,w:3.0,h:0.22,rectRadius:0.05,fill:{color:BLUE},line:{color:BLUE}}); txt('3 Sub Agents (called by the root as tools)',3.15,2.73,3.0,0.22,{sz:8,b:true,c:'FFFFFF'});
-const subs=[['1. Brief Analyst','(Decompose the brief)',['Creator, showroom, sales bundles','Sizes and plugs from the creator list','Requirement lines per region'],'F0F7FF'],
+const subs=[['1. Brief Analyst','(Decompose the brief)',['Guest, venue, sales bundles','Sizes and plugs from the guest list','Requirement lines per region'],'F0F7FF'],
  ['2. Sourcing Planner','(Compute 3 options)',['Reuse depot surplus first','Lead times vs. the embargo date','Cost, buffer, carbon, risk'],LILAC],
  ['3. Fulfilment Agent','(Place the orders)',['PO per vendor line (App Integration)','Depot transfer per surplus line','Tracking update to the launch team'],'FFF7ED']];
 subs.forEach((q,i)=>{ const x=3.2+i*2.33; box(x,3.05,2.25,1.7,{fill:q[3],line:LINE});
@@ -92,7 +92,7 @@ arrow(10.2,3.3,10.45,3.3,true);
 
 // Right column: BigQuery schema (new) and Application Integration
 box(10.9,1.05,2.3,3.35,{fill:LIGHT}); txt('Google BigQuery (launchkit)',10.95,1.08,2.2,0.28,{b:true,sz:9,c:NAVY});
-card(11.0,1.38,2.1,0.98,'Reference data','launches, assets, bundle_templates, creators, depots, depot_stock, transit_lanes, vendors, vendor_offers, planning_rules, approval_policy, approvers',{sz:8,ssz:6.5});
+card(11.0,1.38,2.1,0.98,'Reference data','launches, assets, bundle_templates, guests, depots, depot_stock, transit_lanes, vendors, vendor_offers, planning_rules, approval_policy, approvers',{sz:8,ssz:6.5});
 card(11.0,2.41,2.1,0.72,'Plan & decision','scenarios, scenario_lines, decisions, depot_holds, vendor_disruptions',{sz:8,ssz:6.5});
 card(11.0,3.18,2.1,0.55,'Orders & audit','purchase_orders, depot_transfers, audit_log',{sz:8,ssz:6.5});
 card(11.0,3.78,2.1,0.55,'Views','v_depot_available, v_launch_readiness',{sz:8,ssz:6.5});
@@ -102,5 +102,5 @@ card(11.0,5.57,2.1,0.33,'request_approval (Approve / Reject)',null,{sz:7.5}); ca
 box(10.9,6.4,2.3,0.5,{fill:LIGHT}); txt('Gemini  |  ADK 2.x',10.95,6.42,2.2,0.46,{b:true,sz:8.5,c:NAVY});
 arrow(10.75,2.6,10.9,2.6,true); arrow(10.75,5.2,10.9,5.2,true);
 txt('HCLTech  |  Confidential',0.5,6.95,5,0.3,{sz:9,al:'left',c:MUTE});
-s.addNotes('Reference architecture. Every element is a native, editable PowerPoint shape or text box - no images. BigQuery (dataset launchkit) holds all data: reference data (launches, assets, bundle templates, creators, depots and stock, transit lanes, vendors and offers, planning rules, approval policy, approvers), the computed plan (scenarios, scenario lines, decisions, depot holds, vendor disruptions) and the orders and audit log. The root agent calls the three specialist agents as tools, so it writes every reply on every platform including Gemini Enterprise. Application Integration runs four workflows: create_purchase_order, create_depot_transfer, request_approval (a native Approval task that emails the executive Approve / Reject and waits) and send_launch_update.');
+s.addNotes('Reference architecture. Every element is a native, editable PowerPoint shape or text box - no images. BigQuery (dataset launchkit) holds all data: reference data (launches, assets, bundle templates, guests, depots and stock, transit lanes, vendors and offers, planning rules, approval policy, approvers), the computed plan (scenarios, scenario lines, decisions, depot holds, vendor disruptions) and the orders and audit log. The root agent calls the three specialist agents as tools, so it writes every reply on every platform including Gemini Enterprise. Application Integration runs four workflows: create_purchase_order, create_depot_transfer, request_approval (a native Approval task that emails the executive Approve / Reject and waits) and send_launch_update.');
 p.writeFile({fileName:'/home/user/market-campaign-agent/docs/LaunchKit_Provisioner_Management_Deck.pptx'}).then(()=>console.log('ok'));
