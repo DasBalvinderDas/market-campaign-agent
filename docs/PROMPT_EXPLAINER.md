@@ -205,6 +205,171 @@ the option chosen, and places the orders, with every number computed and every s
 
 ---
 
+## Technical proof: the data, and what each agent adds
+
+*(Companion to the sales pitch. Every table below is real: the starting data is what `setup_bigquery.py` loads into dataset
+`launchkit`, and the plan and order rows are what the code produces for the Project Aurora brief. Request ids and timestamps differ per run.)*
+
+### A. Where the data is
+
+One BigQuery dataset, `gebu-demo-sandbox.launchkit`: 13 reference tables the business owns, 10 transaction tables the agents write, 2 views.
+Nothing the agent says comes from anywhere else.
+
+**1. Launch deadline: `launches`** (dates are re-based by `--reset-demo`)
+
+| launch_id | launch_name | in_hand_by | embargo_date | cost_center |
+|---|---|---|---|---|
+| LAUNCH-AURORA | Project Aurora Global Launch | 2026-11-06 | 2026-11-13 | CC-PROD-MKTG-8820 |
+
+**2. Surplus stock: `depot_stock` (read through view `v_depot_available`, on hand minus active holds)**
+
+| depot | region | sku | free |
+|---|---|---|---|
+| Dallas Marketing Depot | US | FOLIO-LEATHER-EXEC | 120 |
+| London EMEA Marketing Hub | EMEA | PKG-LUX-BOX-BLACK | 60 |
+| London EMEA Marketing Hub | EMEA | PWR-EU-C / PWR-UK-G | 10 / 40 |
+| Singapore APAC Depot | APAC | PWR-AU-I / PWR-JP-A | 10 / 15 |
+
+**3. Vendor terms: `vendor_offers`** (24 rows: 7 vendors, STANDARD and ECO variants). A sample:
+
+| vendor | sku | variant | unit_price | lead_days | carbon_kg |
+|---|---|---|---|---|---|
+| PrintCo | BROCHURE-AURORA | STANDARD / ECO | 3.00 / 3.50 | 6 / 7 | 0.30 / 0.10 |
+| EngraveWorks | CARD-ENGRAVED | STANDARD / ECO | 6.00 / 7.00 | 5 / 6 | 0.20 / 0.08 |
+| DisplayCo | DISPLAY-COUNTER-AURORA | STANDARD / ECO | 1,400 / 1,560 | 17 / 19 | 120 / 70 |
+| RapidDisplay | DISPLAY-COUNTER-AURORA | STANDARD | 1,650 | 10 (faster, dearer) | 135 |
+
+**4. Rules the business can edit: `planning_rules` and `approval_policy`**
+
+| planning_rules | value |   | approval_policy tier | amount | approver role |
+|---|---|---|---|---|---|
+| MIN_BUFFER_HOURS | 24 | | AUTOPILOT | up to $5,000 | none |
+| TARGET_BUFFER_HOURS | 48 | | VP_SIGNOFF | up to $50,000 | VP Product Marketing |
+| DEPOT_HANDLING_DAYS | 1 | | CMO_SIGNOFF | above $50,000 | CMO |
+
+**5. People and places:** `creators` (150 rows: hoodie size, region, power-plug type), `regional_split`, `transit_lanes` (days and cost per
+region pair, for example US to EMEA 5 days, $4 per unit), `approvers` (emails per role), `vendors`, `assets`, `bundle_templates`.
+
+**Transaction tables (written by the agents):** `launch_requests`, `requirement_lines`, `scenarios`, `scenario_lines`, `decisions`,
+`depot_holds`, `vendor_disruptions`, `purchase_orders`, `depot_transfers`, `audit_log`.
+
+### B. What the agents add: prompt 1 traced, with the data it produced
+
+**Step 1, Brief Analyst turns a paragraph into 31 requirement lines (`requirement_lines`)**
+
+| bundle | sku | region | quantity |
+|---|---|---|---|
+| CREATOR_KIT | CARD-ENGRAVED | APAC / EMEA / US | 20 / 45 / 85 |
+| CREATOR_KIT | HOODIE-AURORA-L | APAC / EMEA / US | 10 / 15 / 35 |
+| ... | (sizes S, M, L, XL and each power plug from the creator list) | | |
+| SHOWROOM_DISPLAY | DISPLAY-COUNTER-AURORA | APAC / EMEA / US | 2 / 4 / 4 |
+| SALES_FOLIO | FOLIO-LEATHER-EXEC | APAC / EMEA / US | 50 / 100 / 150 |
+
+*Value added:* "150 kits with personalised hoodie size and plug" became exact per-SKU, per-region quantities taken from the creator table,
+not an estimate. A person would have built this by hand.
+
+**Step 2, Sourcing Planner builds three plans and saves them (`scenarios`)**
+
+| option_code | total_cost | shipping | savings_usd | delivery_date | buffer_hours | carbon_kg | risk | recommended |
+|---|---|---|---|---|---|---|---|---|
+| FULL_NEW | 46,075.50 | 2,375.50 | 0 | 2026-11-06 | 0 | 4,200 | MODERATE | no |
+| REBALANCE | **37,399.50** | 1,839.50 | **8,676** | 2026-11-03 | **72** | 3,702 | LOW | **yes** |
+| ECO | 51,905.50 | 2,375.50 | -5,830 | 2026-11-04 | 48 | 2,378 | LOW | no |
+
+Each option is stored line by line in `scenario_lines` (31 lines for FULL_NEW, **34 for REBALANCE: 27 vendor lines and 7 depot lines**, 31 for ECO).
+
+*Value added:* a decision instead of a number. The three options, the deadline margin and the recommendation are all computed and saved,
+so the approver and the auditor can see exactly what was chosen from.
+
+**Proof 1, why REBALANCE is cheaper: the folio lines (`scenario_lines`)**
+
+| option | region | qty | source | line_total | days to deliver |
+|---|---|---|---|---|---|
+| FULL_NEW | US | 150 | PrintCo (vendor) | $4,470.00 | 14 |
+| REBALANCE | US | **120** | **Dallas depot** | **$144.00** | **3** |
+| REBALANCE | US | 30 | PrintCo (vendor) | $894.00 | 14 |
+
+Same 150 US folios. Buying all of them costs $4,470. Using the 120 already in Dallas and buying only 30 costs $144 + $894 = $1,038, a
+$3,432 saving on one line, and 120 of them arrive in 3 days. Repeat across luxury boxes (60 in London) and power adapters and you reach the
+$8,676 total.
+
+**Proof 2, the planner is deadline-aware, not just cheapest: the APAC displays**
+
+| option | region | qty | vendor | unit price | line_total | days |
+|---|---|---|---|---|---|---|
+| FULL_NEW | APAC | 2 | DisplayCo | $1,400 | $2,950 | **25** (arrives on the deadline) |
+| REBALANCE | APAC | 2 | RapidDisplay | $1,650 | $3,450 | **18** |
+
+The planner pays $500 more for RapidDisplay because DisplayCo would land exactly on the deadline day with no margin. That is why the
+rebalance plan has a 72-hour buffer and the full-new plan has 0. This is the rule `TARGET_BUFFER_HOURS` / `MIN_BUFFER_HOURS` in `planning_rules`
+at work. No prompt contains it.
+
+**Step 3, the sign-off gate (prompt 2: "Go with option 2")**
+
+| table | row | proves |
+|---|---|---|
+| `decisions` | option REBALANCE, amount 37,399.50, tier **VP_SIGNOFF**, approver_role VP Product Marketing, status **PENDING**, `decision_note` = `execution:<id>` | The amount selected the tier from `approval_policy`; the workflow execution id is stored to read the answer later |
+| `depot_holds` | one ACTIVE hold per depot line (7), for example London / PKG-LUX-BOX-BLACK / 45 | The stock is reserved while the executive decides; `v_depot_available` now shows it as not free |
+| `audit_log` | `orchestrator` / `approval_requested` | Who asked for the sign-off, for what amount |
+
+**Step 4, after Approve and "What is the status?"**
+
+| table | rows | proves |
+|---|---|---|
+| `decisions` | status **APPROVED**, decided_by "Application Integration approval" | The answer was read from the approval record |
+| `purchase_orders` | **27** rows, e.g. `PO-REQ-xxxx-RB-L01`, V-ENGRAVE, CARD-ENGRAVED, APAC, 20, $125.00, CREATED | One order per vendor line, number returned by the workflow |
+| `depot_transfers` | **7** rows, e.g. `TR-REQ-xxxx-RB-L16`, DEPOT-LON-01, PKG-LUX-BOX-BLACK, EMEA, 45 | One transfer per depot line |
+| `depot_holds` | the 7 holds become **CONSUMED** | The reserved stock was actually used |
+| `scenario_lines` | `execution_status` = EXECUTED on all 34 | Idempotent: running again would skip them |
+| `audit_log` | 27 `po_created`, 7 `transfer_created`, 1 `launch_update_sent` | Full trail by `fulfilment_agent` |
+
+Application Integration calls made in that turn: **27 x `create_purchase_order`, 7 x `create_depot_transfer`, then `send_launch_update`**
+(and 1 x `request_approval` earlier, when the sign-off was requested).
+
+### C. Agent by agent: what each one adds
+
+| Agent | Without it | What it adds (and proof in the data) |
+|---|---|---|
+| **Coordinator** | A user would have to know which step comes next, and anyone could trigger spending | Fixed order of steps, the one reply, and the sole `authorize_launch` door. Proof: `decisions` rows exist only through it; a "skip approval" request is answered with a refusal |
+| **Brief Analyst** | Hand-built per-size, per-region lists from a spreadsheet | 31 exact `requirement_lines` from `creators`, `regional_split`, `bundle_templates`. Proof: hoodie quantities per size and plug match the creator table |
+| **Sourcing Planner** | Guessing stock, picking a vendor on price alone | Three costed plans, deadline buffers, surplus reuse, re-plan on delay. Proof: `scenarios` and `scenario_lines` (Proofs 1 and 2 above); `vendor_disruptions` rows change the next plan |
+| **Fulfilment** | Someone keying 34 orders into a procurement system | 27 POs and 7 transfers in parallel, once, only if APPROVED. Proof: `purchase_orders`, `depot_transfers`, EXECUTED lines, `execution_blocked` in `audit_log` when not approved |
+| **Application Integration** | Manual emails and ERP entries | Approval email and suspension, PO and transfer numbers, tracking email. Proof: `integration_execution_id` on every order row; approval record `LIFTED` / `REJECTED` |
+| **BigQuery** | Facts scattered across files | One source of truth, holds, audit. Proof: every number above can be queried |
+
+**What the language model contributes, and what it does not:** it understands the paragraph, selects which tool to call and in what order,
+and writes the final wording. It does **not** compute cost, dates or buffers, choose approvers, or place orders. Those are code and data,
+which is why the results repeat exactly and can be audited.
+
+### D. Show it live: queries to run during the demo
+
+Replace the request id with the one in the chat (or use the `ORDER BY ... LIMIT 1` form).
+
+```bash
+# the three options the planner saved
+bq query --use_legacy_sql=false "SELECT option_code, total_cost, savings_usd, delivery_date, buffer_hours, carbon_kg, recommended FROM \`$GOOGLE_CLOUD_PROJECT.launchkit.scenarios\` ORDER BY created_at DESC, total_cost LIMIT 3"
+
+# the sign-off and who has to approve
+bq query --use_legacy_sql=false "SELECT request_id, option_code, tier, approver_role, amount, status FROM \`$GOOGLE_CLOUD_PROJECT.launchkit.decisions\` ORDER BY created_at DESC LIMIT 1"
+
+# stock held for the pending decision, then free stock
+bq query --use_legacy_sql=false "SELECT depot_id, sku, quantity, status FROM \`$GOOGLE_CLOUD_PROJECT.launchkit.depot_holds\` ORDER BY created_at DESC LIMIT 10"
+bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.launchkit.v_depot_available\`"
+
+# after approval: orders, transfers and the trail
+bq query --use_legacy_sql=false "SELECT po_number, vendor_id, sku, region, quantity, total_amount FROM \`$GOOGLE_CLOUD_PROJECT.launchkit.purchase_orders\` ORDER BY created_at DESC LIMIT 10"
+bq query --use_legacy_sql=false "SELECT actor, action, COUNT(*) AS n FROM \`$GOOGLE_CLOUD_PROJECT.launchkit.audit_log\` GROUP BY actor, action ORDER BY n DESC"
+
+# the readiness board
+bq query --use_legacy_sql=false "SELECT * FROM \`$GOOGLE_CLOUD_PROJECT.launchkit.v_launch_readiness\`"
+```
+
+Two proofs worth doing live: (1) change a vendor price in `vendor_offers` or a depot quantity in `depot_stock`, re-run prompt 1 in a new
+chat and watch the card change; (2) in `approval_policy`, move the VP limit and watch option 2 route to a different approver.
+That is the technical answer to "is the AI making this up?": the answer is in the tables, and so is the proof.
+
+---
+
 ## 1. The picture in one page
 
 **Business.** A global product launch (Project Aurora) needs 1,500+ personalised items in hand before an in-hand date and a press
