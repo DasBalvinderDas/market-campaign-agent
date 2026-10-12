@@ -118,6 +118,19 @@ decisions and audit trail are kept and reported on.
 
 *(Semi-formal. Use it as a talk track of about five minutes; the sections after it back up every claim. Figures are from the demo data.)*
 
+### The pitch at a glance
+
+The talk track below runs in this order:
+
+1. **The problem:** surplus stock sitting unused while another region buys new, vendors picked without checking the date, and approvals on a single number.
+2. **What we are proposing:** the launch manager's planning and fulfilment team, in the Gemini Enterprise chat, answering with a decision rather than a report.
+3. **How it works in four steps:** understand, plan, decide, deliver. The demo figures are in the plan step, where reusing depot stock saves $8,676 against buying everything new.
+4. **Why an enterprise can trust it:** five points: code computes the numbers, not the AI; spending has one door; people stay in control; every step is on the audit log; rules are data the business can change.
+5. **Why it fits how enterprises work:** built for Gemini Enterprise, no public endpoint, repeatable script-based setup, and real systems of record connected later without changing the agent.
+6. **The value to the business:** a table covering spend, missed dates, decision speed, governance, carbon and reuse of the pattern.
+7. **Next steps and the one-line close:** the pilot plan and a closing line you can say out loud.
+8. **Questions to be ready for:** six likely questions with short answers, for example "Is the AI making up the numbers?" and "Is this connected to our ERP today?".
+
 ### The problem we solve
 
 Every large launch depends on getting thousands of physical items to the right people, in the right region, before a date that cannot move.
