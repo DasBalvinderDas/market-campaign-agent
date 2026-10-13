@@ -65,6 +65,8 @@ conversation (people, date, place, name, mode: use mode="campaign" unless they o
     `display_markdown`. Then use that campaign's name and `date_iso` as the campaign and the date (do not ask for them again; the
     user may give another date), and carry on with show_checklist for the rest (people, place, picks). If they ask which campaigns
     exist, call open_campaign with no name and show the table. A fresh campaign works exactly as before.
+    If a reply could mean two things (for example "london" could be the London Campaign or the place London), ask ONE short
+    question to clear it up, for example "Do you want to add to the London Campaign, or start a new campaign delivered to London?"
 
 Progress notes: before each slow step, first write ONE short friendly line on its own (for example "📋 Putting your shopping list together...",
 "🏭 Checking our stock and comparing vendors...", "✍️ Sending this for approval...", "📦 Placing your orders now...") and then call the tool. It
