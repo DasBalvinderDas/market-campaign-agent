@@ -131,10 +131,11 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
         if not execution_id:
             raise RuntimeError("the workflow returned no executionId")
     except Exception as exc:  # noqa: BLE001
-        repo.set_decision_note(decision["decision_id"], "FAILED", f"approval workflow did not start: {str(exc)[:200]}")
+        repo.set_decision_note(decision["decision_id"], "FAILED", f"approval request not sent: {str(exc)[:200]}")
         repo.release_holds(request_id)
         _audit(repo, request_id, "orchestrator", "approval_workflow_failed", error=str(exc)[:300])
-        return {"status": "error", "message": f"The approval workflow could not be started: {str(exc)[:300]}"}
+        return {"status": "error", "message": "The approval request could not be sent. Nothing was ordered and the held stock is released. "
+                                              f"Please try again. ({str(exc)[:200]})"}
     repo.set_decision_note(decision["decision_id"], "PENDING", _EXEC_PREFIX + str(execution_id))
     # Our own approval email (HTML, with Approve and Reject buttons, the shopping list and the vendors). The Application
     # Integration approval task does not send its own email, so this is the one the approver gets.
@@ -221,7 +222,7 @@ def sync(repo, executor, decision: dict) -> dict:
     try:
         ex = executor.get_execution(exec_id)
     except Exception as exc:  # noqa: BLE001 - stays PENDING; the next status check retries
-        decision["decision_note"] = f"could not read the approval workflow yet: {str(exc)[:150]}"
+        decision["decision_note"] = f"could not read the approval yet: {str(exc)[:150]}"
         return decision
     state = str((ex.get("executionDetails") or {}).get("state")
                 or (ex.get("eventExecutionDetails") or {}).get("eventExecutionState") or ex.get("state") or "").upper()
@@ -229,12 +230,12 @@ def sync(repo, executor, decision: dict) -> dict:
               or _find_decision(ex) or _suspension_decision(executor, exec_id))
     request_id = decision["request_id"]
     if state in ("FAILED", "CANCELLED", "CANCELED"):
-        repo.set_decision_note(decision["decision_id"], "FAILED", f"approval workflow {state.lower()}")
+        repo.set_decision_note(decision["decision_id"], "FAILED", f"approval {state.lower()}")
         repo.release_holds(request_id)
         _audit(repo, request_id, "orchestrator", "approval_workflow_failed", state=state)
     elif answer in ("APPROVED", "REJECTED"):
-        by = "Application Integration approval"
-        if repo.decide(decision["decision_id"], answer, by, "decided in Application Integration"):
+        by = "Approver"
+        if repo.decide(decision["decision_id"], answer, by, "decided by the approver"):
             if answer == "REJECTED":
                 released = repo.release_holds(request_id)
                 _audit(repo, request_id, f"human:{decision['approver_role']}", "launch_rejected",
@@ -264,7 +265,12 @@ def status(repo, request_id: str, executor=None) -> dict:
            "lines_executed": done, "lines_total": len(lines),
            "purchase_orders": [p["po_number"] for p in repo.list_pos(request_id)],
            "depot_transfers": [t["transfer_number"] for t in repo.list_transfers(request_id)]}
-    out["display_markdown"] = presentation.status_markdown(request_id, d, done, len(lines), note)
+    scenario = repo.get_scenario(d["scenario_id"]) or {}
+    placed = bool(lines) and done == len(lines)
+    shown_note = None if note in (None, "", "decided by the approver", "within the autopilot limit") else note
+    out["display_markdown"] = presentation.status_markdown(
+        request_id, d, scenario.get("option_name", ""), len(repo.list_pos(request_id)), len(repo.list_transfers(request_id)),
+        placed, shown_note)
     if d["status"] == "APPROVED" and done < len(lines):
         out["next_step"] = "Approved. Now call the fulfilment_agent tool with the request_id to place the orders."
     elif d["status"] == "REJECTED":

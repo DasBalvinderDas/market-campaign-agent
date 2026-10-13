@@ -93,3 +93,9 @@ the BigQuery `approvers` table. Planning rules (safety buffers) and sign-off tie
 `pip install -r requirements.txt && pytest` runs the unit tests (planner, sign-off flow, execution, BigQuery repository against a
 stub client with SQL syntax checks, setup scripts) and an end-to-end run of the real agent tree through ADK's runner with a scripted
 model. No cloud access is needed.
+
+
+## Standing campaigns and the order pack
+
+- `setup_bigquery.py` seeds three campaigns, London (`LAUNCH-LONDON`), US (`LAUNCH-USA`) and Singapore (`LAUNCH-SINGAPORE`), with the in-hand date 30 days after setup. `--reset-demo` / `--refresh-reference` re-bases the dates to today. The agent opens them by id or name (`open_campaign`).
+- `launchkit_provisioner/order_pack.py` builds a formatted PDF (shopping list, vendors, warehouse moves, PO numbers) with reportlab. The agent attaches it in the chat after the orders are placed (`get_order_pack`).

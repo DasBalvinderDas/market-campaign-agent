@@ -10,8 +10,8 @@ from . import config
 from .sub_agents.brief_analyst_agent import brief_analyst_agent
 from .sub_agents.fulfilment_agent import fulfilment_agent
 from .sub_agents.sourcing_planner_agent import sourcing_planner_agent
-from .tools.brief_tools import create_campaign, register_launch_request
-from .tools.decision_tools import authorize_launch, get_launch_status
+from .tools.brief_tools import create_campaign, open_campaign, register_launch_request
+from .tools.decision_tools import authorize_launch, get_launch_status, get_order_pack
 from .tools.orchestration_tools import (get_approval_rules, get_audit_trail, get_launch_overview, get_vendor_report,
                                         show_capabilities, show_checklist)
 from .workflow.callbacks import on_tool_error
@@ -23,10 +23,15 @@ it, you show what we have (our stock, vendors by place, prices, dates), they pic
 says OK, and you place all the orders. Selected items can be bought too. You do not do the specialist work yourself; you
 delegate in a fixed order and enforce the rules. All data comes from BigQuery through your tools.
 
+Never mention how the system works inside: no BigQuery, Application Integration, workflows, tools, tables, agents, specialists,
+triggers or databases. The user only sees campaigns, items, vendors, prices, dates, approvals and orders. If something fails,
+say what went wrong in plain words and what happens next.
+
 How to write (very important): use short, simple words that a 10-year-old can follow. No jargon. Show results as Markdown
 tables with emoji markers. Every tool result has a `display_markdown` field (or `decision_card`, `bom_markdown`,
 `stock_report`, `vendor_report`, `date_options`, `tldr`): show that text EXACTLY as returned, do not retype or change a
-number. You may add one or two short friendly sentences above or below.
+number. Make section titles and the key facts (names, amounts, dates, decisions) **bold** so they stand out. You may add one or
+two short friendly sentences above or below.
 
 First message: if the user only greets you (hi, hello) or asks what you can do, call show_capabilities and show its
 `display_markdown` exactly. It ends with the first question.
@@ -52,6 +57,12 @@ On EVERY turn while you are still collecting, call show_checklist with everythin
     the campaign-created confirmation (its `display_markdown`) followed by the checklist's `display_markdown` (it shows our
     offer).
   - Do not ask about stock, vendors or prices: you show them.
+  - Existing campaigns: we always have three standing campaigns, the London Campaign, the US Campaign and the Singapore
+    Campaign (their dates are 30 days after setup). When the user wants to add to one of them, or names one by its reference
+    (LAUNCH-LONDON) or by its name or a part of it ("london", "the US campaign"), call open_campaign(campaign) and show its
+    `display_markdown`. Then use that campaign's name and `date_iso` as the campaign and the date (do not ask for them again; the
+    user may give another date), and carry on with show_checklist for the rest (people, place, picks). If they ask which campaigns
+    exist, call open_campaign with no name and show the table. A fresh campaign works exactly as before.
 
 Workflow once everything is closed:
 1. register_launch_request(campaign, summary, deadline_date=date_iso) -> request_id (this creates a new campaign).
@@ -74,12 +85,14 @@ Workflow once everything is closed:
    the new date as YYYY-MM-DD, then proceed with the new request_id and the same list. Never change anything after a sign-off.
 6. When the user chooses an option (the plan feels good): call authorize_launch (request_id, the option, a one-sentence
    justification).
-   - status approved: call the fulfilment_agent tool, then show its summary.
+   - status approved: call the fulfilment_agent tool, then show its summary, then call get_order_pack and show its message.
    - status pending_approval: begin with the text in `announce`, in bold, exactly, then show `display_markdown`. Do NOT
      call the fulfilment_agent tool. The approval email is sent first; orders come only after the approval.
    - status error: explain the problem simply and list the valid choices.
 7. When the user asks for the status (or says the approver decided): call get_launch_status. If its next_step says to place
-   the orders, call the fulfilment_agent tool and show its summary. Otherwise show `display_markdown`. If rejected, say the
+   the orders, call the fulfilment_agent tool and show ONLY its summary (do not show the status table first), then call
+   get_order_pack and show its message (the PDF with the shopping list and vendors). Otherwise show
+   `display_markdown`. If rejected, say the
    held stock was released and offer to re-plan.
 8. When the user reports a vendor delay: call the sourcing_planner_agent tool with the request_id and the delay. If the
    request is not signed off yet, show the new plan again as in step 4.
@@ -110,8 +123,8 @@ root_agent = LlmAgent(
                 "named executive to sign off above the autopilot limit, and places the orders through Application "
                 "Integration.",
     instruction=INSTRUCTION,
-    tools=[register_launch_request, create_campaign, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
-           get_vendor_report, authorize_launch, get_launch_status]
+    tools=[register_launch_request, create_campaign, open_campaign, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
+           get_vendor_report, authorize_launch, get_launch_status, get_order_pack]
     + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)],
     on_tool_error_callback=on_tool_error,
 )

@@ -81,7 +81,7 @@ def test_the_campaign_is_created_as_soon_as_the_name_is_given(repo):
     assert out["status"] == "ok" and out["campaign_status"] == "created" and out["launch_id"] == "EVT-AUTUMN-SUMMIT-2026"
     assert repo.get_launch("EVT-AUTUMN-SUMMIT-2026")["in_hand_by"] == date.today() + timedelta(days=25)
     md = out["display_markdown"]
-    assert "Your campaign is created!" in md and "**Autumn Summit 2026**" in md and "| 👥 People | 300 |" in md and "| 📍 Where | USA |" in md
+    assert "Your campaign is created!" in md and "**Autumn Summit 2026**" in md and "| **👥 People** | 300 |" in md and "| **📍 Where** | USA |" in md
     assert any(a["action"] == "campaign_created" for a in repo.list_audit())
 
 

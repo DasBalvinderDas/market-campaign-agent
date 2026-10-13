@@ -120,7 +120,7 @@ def test_approved_in_integration_is_recorded_once_and_unlocks_fulfilment(repo, a
     ex.suspensions = [{"state": "LIFTED", "taskId": "10"}]                 # the shape seen on a real project
     out = decision_flow.status(repo, aurora, ex)
     assert out["status"] == "APPROVED" and "fulfilment_agent" in out["next_step"]
-    assert repo.get_decision_for_request(aurora)["decided_by"] == "Application Integration approval"
+    assert repo.get_decision_for_request(aurora)["decided_by"] == "Approver"
     assert [a["action"] for a in repo.list_audit(aurora)].count("launch_approved") == 1
     decision_flow.status(repo, aurora, ex)
     assert [a["action"] for a in repo.list_audit(aurora)].count("launch_approved") == 1

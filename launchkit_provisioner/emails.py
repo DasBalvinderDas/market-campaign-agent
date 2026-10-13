@@ -61,7 +61,8 @@ def _bom_html(repo, request_id) -> str:
     return _h("Shopping list (Bill of Materials)") + _table(head, data) + f'<div style="font-size:13px;color:#6b7280">{total:,} items in total</div>'
 
 
-def _vendors_html(repo, scenario, lines) -> str:
+def vendor_data(repo, scenario, lines):
+    """(vendor rows [name, what, arrives, amount], warehouse rows [name, what]) as plain text, for the emails and the PDF."""
     assets = {a["sku"]: a for a in repo.list_assets()}
     vendors = {v["vendor_id"]: v["vendor_name"] for v in repo.list_vendors()}
     depots = {d["depot_id"]: d["depot_name"] for d in repo.list_depot_free()}
@@ -76,18 +77,23 @@ def _vendors_html(repo, scenario, lines) -> str:
     rows = []
     for vid, v in sorted(by_v.items(), key=lambda kv: -kv[1]["amount"]):
         arrives = scenario["delivery_date"] - timedelta(days=longest - v["days"])
-        rows.append([f"<b>{escape(vendors.get(vid, vid))}</b>", escape(", ".join(f"{k} ({q:,})" for k, q in v["items"].items())),
+        rows.append([vendors.get(vid, vid), ", ".join(f"{k} ({q:,})" for k, q in v["items"].items()),
                      presentation.day(arrives), presentation.money(v["amount"])])
-    out = _h("Vendors we are ordering from") + _table(["Vendor", "What", "Arrives", "Amount"], rows, right=(3,), nowrap=(2,))
     moves: dict = {}
     for ln in (x for x in lines if x["source_type"] == "DEPOT"):
         w = depots.get(ln["source_id"], ln["source_id"])
         label = presentation._item_label(assets, ln["sku"])
         moves.setdefault(w, {})[label] = moves.get(w, {}).get(label, 0) + ln["quantity"]
+    return rows, [[w, ", ".join(f"{k} ({q:,})" for k, q in items.items())] for w, items in moves.items()]
+
+
+def _vendors_html(repo, scenario, lines) -> str:
+    rows, moves = vendor_data(repo, scenario, lines)
+    out = _h("Vendors we are ordering from") + _table(["Vendor", "What", "Arrives", "Amount"],
+                                                      [[f"<b>{escape(r[0])}</b>", escape(r[1]), r[2], r[3]] for r in rows],
+                                                      right=(3,), nowrap=(2,))
     if moves:
-        out += _h("Taken from our own warehouses") + _table(
-            ["Warehouse", "What"], [[f"<b>{escape(w)}</b>", escape(", ".join(f"{k} ({q:,})" for k, q in items.items()))]
-                                    for w, items in moves.items()])
+        out += _h("Taken from our own warehouses") + _table(["Warehouse", "What"], [[f"<b>{escape(w)}</b>", escape(t)] for w, t in moves])
     return out
 
 

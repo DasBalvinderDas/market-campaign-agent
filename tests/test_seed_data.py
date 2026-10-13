@@ -52,3 +52,21 @@ def test_suggested_amounts_per_person_exist_for_the_campaign_extras():
     ratios = {a["sku"]: a.get("suggested_per_person") for a in SEED["assets"]}
     assert ratios["BADGE-LANYARD"] == 1.0 and ratios["BANNER-ROLLUP"] is None and ratios["GIFT-BOX-BLACK"] is None
     assert {b["bundle_type"] for b in SEED["bundle_templates"] if b.get("suggested_per_person")} == {"GUEST_KIT", "VENUE_DISPLAY", "SALES_PACK"}
+
+
+def test_three_standing_campaigns_open_by_id_or_name(repo):
+    from datetime import date, timedelta
+    from launchkit_provisioner.tools import brief_tools
+    names = {x["launch_id"]: x for x in repo.list_launches()}
+    for lid in ("LAUNCH-LONDON", "LAUNCH-USA", "LAUNCH-SINGAPORE"):
+        assert (names[lid]["in_hand_by"] - date.today()) == timedelta(days=30)
+    for text, lid in [("LAUNCH-LONDON", "LAUNCH-LONDON"), ("london", "LAUNCH-LONDON"), ("London Campaign", "LAUNCH-LONDON"),
+                      ("the US campaign", "LAUNCH-USA"), ("singapore", "LAUNCH-SINGAPORE")]:
+        r = brief_tools.open_campaign(text)
+        assert r["status"] == "ok" and r["launch_id"] == lid, (text, r)
+        assert "Campaign opened" in r["display_markdown"]
+    assert "**London Campaign**" in brief_tools.open_campaign("")["display_markdown"]
+    assert brief_tools.open_campaign("mars")["status"] == "error"
+    # adding to an existing campaign finds it (no duplicate)
+    req = brief_tools.register_launch_request("london", "more bottles")
+    assert req["launch_name"] == "London Campaign" and req["campaign_status"] == "found"

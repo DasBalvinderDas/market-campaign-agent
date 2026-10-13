@@ -201,12 +201,12 @@ def test_a_reset_puts_the_demo_campaign_back_when_an_old_seed_id_was_deleted():
     import setup_bigquery as sb
     c, BQ = _fake_bq(existing_launches=[], guests_for_seed=0)          # the old id was removed by the delete
     sb.ensure_seed_campaigns(c, "p.d", BQ)
-    assert any("DELETE FROM `p.d.launches` WHERE launch_id NOT IN ('LAUNCH-SPRING')" in q for q in c.queries)
-    assert ("launches", 1, "WRITE_APPEND") in c.loads and ("guests", 150, "WRITE_TRUNCATE") in c.loads
+    assert any("DELETE FROM `p.d.launches` WHERE launch_id NOT IN ('LAUNCH-SPRING', 'LAUNCH-LONDON', 'LAUNCH-USA', 'LAUNCH-SINGAPORE')" in q for q in c.queries)
+    assert ("launches", 4, "WRITE_APPEND") in c.loads and ("guests", 150, "WRITE_TRUNCATE") in c.loads
 
 
 def test_a_reset_leaves_a_healthy_demo_campaign_alone():
     import setup_bigquery as sb
-    c, BQ = _fake_bq(existing_launches=["LAUNCH-SPRING"], guests_for_seed=150)
+    c, BQ = _fake_bq(existing_launches=["LAUNCH-SPRING", "LAUNCH-LONDON", "LAUNCH-USA", "LAUNCH-SINGAPORE"], guests_for_seed=150)
     sb.ensure_seed_campaigns(c, "p.d", BQ)
     assert c.loads == []

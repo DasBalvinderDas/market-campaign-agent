@@ -193,7 +193,7 @@ def catalog_markdown(repo, deadline: date | None = None, focus: str = "campaign"
             row = (money(price(b)), b["vendor_name"], day(rb), _fits(rb, deadline), faster, money(price(e)) if e else "-")
         else:
             row = ("-", "-", "-", "", "-", "-")
-        item_md.append(f"| {label} | {stock_txt} | " + " | ".join(row) + (f" | {sug_item.get(label, '-')}" if people else "") + " |")
+        item_md.append(f"| **{label}** | {stock_txt} | " + " | ".join(row) + (f" | {sug_item.get(label, '-')}" if people else "") + " |")
     first, second = (pack_md, item_md) if focus != "items" else (item_md, pack_md)
     out += first + [""] + second
     out += ["", "👉 **Pick what you want.** " + ("Say **use the suggested plan**, or " if people else "") +
@@ -244,7 +244,7 @@ def name_suggestions(people: int = 0, deadline: date | None = None, venue: str =
 
 
 def campaign_created_markdown(launch: dict, how: str, people: int = 0, venue: str = "") -> str:
-    head = {"created": "### 🎉 Your campaign is created!", "date_updated": "### ✅ Campaign found, date updated",
+    head = {"created": "### 🎉 Your campaign is created!", "opened": "### ✅ Campaign opened", "date_updated": "### ✅ Campaign found, date updated",
             "found": "### ✅ Campaign found"}.get(how, "### ✅ Campaign ready")
     rows = [("🎪 Campaign", f"**{launch['launch_name']}**"), ("🆔 Reference", f"`{launch['launch_id']}`"),
             ("📅 In hand by", day(launch["in_hand_by"]))]
@@ -252,8 +252,14 @@ def campaign_created_markdown(launch: dict, how: str, people: int = 0, venue: st
         rows.append(("👥 People", f"{people:,}"))
     if venue:
         rows.append(("📍 Where", venue))
-    return "\n".join([head, "", "| | |", "|---|---|"] + [f"| {a} | {b} |" for a, b in rows]
+    return "\n".join([head, "", "| | |", "|---|---|"] + [f"| **{a}** | {b} |" for a, b in rows]
                      + ["", "Next, let's see what we can offer you."])
+
+
+def campaigns_markdown(launches) -> str:
+    rows = [f"| **{x['launch_name']}** | `{x['launch_id']}` | {day(x['in_hand_by'])} |" for x in launches]
+    return "\n".join(["### 🎪 **Our campaigns**", "", "| Campaign | Reference | In hand by |", "|---|---|---|"] + rows
+                     + ["", "Say the **name** or the **reference** to add to one of them, or start a new campaign."])
 
 
 _STEPS = {"mode": "🧭", "campaign": "🎪", "people": "👥", "date": "📅", "venue": "📍", "picks": "🛒"}
@@ -475,7 +481,7 @@ def stock_report(repo, request_id: str) -> str:
         short = d["depot_name"].split(" ")[0]
         a["where"][short] = a["where"].get(short, 0) + int(d["free"])
     out += ["| 🧩 Item | ♻️ We have | 🏢 Where | ✅ Used in the best choice |", "|---|---|---|---|"]
-    out += [f"| {item} | {a['free']:,} | {', '.join(f'{p} {n:,}' for p, n in a['where'].items())} | **{a['used']:,}** |"
+    out += [f"| **{item}** | {a['free']:,} | {', '.join(f'{p} {n:,}' for p, n in a['where'].items())} | **{a['used']:,}** |"
             for item, a in agg.items()]
     return "\n".join(out)
 
@@ -528,13 +534,13 @@ def vendor_report(repo, request_id: str, today: date | None = None) -> str:
             names = " + ".join(vendors.get(v, v) for v in sorted(picked, key=picked.get, reverse=True)[:2])
             rest = [x for v, x in by_vendor.items() if v not in picked]
             nxt = min(rest, key=price) if rest else None
-            out.append(f"| {item} | **{names}** | {money(price(o))} | {day(today + timedelta(days=int(o['lead_days']) + int(o['delay_days'])))} | "
+            out.append(f"| **{item}** | **{names}** | {money(price(o))} | {day(today + timedelta(days=int(o['lead_days']) + int(o['delay_days'])))} | "
                        f"{plural(len(by_vendor), 'vendor')} | {(nxt['vendor_name'] + ' ' + money(price(nxt))) if nxt else '-'} |")
             cheapest = min(by_vendor.values(), key=price)
             if cheapest["vendor_id"] not in picked and len(by_vendor) > 1:
                 notes.append(f"🧠 **{item}**: {names} is used because {cheapest['vendor_name']} is cheaper but would not arrive in time.")
         else:
-            out.append(f"| {item} | ♻️ **Our own stock** | - | - | {plural(len(by_vendor), 'vendor')} | no need to buy |")
+            out.append(f"| **{item}** | ♻️ **Our own stock** | - | - | {plural(len(by_vendor), 'vendor')} | no need to buy |")
     for name, days in sorted(late):
         notes.append(f"⚠️ **{name}** is running **{days} days late**.")
     return "\n".join(out + ([""] + notes if notes else []))
@@ -683,7 +689,7 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
            f"4. ✍️ {approval}", "", "### 🏭 Who we bought from, and why", "",
            "| 🏭 Vendor | 🧩 What | 💵 Amount | 🧠 Why |", "|---|---|---|---|"]
     for vid, v in sorted(by_vendor.items(), key=lambda kv: -kv[1]["amount"]):
-        out.append(f"| {vendors.get(vid, vid)} | {item_names(v['skus'])} ({v['units']:,}) | {money(v['amount'])} | "
+        out.append(f"| **{vendors.get(vid, vid)}** | {item_names(v['skus'])} ({v['units']:,}) | {money(v['amount'])} | "
                    f"{' · '.join(sorted(v['why']))} |")
     if dlines:
         agg: dict = {}
@@ -702,18 +708,22 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
     return "\n".join(out)
 
 
-def status_markdown(request_id: str, d: dict, done: int, total: int, note=None) -> str:
+def status_markdown(request_id: str, d: dict, option_name: str = "", n_po: int = 0, n_tr: int = 0, placed: bool = False,
+                    note=None) -> str:
+    """Where a request stands, in plain words: the choice, the amount, who decides, and whether the orders are placed."""
     icon = {"PENDING": "⏳", "APPROVED": "✅", "REJECTED": "❌", "FAILED": "⚠️"}.get(d["status"], "ℹ️")
+    approved = d["status"] == "APPROVED"
     words = {"PENDING": f"Waiting for **{d['approver_role']}** to click Approve or Reject",
-             "APPROVED": "Approved" if done < total else "Approved and all orders placed",
-             "REJECTED": "Rejected. Nothing was bought and the held stock is free again",
-             "FAILED": "The approval did not finish"}.get(d["status"], d["status"])
-    out = [f"### {icon} Status of `{request_id}`", "", "| | |", "|---|---|",
-           f"| Choice | {d['option_code']} |", f"| Order value | {money(d['amount'])} |",
-           f"| Who decides | {d['approver_role']} |", f"| Status | {icon} {words} |",
-           f"| Orders placed | {done} of {total} lines |"]
+             "APPROVED": "**Approved**" if placed else "**Approved.** Placing your orders now",
+             "REJECTED": "**Rejected.** Nothing was bought and the held stock is free again",
+             "FAILED": "**The approval did not finish**"}.get(d["status"], d["status"])
+    orders = (f"{plural(n_po, 'purchase order')} + {plural(n_tr, 'warehouse move')}" if placed
+              else ("Not placed yet" if approved else "None"))
+    out = [f"### {icon} **Status of** `{request_id}`", "", "| | |", "|---|---|",
+           f"| **Choice** | {option_name or d['option_code']} |", f"| **Order value** | {money(d['amount'])} |",
+           f"| **Who decides** | {d['approver_role']} |", f"| **Status** | {icon} {words} |", f"| **Orders** | {orders} |"]
     if note:
-        out.append(f"| Note | {note} |")
+        out.append(f"| **Note** | {note} |")
     return "\n".join(out)
 
 
@@ -731,7 +741,7 @@ def board_markdown(requests: list[dict], depot: list[dict], assets: dict) -> str
     else:
         out.append("No requests yet. Tell me about your campaign to start.")
     out += ["", "### ♻️ Stock we already own", "", "| 🏢 Warehouse | 🌍 Region | 🧩 Item | Free units |", "|---|---|---|---|"]
-    out += [f"| {d['depot_name']} | {d['region']} | {assets.get(d['sku'], {}).get('name', d['sku'])} | {int(d['free'])} |"
+    out += [f"| **{d['depot_name']}** | {d['region']} | {assets.get(d['sku'], {}).get('name', d['sku'])} | {int(d['free'])} |"
             for d in depot if int(d["free"]) > 0]
     return "\n".join(out)
 

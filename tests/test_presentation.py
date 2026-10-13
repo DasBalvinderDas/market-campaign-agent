@@ -39,7 +39,7 @@ def test_build_requirements_returns_the_bom_for_the_chat(repo):
 def test_vendor_report_shows_vendors_compared_and_why_the_faster_one_was_used(repo, aurora):
     md = presentation.vendor_report(repo, aurora)
     assert "12 vendors" in md and "38 price offers" in md and "Chosen vendor" in md and "Next best" in md
-    assert "| Venue display stand | **DisplayCo + RapidDisplay** | $1,400.00 |" in md and "StagePro Displays $1,760.00" in md
+    assert "| **Venue display stand** | **DisplayCo + RapidDisplay** | $1,400.00 |" in md and "StagePro Displays $1,760.00" in md
     assert "Ready by" in md and "🔴" not in md and md.count("\n|") <= 12      # one short row per item
 
 
@@ -92,7 +92,8 @@ def test_launch_team_update_is_a_formatted_html_email(repo, aurora):
 def test_status_and_board_are_tables(repo, aurora):
     _approved(repo, aurora)
     md = decision_flow.status(repo, aurora, executor=FakeExecutor())["display_markdown"]
-    assert "Status of" in md and "| Status |" in md
+    assert "Status of" in md and "| **Status** |" in md and "Placing your orders now" in md and "Not placed yet" in md
+    assert "REBALANCE" not in md and "Application Integration" not in md and "lines" not in md
     board = orchestration_tools.get_launch_overview()["display_markdown"]
     assert "Event status board" in board and "Stock we already own" in board
     assert "What happened" in orchestration_tools.get_audit_trail()["display_markdown"]
@@ -100,7 +101,7 @@ def test_status_and_board_are_tables(repo, aurora):
 
 def test_stock_report_lists_what_we_own_and_what_the_best_plan_uses(repo, aurora):
     md = presentation.stock_report(repo, aurora)
-    assert "What we already have in stock" in md and "| Leather sales folder | 120 | Dallas 120 | **120** |" in md
+    assert "What we already have in stock" in md and "| **Leather sales folder** | 120 | Dallas 120 | **120** |" in md
 
 
 def test_stock_report_says_so_when_we_own_nothing(repo):
@@ -173,7 +174,7 @@ def test_the_offer_shows_a_suggested_plan_for_the_headcount():
 
 def test_the_offer_shows_stock_in_every_warehouse_because_it_can_be_moved():
     md = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "Singapore")["display_markdown"]
-    assert "| Leather sales folder | 120 Dallas |" in md and "| Steel water bottle | 150 Dallas, 80 Singapore |" in md
+    assert "| **Leather sales folder** | 120 Dallas |" in md and "| **Steel water bottle** | 150 Dallas, 80 Singapore |" in md
 
 
 def test_the_offer_prices_follow_the_date():

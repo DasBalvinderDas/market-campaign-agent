@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common import default_account_email, guarded, preflight, resolve_project  # noqa: E402
 from launchkit_provisioner import approvers as approvers_cfg  # noqa: E402
 from launchkit_provisioner.data.schema import TABLES, TRANSACTION_TABLES, VIEWS  # noqa: E402
-from launchkit_provisioner.data.seed_data import (APPROVER_ROLES, EMBARGO_DAYS, IN_HAND_DAYS, SEED,  # noqa: E402
+from launchkit_provisioner.data.seed_data import (APPROVER_ROLES, CAMPAIGN_DAYS, CAMPAIGN_EMBARGO_DAYS, EMBARGO_DAYS, IN_HAND_DAYS, SEED, STANDING_CAMPAIGNS,  # noqa: E402
                                                   TEAM_ROLE)
 
 
@@ -160,10 +160,13 @@ def run(args, project=""):
         for t in TRANSACTION_TABLES:
             client.query(f"TRUNCATE TABLE `{ds}.{t}`").result()
         ensure_seed_campaigns(client, ds, bigquery)
-        client.query(f"UPDATE `{ds}.launches` SET in_hand_by = DATE_ADD(CURRENT_DATE(), INTERVAL {IN_HAND_DAYS} DAY), "
-                     f"embargo_date = DATE_ADD(CURRENT_DATE(), INTERVAL {EMBARGO_DAYS} DAY) WHERE TRUE").result()
-        print(f"Demo transactions cleared in {ds}. Launch dates moved to today (in-hand +{IN_HAND_DAYS} days, "
-              f"embargo +{EMBARGO_DAYS} days). Reference data untouched.")
+        standing = ", ".join(f"'{i}'" for i, _ in STANDING_CAMPAIGNS)
+        client.query(f"UPDATE `{ds}.launches` SET "
+                     f"in_hand_by = DATE_ADD(CURRENT_DATE(), INTERVAL IF(launch_id IN ({standing}), {CAMPAIGN_DAYS}, {IN_HAND_DAYS}) DAY), "
+                     f"embargo_date = DATE_ADD(CURRENT_DATE(), INTERVAL IF(launch_id IN ({standing}), {CAMPAIGN_EMBARGO_DAYS}, {EMBARGO_DAYS}) DAY) "
+                     "WHERE TRUE").result()
+        print(f"Demo transactions cleared in {ds}. Campaign dates moved to today (London, US and Singapore campaigns +{CAMPAIGN_DAYS} "
+              f"days, Spring event +{IN_HAND_DAYS} days). Reference data untouched.")
         return
 
     dataset = bigquery.Dataset(ds)

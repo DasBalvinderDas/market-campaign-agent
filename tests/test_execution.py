@@ -125,3 +125,11 @@ def test_a_retry_after_a_failed_order_keeps_the_numbers_unique(repo, aurora):
     out = execution.execute_plan(repo, ex, aurora)
     numbers = out["purchase_orders"] + out["depot_transfers"]
     assert out["status"] == "executed" and len(numbers) == len(set(numbers)) and f"PO-{aurora}-V-DISPLAYCO" in numbers
+
+
+def test_order_pack_pdf_is_built_from_the_plan(repo, aurora):
+    from launchkit_provisioner import order_pack
+    from tests.test_presentation import _approved
+    _approved(repo, aurora)
+    pdf = order_pack.build_pdf(repo, aurora)
+    assert pdf[:5] == b"%PDF-" and len(pdf) > 2000

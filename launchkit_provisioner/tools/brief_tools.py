@@ -64,6 +64,40 @@ def create_campaign(campaign: str, deadline_date: str, people: int = 0, venue: s
             "display_markdown": presentation.campaign_created_markdown(launch, how, people, venue)}
 
 
+def open_campaign(campaign: str = "") -> dict:
+    """Open a campaign that already exists, by its reference or its name (a part of the name is fine, for example "london").
+    Use it when the user wants to add something to an existing campaign, for example the London, US or Singapore
+    campaign, or asks which campaigns there are (leave campaign empty). Shows the campaign and its date. Afterwards carry on
+    as for a new campaign, with this campaign's name and date.
+
+    Args:
+        campaign: The reference (LAUNCH-LONDON) or the name (London Campaign). Leave empty to list all campaigns.
+    """
+    repo = get_repo()
+    launches = repo.list_launches()
+    if not (campaign or "").strip():
+        return {"status": "ok", "display_markdown": presentation.campaigns_markdown(launches)}
+    hits = _match_campaigns(launches, campaign)
+    if len(hits) != 1:
+        return {"status": "error" if not hits else "choose",
+                "message": f"{'No campaign matches' if not hits else 'Several campaigns match'} '{campaign}'. Show the list and ask which one.",
+                "display_markdown": presentation.campaigns_markdown(hits or launches)}
+    launch = hits[0]
+    audit(None, "orchestrator", "campaign_opened", launch_id=launch["launch_id"], name=launch["launch_name"])
+    return {"status": "ok", "launch_id": launch["launch_id"], "launch_name": launch["launch_name"],
+            "date_iso": str(launch["in_hand_by"]), "display_markdown": presentation.campaign_created_markdown(launch, "opened")}
+
+
+def _match_campaigns(launches, text):
+    """Exact reference or name first, then every word of the text found in the name or reference."""
+    t = (text or "").strip().lower()
+    exact = [x for x in launches if t in (x["launch_id"].lower(), x["launch_name"].lower())]
+    if exact:
+        return exact[:1]
+    words = [w for w in re.split(r"[^a-z0-9]+", t) if w and w not in ("campaign", "the", "my")] or [t]
+    return [x for x in launches if all(w in x["launch_name"].lower() or w in x["launch_id"].lower() for w in words)]
+
+
 def register_launch_request(campaign: str, summary: str, deadline_date: str = "") -> dict:
     """Register a new request for a campaign (or a quick purchase) and get its request id. The campaign is found by id or
     name (for example "Spring Product Launch Event"). A new campaign name is created when a deadline_date is given. If
@@ -85,12 +119,12 @@ def register_launch_request(campaign: str, summary: str, deadline_date: str = ""
 
 
 def _find_event(repo, text: str):
-    t = (text or "").strip().lower()
     events = repo.list_launches()
-    for x in events:
-        if t in (x["launch_id"].lower(), x["launch_name"].lower()):
-            return x
-    hits = [x for x in events if t and (t in x["launch_name"].lower() or x["launch_name"].lower() in t)]
+    hits = _match_campaigns(events, text)
+    if len(hits) == 1:
+        return hits[0]
+    t = (text or "").strip().lower()
+    hits = [x for x in events if t and x["launch_name"].lower() in t]
     return hits[0] if len(hits) == 1 else None
 
 

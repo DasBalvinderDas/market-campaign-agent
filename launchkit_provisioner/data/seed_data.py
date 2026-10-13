@@ -9,13 +9,24 @@ from datetime import date, timedelta
 
 IN_HAND_DAYS = 25
 EMBARGO_DAYS = 32
+CAMPAIGN_DAYS = 30                 # the three standing campaigns (London, US, Singapore): in hand 30 days after setup
+CAMPAIGN_EMBARGO_DAYS = 37
 
 REGIONS = ["US", "EMEA", "APAC"]
 
 
-def launch_dates(today: date | None = None) -> dict:
+def launch_dates(today: date | None = None, in_hand_days: int = IN_HAND_DAYS, embargo_days: int = EMBARGO_DAYS) -> dict:
     today = today or date.today()
-    return {"in_hand_by": today + timedelta(days=IN_HAND_DAYS), "embargo_date": today + timedelta(days=EMBARGO_DAYS)}
+    return {"in_hand_by": today + timedelta(days=in_hand_days), "embargo_date": today + timedelta(days=embargo_days)}
+
+
+def _standing(launch_id: str, name: str) -> dict:
+    return {"launch_id": launch_id, "launch_name": name, "product_name": name, "cost_center": "CC-EVENTS-GENERAL",
+            "owner": "Marketing", **launch_dates(in_hand_days=CAMPAIGN_DAYS, embargo_days=CAMPAIGN_EMBARGO_DAYS)}
+
+
+STANDING_CAMPAIGNS = [("LAUNCH-LONDON", "London Campaign"), ("LAUNCH-USA", "US Campaign"),
+                      ("LAUNCH-SINGAPORE", "Singapore Campaign")]
 
 
 def _guests():
@@ -91,7 +102,7 @@ SEED = {
     "launches": [
         {"launch_id": "LAUNCH-SPRING", "launch_name": "Spring Product Launch Event", "product_name": "Spring",
          "cost_center": "CC-PROD-MKTG-8820", "owner": "Product Marketing", **launch_dates()},
-    ],
+    ] + [_standing(i, n) for i, n in STANDING_CAMPAIGNS],
     "assets": (
         [{"sku": "GIFT-BOX-BLACK", "name": "Black gift box",
           "component_type": "BOX", "ship_factor": 1.0}]

@@ -22,6 +22,10 @@ date -d "+25 days" "+%-d %B %Y"                           # prints the date to u
 Use **exactly 25 days from today** for `<DATE>`. The amounts below depend on it: vendors charge **less when you order earlier and more for a rush**, and the 21 to 34 day band is
 the standard price. Open a **new chat** for every run. The approval email goes to the approver addresses you set up (`FRESH_SETUP.md`, section E). It is an **HTML email**: summary table, **✓ Approve** and **✗ Reject** buttons, the shopping list and the vendor table. Both buttons open the approval page, where you confirm with one click.
 
+**Standing campaigns.** The system always starts with three campaigns: **London Campaign** (`LAUNCH-LONDON`), **US Campaign** (`LAUNCH-USA`) and **Singapore Campaign** (`LAUNCH-SINGAPORE`), each in hand **30 days after setup**. To add to one, say its name or reference (`add to the London campaign`, `LAUNCH-USA`); partial names work. `Which campaigns do we have?` lists them. A fresh campaign works as described below.
+
+After the orders are placed, the assistant also attaches an **order pack PDF** (shopping list, vendors, warehouse moves) to the chat.
+
 Approval levels used in both stories: **up to $5,000 automatic · $5,000 to $50,000 VP Product Marketing · above $50,000 CMO.**
 
 ---
