@@ -31,7 +31,9 @@ Contents: **A.** Hello · **B.** A campaign for 300 people · **C.** One item, i
 > **💡 Planning the whole campaign is best:** more stock to reuse, more vendors to compare, a stronger case for better rates.
 >
 > ### 👉 First question
-> **Tell me about your campaign:** how many people, and on which date?
+> We already have **4 campaigns**: **Spring Product Launch Event**, **London Campaign**, **US Campaign**, **Singapore Campaign**.
+>
+> **Do you want to add to one of them, or create a new campaign?** Say the name of one, or tell me about the new one: how many people, and on which date?
 
 ---
 ## B. A campaign for 300 people (the main story)

@@ -36,7 +36,7 @@ def get_audit_trail(request_id: str = "") -> dict:
 def show_capabilities() -> dict:
     """What this assistant can do and what it needs from the user. Call it when the user greets (hi, hello), asks what
     you can do, or sends a first message that is not a request to plan or buy."""
-    return {"status": "ok", "display_markdown": presentation.capabilities_card()}
+    return {"status": "ok", "display_markdown": presentation.capabilities_card(get_repo().list_launches())}
 
 
 def get_approval_rules() -> dict:

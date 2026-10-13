@@ -38,7 +38,7 @@ def spare(hours, min_buffer=24) -> str:
 
 
 # ---------------------------------------------------------------------------- the first hello
-def capabilities_card() -> str:
+def capabilities_card(launches=None) -> str:
     return """## 👋 Hi! I am your Campaign Procurement Assistant
 > Tell me about your campaign. I show you what we have, compare vendors, find the best date, and place the orders once the right person says OK.
 
@@ -57,9 +57,18 @@ def capabilities_card() -> str:
 
 **💡 Planning the whole campaign is best:** more stock to reuse, more vendors to compare, a stronger case for better rates.
 
-### 👉 First question
+""" + _first_question(launches)
+
+
+def _first_question(launches) -> str:
+    if not launches:
+        return """### 👉 First question
 **Tell me about your campaign:** how many people, and on which date?
 """
+    names = ", ".join(f"**{x['launch_name']}**" for x in launches)
+    return (f"### 👉 First question\nWe already have **{plural(len(launches), 'campaign')}**: {names}.\n\n"
+            "**Do you want to add to one of them, or create a new campaign?** Say the name of one, or tell me about the new one: "
+            "how many people, and on which date?\n")
 
 
 def _fits(ready: date, deadline: date | None) -> str:

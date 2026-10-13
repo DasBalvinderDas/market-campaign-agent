@@ -19,6 +19,7 @@ def test_greeting_card_invites_a_natural_conversation():
     assert "Campaign Procurement Assistant" in card and "Just talk to me" in card and "300 people on 31st Oct" in card
     assert "where we can deliver" in card and "best date" in card and "Compare **vendors**" in card
     assert "how many people, and on which date?" in card
+    assert "We already have **4 campaigns**" in card and "**London Campaign**" in card and "add to one of them, or create a new campaign" in card
 
 
 def test_bom_is_short_one_row_per_pack_with_what_is_inside(repo, aurora):

@@ -45,7 +45,7 @@ Approval levels used in both stories: **up to $5,000 automatic · $5,000 to $50,
   (Canada is served from the US vendors and the Dallas warehouse), plus *what we have in place* (the 12 kinds of items);
 - the one next question: **Where is your campaign?**
 
-*(Try `Hi` first if you like: you get the hello card, with the first question, "how many people and which date?")*
+*(Try `Hi` first if you like: you get the hello card. Its first question says we already have four campaigns (London, US, Singapore and Spring) and asks: add to one of them, or create a new one?)*
 
 ### 2. Say where, then pick a name
 
