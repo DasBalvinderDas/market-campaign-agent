@@ -6,7 +6,7 @@ _MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun",
 
 
 def parse_date(text: str, today: date | None = None) -> date | None:
-    """A date from free text. Without a year it is the next time that day comes round. None if it is not a date."""
+    """A date from free text. Without a year it is this year. None if it is not a date."""
     today = today or date.today()
     t = (text or "").strip().lower()
     if not t:
@@ -31,10 +31,7 @@ def parse_date(text: str, today: date | None = None) -> date | None:
             year = (int(m[3]) + 2000 if m[3] and len(m[3]) == 2 else int(m[3])) if m[3] else None
     if year:
         return _make(year, month, day)
-    d = _make(today.year, month, day)
-    if d and d <= today:
-        d = _make(today.year + 1, month, day)
-    return d
+    return _make(today.year, month, day)       # no year: this year (a date that has already passed is flagged by the caller)
 
 
 def _make(y, m, d):

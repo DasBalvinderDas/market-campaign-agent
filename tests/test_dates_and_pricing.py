@@ -15,8 +15,8 @@ def test_dates_the_way_people_say_them():
     assert parse_date("31/10", TODAY) == date(2026, 10, 31)
     assert parse_date("31.10.2027", TODAY) == date(2027, 10, 31)
     assert parse_date("2026-12-24", TODAY) == date(2026, 12, 24)
-    assert parse_date("the 1st of March", TODAY) == date(2027, 3, 1)           # no year: the next one
-    assert parse_date("12 Oct", TODAY) == date(2027, 10, 12)                   # today has passed for this purpose
+    assert parse_date("the 1st of March", TODAY) == date(2026, 3, 1)           # no year: this year
+    assert parse_date("12 Oct", TODAY) == date(2026, 10, 12)                   # even if it has passed (the caller says so)
 
 
 def test_things_that_are_not_dates_are_none():

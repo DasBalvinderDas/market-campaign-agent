@@ -152,7 +152,7 @@ def test_an_unknown_place_is_asked_again_without_losing_what_we_know():
 
 
 def test_a_date_in_the_past_or_unreadable_is_explained():
-    assert "not in the future" in orchestration_tools.show_checklist("campaign", "", 100, "2020-01-01")["display_markdown"]
+    assert "has already passed" in orchestration_tools.show_checklist("campaign", "", 100, "2020-01-01")["display_markdown"]
     assert "could not read the date" in orchestration_tools.show_checklist("campaign", "", 100, "sometime soon")["display_markdown"]
 
 
@@ -227,3 +227,9 @@ def test_name_ideas_are_the_same_every_time_and_follow_the_season_and_size():
 def test_no_name_ideas_once_a_name_is_given():
     out = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
     assert "name_suggestions" not in out and "What we can offer you" in out["display_markdown"]
+
+
+def test_a_date_without_a_year_is_this_year():
+    from datetime import date
+    md = orchestration_tools.show_checklist("campaign", "", 300, "31st Oct")["display_markdown"]
+    assert f"31 Oct {date.today().year}" in md

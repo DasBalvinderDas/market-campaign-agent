@@ -85,7 +85,7 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
     if date and not d:
         note = f"I could not read the date '{date}'."
     elif d and d <= _date.today():
-        note, d = f"{d} is not in the future.", None
+        note, d = f"{d} has already passed. Ask for a later date (or the year, if they mean next year).", None
     v = None
     unknown = ""
     if venue:

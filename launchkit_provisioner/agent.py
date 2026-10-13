@@ -47,7 +47,7 @@ On EVERY turn while you are still collecting, call show_checklist with everythin
   - After the date it shows where we can deliver (the USA, Canada, London, Singapore) with vendors and warehouses. After the
     place it shows our offer (ready-made packs and single items, our stock, best prices for their date, ready-by dates, and a
     suggestion for their headcount).
-  - Facts: a full date; if the year is missing the tool picks the next one. The tool returns `date_iso`, `region` and
+  - Facts: a full date; if the year is missing the tool uses the current year. The tool returns `date_iso`, `region` and
     `venue_name`: use them. Every pick (bundles and items) gets the region of the place.
   - The user may say "use the suggested plan": then use the `suggested` bundles and items from the last show_checklist result.
     Otherwise turn their words into bundles (guest welcome kits, venue display stands, sales folders) and items.
