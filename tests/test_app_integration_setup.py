@@ -192,11 +192,17 @@ def test_falls_back_when_publish_rejects_the_attachment(capsys):
         def post(self, url, json=None, params=None):
             if url.endswith(":publish"):
                 Picky.publishes += 1
-                if Picky.publishes < 3:                 # the first two formats are refused at publish time
+                if Picky.publishes < 4:                 # the first three formats are refused at publish time
                     return Resp(400, {"error": {"message": "Invalid email task configuration."}})
             return super().post(url, json=json, params=params)
     h = Picky(existing=False)
     sai.run_with(h, args(), "p")
-    assert Picky.publishes == 3
+    assert Picky.publishes == 4
     assert [p for m, u, p in h.calls if m == "POST" and u.endswith("/versions")][1] == {"newIntegration": "false"}
     assert "emails go out without the PDF" in capsys.readouterr().out
+
+
+def test_list_typed_attachment_variable():
+    v = sai.build_version(attachments="arrayvar")
+    assert next(p for p in v["integrationParameters"] if p["key"] == "attachment_path")["dataType"] == "STRING_ARRAY"
+    assert next(p for p in sai.build_version()["integrationParameters"] if p["key"] == "attachment_path")["dataType"] == "STRING_VALUE"

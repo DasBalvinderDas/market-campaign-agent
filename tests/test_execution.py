@@ -150,4 +150,4 @@ def test_the_pack_is_attached_to_the_update_email_and_the_email_still_goes_witho
     refuse = FakeExecutor(fail_on=lambda t, i: t == config.UPDATE_TRIGGER and "attachment_path" in i)
     from launchkit_provisioner import emails
     emails.send_update(refuse, {"request_id": "r"}, "gs://b/x.pdf")
-    assert [("attachment_path" in i) for t, i in refuse.calls] == [True, False]
+    assert [("attachment_path" in i) for t, i in refuse.calls] == [True, True, False]

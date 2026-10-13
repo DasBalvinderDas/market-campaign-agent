@@ -151,11 +151,13 @@ def orders_placed_email(repo, launch, scenario, pos, transfers, saved, request_i
 
 
 def send_update(executor, inputs: dict, attachment: str = ""):
-    """Send one email through the update workflow. With an attachment (a gs:// path) it is tried first; if the workflow
-    refuses it, the same email goes without the PDF so the message is never lost."""
+    """Send one email through the update workflow. With an attachment (a gs:// path) it is tried first, as a text and then
+    as a list (whichever the published workflow expects); if the workflow refuses both, the same email goes without the PDF
+    so the message is never lost."""
     if attachment:
-        try:
-            return executor.execute(config.UPDATE_TRIGGER, {**inputs, "attachment_path": attachment})
-        except Exception:  # noqa: BLE001
-            pass
+        for value in (attachment, [attachment]):
+            try:
+                return executor.execute(config.UPDATE_TRIGGER, {**inputs, "attachment_path": value})
+            except Exception:  # noqa: BLE001
+                continue
     return executor.execute(config.UPDATE_TRIGGER, inputs)

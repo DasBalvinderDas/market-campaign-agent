@@ -17,6 +17,8 @@ def _typed(value):
         return {"intValue": str(value)}
     if isinstance(value, float):
         return {"doubleValue": value}
+    if isinstance(value, (list, tuple)):
+        return {"stringArray": {"stringValues": [str(x) for x in value]}}
     return {"stringValue": "" if value is None else str(value)}
 
 

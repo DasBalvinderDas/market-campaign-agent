@@ -116,7 +116,7 @@ def _attachment_value(style, empty):
     style = "array" if style is True else ("off" if style in (False, None) else style)
     if style == "array":
         return {"stringArray": {"stringValues": ["$attachment_path$"]}}
-    if style == "string":
+    if style in ("string", "arrayvar"):
         return {"stringValue": "$attachment_path$"}
     return empty
 
@@ -187,6 +187,8 @@ def build_version(email: bool = True, approver_emails=None, email_format: str = 
                         (TRANSFER_OUT, "OUT"), (APPROVAL_OUT, "OUT"), (UPDATE_OUT, "OUT")):
         for key, typ in group.items():
             params.setdefault(key, {"key": key, "displayName": key, "dataType": typ, "inputOutputType": kind})
+    if attachments == "arrayvar":          # the attachment variable itself is a list of paths
+        params["attachment_path"]["dataType"] = "STRING_ARRAY"
     tasks = [_mapping_task("1", "Build PO number", [_prefixed("PO-", "plan_line_id", "po_number"), _execution_id()]),
              _mapping_task("4", "Build transfer number",
                            [_prefixed("TR-", "plan_line_id", "transfer_number"), _execution_id()])]
@@ -285,7 +287,7 @@ def run_with(http, args, project):
         print("  creating the integration and publishing it ..." if not exists else "  adding a new version and publishing it ...")
         # The attachment setting is tried in the formats the Send Email task may accept; the first one the API takes is used,
         # and the last resort is no attachment (the emails then go out without the PDF).
-        styles = ["off"] if (getattr(args, "no_attachments", False) or args.no_email) else ["array", "string", "off"]
+        styles = ["off"] if (getattr(args, "no_attachments", False) or args.no_email) else ["array", "string", "arrayvar", "off"]
         for style in styles:
             r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
                           json=build_version(email=not args.no_email,
@@ -295,7 +297,7 @@ def run_with(http, args, project):
                 version = r.json()["name"]
                 exists = True                                             # the integration now exists (as a draft at least)
                 r = http.post(f"{API}/{version}:publish", json={})       # the email task is validated at publish time
-            if r.status_code == 400 and "email task" in r.text.lower() and style != "off":
+            if r.status_code == 400 and style != "off" and any(k in r.text.lower() for k in ("email task", "emailtask", "attachment_path")):
                 print(f"  the email task did not accept the attachment setting '{style}', trying the next one ...")
                 continue
             break
