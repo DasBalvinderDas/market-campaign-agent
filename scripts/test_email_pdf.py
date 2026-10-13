@@ -47,7 +47,11 @@ def main():
     if a.request:
         from launchkit_provisioner.repositories import get_repo
         from launchkit_provisioner import order_pack
-        pdf, name = order_pack.build_pdf(get_repo(), a.request), a.request
+        try:
+            pdf, name = order_pack.build_pdf(get_repo(), a.request), a.request
+        except ValueError as exc:
+            print(f"  ..  {a.request}: {exc}. Using a sample PDF instead (pick a request that has been through the choice step).")
+            pdf, name = sample_pdf(), "TEST"
     else:
         pdf, name = sample_pdf(), "TEST"
     print(f"  OK  PDF built ({len(pdf):,} bytes)")
@@ -57,16 +61,21 @@ def main():
                  "service account's Storage Object Admin role).")
     print(f"  OK  file in the bucket: {path}")
     ex = IntegrationExecutor()
-    base = {"request_id": name, "launch_id": "TEST", "recipient_email": a.to, "email_subject": "Order pack PDF test (please ignore)",
-            "email_body": "<div style='font-family:Arial'><h3>PDF attachment test</h3><p>The order pack PDF should be attached to this email.</p></div>"}
-    for label, value in (("text", path), ("list", [path])):
+    body = "<div style='font-family:Arial'><h3>PDF attachment test</h3><p>Form: <b>%s</b>. The order pack PDF should be attached to this email.</p></div>"
+    sent = []
+    for form in storage.FORMS:
         try:
-            ex.execute(config.UPDATE_TRIGGER, {**base, "attachment_path": value})
-            print(f"  OK  the workflow accepted the attachment as a {label}. Check the inbox of {a.to} for the PDF.")
-            return
+            ex.execute(config.UPDATE_TRIGGER, {"request_id": name, "launch_id": "TEST", "recipient_email": a.to,
+                                               "email_subject": f"PDF test [{form}] (please ignore)", "email_body": body % form,
+                                               "attachment_path": storage.attachment_value(path, form)})
+            print(f"  OK  sent the test email for form '{form}'")
+            sent.append(form)
         except Exception as exc:  # noqa: BLE001
-            print(f"  ..  as a {label}: {str(exc)[:220]}")
-    sys.exit("  FAIL the workflow refused the attachment in both forms (see the messages above).")
+            print(f"  ..  form '{form}' refused by the workflow: {str(exc)[:200]}")
+    if not sent:
+        sys.exit("  FAIL the workflow refused every form (see above).")
+    print(f"\nNow open the inbox of {a.to}: the subject of the email that HAS the PDF tells you the form, e.g. 'PDF test [list-gs]'.\n"
+          "Put it in .env as ORDER_PACK_ATTACH_FORM=<form> and redeploy the agent. If none has the PDF, tell the maintainer.")
 
 
 if __name__ == "__main__":

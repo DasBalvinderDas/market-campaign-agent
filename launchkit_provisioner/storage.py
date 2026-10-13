@@ -39,3 +39,13 @@ def pack_path(repo, request_id: str) -> str:
     except Exception as exc:  # noqa: BLE001
         log.warning("order pack not built: %s", exc)
         return ""
+
+
+FORMS = ("list-gs", "text-gs", "list-path", "text-path")
+
+
+def attachment_value(gs_path: str, form: str = ""):
+    """The workflow input for a gs://bucket/file path, in the chosen form (see config.ORDER_PACK_ATTACH_FORM)."""
+    form = form or config.ORDER_PACK_ATTACH_FORM
+    path = gs_path[len("gs://"):] if form.endswith("-path") and gs_path.startswith("gs://") else gs_path
+    return [path] if form.startswith("list") else path

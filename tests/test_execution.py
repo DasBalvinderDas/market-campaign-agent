@@ -145,9 +145,9 @@ def test_the_pack_is_attached_to_the_update_email_and_the_email_still_goes_witho
     ex = FakeExecutor()
     execution.execute_plan(repo, ex, aurora)
     sent = [i for t, i in ex.calls if t == config.UPDATE_TRIGGER]
-    assert sent and all(i["attachment_path"] == f"gs://b/{aurora}/order-pack.pdf" for i in sent)
+    assert sent and all(i["attachment_path"] == [f"gs://b/{aurora}/order-pack.pdf"] for i in sent)
     # a workflow that refuses the attachment: the email is sent again without it
     refuse = FakeExecutor(fail_on=lambda t, i: t == config.UPDATE_TRIGGER and "attachment_path" in i)
     from launchkit_provisioner import emails
     emails.send_update(refuse, {"request_id": "r"}, "gs://b/x.pdf")
-    assert [("attachment_path" in i) for t, i in refuse.calls] == [True, True, False]
+    assert [("attachment_path" in i) for t, i in refuse.calls] == [True, False]
