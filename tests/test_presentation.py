@@ -233,3 +233,11 @@ def test_a_date_without_a_year_is_this_year():
     from datetime import date
     md = orchestration_tools.show_checklist("campaign", "", 300, "31st Oct")["display_markdown"]
     assert f"31 Oct {date.today().year}" in md
+
+
+def test_facts_given_without_a_mode_are_not_asked_again():
+    md = orchestration_tools.show_checklist("", "", 300, _iso(25), "London")["display_markdown"]
+    assert "Tell me about your campaign" not in md and "What would you like to call your campaign?" in md
+    md = orchestration_tools.show_checklist("", "", 0, _iso(25), "")["display_markdown"]
+    assert "How many people will come to your campaign?" in md
+    assert "Tell me about your campaign" in orchestration_tools.show_checklist("", "", 0, "", "")["display_markdown"]
