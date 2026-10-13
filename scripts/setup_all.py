@@ -90,6 +90,16 @@ def main():
                                     approver_email=args.approver_email, republish=False)
     step("Application Integration", lambda: ai.run(ai_args, project=project))
 
+    import setup_order_pack_bucket as pack
+    pack_args = types.SimpleNamespace(bucket=None, location=args.location, service_account=args.service_account)
+    print("== Order pack bucket (private hand-off for the PDF attached to the emails; name from ORDER_PACK_BUCKET in .env)")
+    try:
+        pack.run(pack_args, project=project)
+    except SystemExit as exc:      # not fatal: without the bucket the emails simply go without the PDF
+        print(exc.code if isinstance(exc.code, str) else f"(exit {exc.code})")
+        print("  The emails will be sent without the PDF until this works. Re-run: python scripts/setup_order_pack_bucket.py")
+    print()
+
     if not args.no_env and all(v == "OK" for v in results.values()):
         updates = {"GOOGLE_CLOUD_PROJECT": project, "BQ_DATASET": args.dataset, "BQ_LOCATION": args.location,
                    "APP_INTEGRATION_LOCATION": args.region}

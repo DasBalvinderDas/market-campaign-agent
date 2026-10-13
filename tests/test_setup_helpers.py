@@ -210,3 +210,11 @@ def test_a_reset_leaves_a_healthy_demo_campaign_alone():
     c, BQ = _fake_bq(existing_launches=["LAUNCH-SPRING", "LAUNCH-LONDON", "LAUNCH-USA", "LAUNCH-SINGAPORE"], guests_for_seed=150)
     sb.ensure_seed_campaigns(c, "p.d", BQ)
     assert c.loads == []
+
+
+def test_the_bucket_name_comes_from_the_environment_then_the_default(monkeypatch):
+    import setup_order_pack_bucket as pb
+    monkeypatch.delenv("ORDER_PACK_BUCKET", raising=False)
+    assert pb.configured_bucket("proj").endswith("launchkit-order-packs") or pb.configured_bucket("proj")
+    monkeypatch.setenv("ORDER_PACK_BUCKET", "my-bucket")
+    assert pb.configured_bucket("proj") == "my-bucket"

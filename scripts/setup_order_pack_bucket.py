@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create the private Cloud Storage bucket that hands the order pack PDF to the email workflow.
 
-  python scripts/setup_order_pack_bucket.py                    # bucket <project>-launchkit-order-packs
+  python scripts/setup_order_pack_bucket.py                    # bucket from ORDER_PACK_BUCKET in .env, else <project>-launchkit-order-packs
   python scripts/setup_order_pack_bucket.py --bucket my-bucket
 
 Nobody gets a link: the bucket is private, files are deleted after 2 days, and the emails carry the PDF as an attachment.
@@ -27,10 +27,23 @@ def _number(project: str) -> str:
     return _run("gcloud", "projects", "describe", project, "--format=value(projectNumber)").stdout.strip()
 
 
+def configured_bucket(project: str) -> str:
+    """--bucket wins, else ORDER_PACK_BUCKET (environment or the .env file), else <project>-launchkit-order-packs."""
+    import os
+    if os.getenv("ORDER_PACK_BUCKET"):
+        return os.environ["ORDER_PACK_BUCKET"]
+    env = Path(__file__).resolve().parent.parent / ".env"
+    if env.exists():
+        for line in env.read_text().splitlines():
+            if line.startswith("ORDER_PACK_BUCKET=") and line.split("=", 1)[1].strip():
+                return line.split("=", 1)[1].strip()
+    return f"{project}-launchkit-order-packs"
+
+
 @guarded
 def run(args, project=""):
     import os
-    bucket = args.bucket or f"{project}-launchkit-order-packs"
+    bucket = args.bucket or configured_bucket(project)
     sa = args.service_account or os.getenv("AGENT_SERVICE_ACCOUNT", "")
     uri = f"gs://{bucket}"
     print(f"Project: {project}\nBucket:  {uri}")

@@ -74,7 +74,7 @@ python scripts/setup_bigquery.py --reset --approver-email "dasbalvinder.das@hclt
 cd ~/market-campaign-agent
 git pull origin <your-branch>
 source scripts/env_setup.sh
-python scripts/setup_order_pack_bucket.py              # once: private hand-off bucket for the PDF attached to the emails
+python scripts/setup_order_pack_bucket.py              # once: private bucket for the PDF in the emails (name from ORDER_PACK_BUCKET in .env; setup_all.py also does it)
 python scripts/setup_application_integration.py --republish --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
 python scripts/setup_bigquery.py --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
 python scripts/setup_bigquery.py --refresh-reference   # picks up new items, vendors, prices and stock, and resets the demo
