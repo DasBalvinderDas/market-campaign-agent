@@ -148,3 +148,14 @@ def orders_placed_email(repo, launch, scenario, pos, transfers, saved, request_i
              + f'<p style="margin:20px 0 0;color:#6b7280;font-size:13px">Request {escape(request_id)}. To see this in the chat, ask the '
                f'assistant: <em>What is the status of {escape(request_id)}?</em></p>')
     return subject, _page("#0f766e", "ORDERS PLACED", launch["launch_name"], inner)
+
+
+def send_update(executor, inputs: dict, attachment: str = ""):
+    """Send one email through the update workflow. With an attachment (a gs:// path) it is tried first; if the workflow
+    refuses it, the same email goes without the PDF so the message is never lost."""
+    if attachment:
+        try:
+            return executor.execute(config.UPDATE_TRIGGER, {**inputs, "attachment_path": attachment})
+        except Exception:  # noqa: BLE001
+            pass
+    return executor.execute(config.UPDATE_TRIGGER, inputs)

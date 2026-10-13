@@ -166,3 +166,12 @@ def test_by_default_the_approval_task_sends_no_email_of_its_own():
 def test_the_platform_approval_email_can_be_switched_back_on():
     a = next(t for t in sai.build_version(approver_emails=["a@x.com"])["taskConfigs"] if t["taskId"] == "10")
     assert "notifications" in a["parameters"]
+
+
+def test_email_task_attaches_the_pack_unless_switched_off():
+    def attach(v):
+        t = next(x for x in v["taskConfigs"] if x["task"] == "EmailTask")
+        return t["parameters"]["AttachmentPath"]["value"]
+    assert attach(sai.build_version()) == {"stringArray": {"stringValues": ["$attachment_path$"]}}
+    assert attach(sai.build_version(attachments=False)) == {"stringArray": {}}
+    assert "attachment_path" in {p["key"] for p in sai.build_version()["integrationParameters"]}

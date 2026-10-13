@@ -9,7 +9,7 @@ The amount, the options and the recipients all come from BigQuery; the model onl
 """
 from datetime import datetime, timedelta, timezone
 
-from . import config, emails, presentation
+from . import config, emails, presentation, storage
 from .repositories.base import new_id
 
 _EXEC_PREFIX = "execution:"
@@ -143,10 +143,11 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
     subject, html = emails.approval_email(repo, launch, scenario, lines, request_id, justification, policy["approver_role"],
                                           emails.approval_url(execution_id), rng)
     sent, failed_to = [], []
+    pack = storage.pack_path(repo, request_id)
     for address in emails_to:
         try:
-            executor.execute(config.UPDATE_TRIGGER, {"request_id": request_id, "launch_id": req["launch_id"],
-                                                     "recipient_email": address, "email_subject": subject, "email_body": html})
+            emails.send_update(executor, {"request_id": request_id, "launch_id": req["launch_id"], "recipient_email": address,
+                                          "email_subject": subject, "email_body": html}, pack)
             sent.append(address)
         except Exception as exc:  # noqa: BLE001
             failed_to.append({"email": address, "error": str(exc)[:200]})

@@ -26,3 +26,7 @@ AGENT_SERVICE_ACCOUNT = os.getenv("AGENT_SERVICE_ACCOUNT", "")
 
 # Notification emails: "Role=a@x.com,b@x.com;Other Role=c@x.com" (or just "a@x.com" for every role).
 APPROVER_EMAILS = os.getenv("APPROVER_EMAILS", "")
+
+# Private Cloud Storage bucket that hands the order pack PDF to the email workflow (created by scripts/setup_order_pack_bucket.py).
+# Empty string switches the attachment off.
+ORDER_PACK_BUCKET = os.getenv("ORDER_PACK_BUCKET", f"{PROJECT}-launchkit-order-packs" if PROJECT else "")
