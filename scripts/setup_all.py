@@ -82,7 +82,7 @@ def main():
                 print(exc.code if isinstance(exc.code, str) else f"(exit {exc.code})")
         print()
 
-    bq_args = types.SimpleNamespace(dataset=args.dataset, location=args.location, reset=False, reset_demo=False,
+    bq_args = types.SimpleNamespace(dataset=args.dataset, location=args.location, reset=False, reset_demo=False, refresh_reference=False, print_ddl=False,
                                     approver_email=args.approver_email, skip_preflight=True)
     step("BigQuery data", lambda: bq.run(bq_args, project=project))
     ai_args = types.SimpleNamespace(test=args.test, check_only=False, provision_region=False,

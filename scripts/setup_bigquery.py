@@ -151,11 +151,11 @@ def run(args, project=""):
     client = bigquery.Client(project=project, location=args.location)
     ds = f"{project}.{args.dataset}"
 
-    if args.refresh_reference:
+    if getattr(args, "refresh_reference", False):
         refresh_reference(client, ds, bigquery)
         args.reset_demo = True          # old plans and orders may point at items or stock that just changed
 
-    if args.reset_demo:
+    if getattr(args, "reset_demo", False):
         client.query(ddl(ds)).result()  # creates any table or view added since the dataset was first built
         for t in TRANSACTION_TABLES:
             client.query(f"TRUNCATE TABLE `{ds}.{t}`").result()
