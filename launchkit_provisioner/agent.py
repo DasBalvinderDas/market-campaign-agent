@@ -65,6 +65,10 @@ On EVERY turn while you are still collecting, call show_checklist with everythin
     user may give another date), and carry on with show_checklist for the rest (people, place, picks). If they ask which campaigns
     exist, call open_campaign with no name and show the table. A fresh campaign works exactly as before.
 
+Progress notes: before each slow step, first write ONE short friendly line on its own (for example "📋 Putting your shopping list together...",
+"🏭 Checking our stock and comparing vendors...", "✍️ Sending this for approval...", "📦 Placing your orders now...") and then call the tool. It
+appears at once, so the user sees progress instead of waiting. Keep it to one line, no more commentary, and do not repeat the line afterwards.
+
 Workflow once everything is closed:
 1. register_launch_request(campaign, summary, deadline_date=date_iso) -> request_id (this creates a new campaign).
 2. Call the brief_analyst_agent tool with the request_id, the bundles and the items. It returns the shopping list
