@@ -110,6 +110,17 @@ def _trigger(number, trigger_id, start_task, inputs, outputs):
             "inputVariables": {"names": list(inputs)}, "outputVariables": {"names": list(outputs)}}
 
 
+def _attachment_value(style, empty):
+    """The Send Email task's attachment setting: "array" (a list holding the path), "string" (the path itself) or off (none).
+    True means "array" and False means off."""
+    style = "array" if style is True else ("off" if style in (False, None) else style)
+    if style == "array":
+        return {"stringArray": {"stringValues": ["$attachment_path$"]}}
+    if style == "string":
+        return {"stringValue": "$attachment_path$"}
+    return empty
+
+
 def _email_task(task_id, next_id, body_format="html", attachments=True):
     """Send Email task. Parameter keys follow Google's published foreach-loop-send-email sample."""
     empty = {"stringArray": {}}
@@ -118,8 +129,7 @@ def _email_task(task_id, next_id, body_format="html", attachments=True):
             "parameters": {
                 "To": {"key": "To", "value": {"stringArray": {"stringValues": ["$recipient_email$"]}}},
                 "Cc": {"key": "Cc", "value": empty}, "Bcc": {"key": "Bcc", "value": empty},
-                "AttachmentPath": {"key": "AttachmentPath", "value": (
-                    {"stringArray": {"stringValues": ["$attachment_path$"]}} if attachments else empty)},
+                "AttachmentPath": {"key": "AttachmentPath", "value": _attachment_value(attachments, empty)},
                 "Subject": {"key": "Subject", "value": {"stringValue": "$email_subject$"}},
                 "TextBody": {"key": "TextBody", "value": {"stringValue": "$email_body$"}},
                 "BodyFormat": {"key": "BodyFormat", "value": {"stringValue": body_format}},
@@ -273,13 +283,23 @@ def run_with(http, args, project):
         sys.exit(f"\nNot set up yet (missing: {', '.join(sorted(wanted - found))}). Run without --check-only to create it.")
     else:
         print("  creating the integration and publishing it ..." if not exists else "  adding a new version and publishing it ...")
-        r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
-                      json=build_version(email=not args.no_email,
-                                           approver_emails=approvers if getattr(args, "platform_approval_email", False) else None,
-                                           email_format=getattr(args, "email_format", "html"),
-                                           attachments=not getattr(args, "no_attachments", False)))
+        # The attachment setting is tried in the formats the Send Email task may accept; the first one the API takes is used,
+        # and the last resort is no attachment (the emails then go out without the PDF).
+        styles = ["off"] if (getattr(args, "no_attachments", False) or args.no_email) else ["array", "string", "off"]
+        for style in styles:
+            r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
+                          json=build_version(email=not args.no_email,
+                                             approver_emails=approvers if getattr(args, "platform_approval_email", False) else None,
+                                             email_format=getattr(args, "email_format", "html"), attachments=style))
+            if r.status_code == 400 and "email task" in r.text.lower() and style != "off":
+                print(f"  the email task did not accept the attachment setting '{style}', trying the next one ...")
+                continue
+            break
         if r.status_code != 200:
             _fail(r, project)
+        if not args.no_email:
+            print("  OK  the PDF will be attached to the emails" if style != "off" else
+                  "  NOTE the email task accepts no attachment on this project: the emails go out without the PDF (it stays in the chat)")
         version = r.json()["name"]
         r = http.post(f"{API}/{version}:publish", json={})
         if r.status_code != 200:

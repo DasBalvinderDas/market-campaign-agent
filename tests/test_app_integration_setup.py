@@ -175,3 +175,11 @@ def test_email_task_attaches_the_pack_unless_switched_off():
     assert attach(sai.build_version()) == {"stringArray": {"stringValues": ["$attachment_path$"]}}
     assert attach(sai.build_version(attachments=False)) == {"stringArray": {}}
     assert "attachment_path" in {p["key"] for p in sai.build_version()["integrationParameters"]}
+
+
+def test_attachment_styles():
+    def attach(style):
+        t = next(x for x in sai.build_version(attachments=style)["taskConfigs"] if x["task"] == "EmailTask")
+        return t["parameters"]["AttachmentPath"]["value"]
+    assert attach("string") == {"stringValue": "$attachment_path$"}
+    assert attach("off") == {"stringArray": {}}
