@@ -291,6 +291,10 @@ def run_with(http, args, project):
                           json=build_version(email=not args.no_email,
                                              approver_emails=approvers if getattr(args, "platform_approval_email", False) else None,
                                              email_format=getattr(args, "email_format", "html"), attachments=style))
+            if r.status_code == 200:
+                version = r.json()["name"]
+                exists = True                                             # the integration now exists (as a draft at least)
+                r = http.post(f"{API}/{version}:publish", json={})       # the email task is validated at publish time
             if r.status_code == 400 and "email task" in r.text.lower() and style != "off":
                 print(f"  the email task did not accept the attachment setting '{style}', trying the next one ...")
                 continue
@@ -300,10 +304,6 @@ def run_with(http, args, project):
         if not args.no_email:
             print("  OK  the PDF will be attached to the emails" if style != "off" else
                   "  NOTE the email task accepts no attachment on this project: the emails go out without the PDF (it stays in the chat)")
-        version = r.json()["name"]
-        r = http.post(f"{API}/{version}:publish", json={})
-        if r.status_code != 200:
-            _fail(r, project)
         exists, found = _published_triggers(http, base)
         if not (wanted <= (found if isinstance(found, set) else set())):
             sys.exit("\nThe version was created but is not showing as published. Open the integration in the console and click Publish.")

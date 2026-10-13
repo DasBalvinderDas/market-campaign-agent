@@ -183,3 +183,20 @@ def test_attachment_styles():
         return t["parameters"]["AttachmentPath"]["value"]
     assert attach("string") == {"stringValue": "$attachment_path$"}
     assert attach("off") == {"stringArray": {}}
+
+
+def test_falls_back_when_publish_rejects_the_attachment(capsys):
+    class Picky(FakeHttp):
+        publishes = 0
+
+        def post(self, url, json=None, params=None):
+            if url.endswith(":publish"):
+                Picky.publishes += 1
+                if Picky.publishes < 3:                 # the first two formats are refused at publish time
+                    return Resp(400, {"error": {"message": "Invalid email task configuration."}})
+            return super().post(url, json=json, params=params)
+    h = Picky(existing=False)
+    sai.run_with(h, args(), "p")
+    assert Picky.publishes == 3
+    assert [p for m, u, p in h.calls if m == "POST" and u.endswith("/versions")][1] == {"newIntegration": "false"}
+    assert "emails go out without the PDF" in capsys.readouterr().out
