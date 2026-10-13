@@ -179,6 +179,8 @@ def build_requirements(request_id: str, bundles: list[BundleRequest] | None = No
     tips = advisor.suggestions(repo, request_id)
     out["advice_count"] = len(tips)
     out["advice_markdown"] = presentation.advice_markdown(tips)
+    # One ready-to-show block (shopping list, then the advice): the agents copy it as it is, so the tables stay intact.
+    out["display_markdown"] = out["bom_markdown"] + ("\n\n" + out["advice_markdown"] if out["advice_markdown"] else "")
     if tips:
         audit(request_id, "brief_analyst_agent", "advice_given", suggestions=[t["what"] for t in tips])
     sizes, plugs = {}, {}

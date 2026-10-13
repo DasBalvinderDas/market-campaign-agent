@@ -68,8 +68,8 @@ On EVERY turn while you are still collecting, call show_checklist with everythin
 Workflow once everything is closed:
 1. register_launch_request(campaign, summary, deadline_date=date_iso) -> request_id (this creates a new campaign).
 2. Call the brief_analyst_agent tool with the request_id, the bundles and the items. It returns the shopping list
-   (bom_markdown) and business advice (advice_markdown, advice_count).
-   - advice_count above 0: reply with the shopping list and the advice exactly (the advice ends with the question "Want any of
+   and business advice together as `display_markdown` (plus advice_count).
+   - advice_count above 0: reply with the brief analyst's `display_markdown` exactly as it is, with real line breaks, never as text with \\n in it (the advice ends with the question "Want any of
      these? ... Say Looks good"). End your turn there. When the user adds something, call the brief_analyst_agent tool again
      with the COMPLETE updated list and show the new shopping list and advice. When they say it looks good, go on to step 3.
    - advice_count is 0: go straight to step 3 in the same turn.
@@ -86,15 +86,16 @@ Workflow once everything is closed:
    the new date as YYYY-MM-DD, then proceed with the new request_id and the same list. Never change anything after a sign-off.
 6. When the user chooses an option (the plan feels good): call authorize_launch (request_id, the option, a one-sentence
    justification).
-   - status approved: call the fulfilment_agent tool, then show its summary, then call get_order_pack and show its message.
+   - status approved: call the fulfilment_agent tool, then show its summary.
    - status pending_approval: begin with the text in `announce`, in bold, exactly, then show `display_markdown`. Do NOT
      call the fulfilment_agent tool. The approval email is sent first; orders come only after the approval.
    - status error: explain the problem simply and list the valid choices.
 7. When the user asks for the status (or says the approver decided): call get_launch_status. If its next_step says to place
-   the orders, call the fulfilment_agent tool and show ONLY its summary (do not show the status table first), then call
-   get_order_pack and show its message (the PDF with the shopping list and vendors). Otherwise show
+   the orders, call the fulfilment_agent tool and show ONLY its summary (do not show the status table first). Otherwise show
    `display_markdown`. If rejected, say the
    held stock was released and offer to re-plan.
+7b. Only when the user asks for the details as a document (for example "send me the order pack" or "PDF"): call get_order_pack with the
+   request_id and show its message. Do not call it otherwise: it is not part of the normal flow.
 8. When the user reports a vendor delay: call the sourcing_planner_agent tool with the request_id and the delay. If the
    request is not signed off yet, show the new plan again as in step 4.
 

@@ -7,6 +7,7 @@ status(): reads the workflow's result when the user asks. Approved: the decision
     fulfilment agent places the orders. Rejected: the held depot stock is released.
 The amount, the options and the recipients all come from BigQuery; the model only names the option.
 """
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from . import config, emails, presentation
@@ -143,10 +144,17 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
     subject, html = emails.approval_email(repo, launch, scenario, lines, request_id, justification, policy["approver_role"],
                                           emails.approval_url(execution_id), rng)
     sent, failed_to = [], []
-    for address in emails_to:
+
+    def _send(address):
+        executor.execute(config.UPDATE_TRIGGER, {"request_id": request_id, "launch_id": req["launch_id"],
+                                                 "recipient_email": address, "email_subject": subject, "email_body": html})
+
+    # The approvers' emails go out at the same time, so the chat answers sooner.
+    with ThreadPoolExecutor(max_workers=max(1, min(len(emails_to), 5))) as pool:
+        futures = [(a, pool.submit(_send, a)) for a in emails_to]
+    for address, fut in futures:
         try:
-            executor.execute(config.UPDATE_TRIGGER, {"request_id": request_id, "launch_id": req["launch_id"],
-                                                     "recipient_email": address, "email_subject": subject, "email_body": html})
+            fut.result()
             sent.append(address)
         except Exception as exc:  # noqa: BLE001
             failed_to.append({"email": address, "error": str(exc)[:200]})

@@ -14,8 +14,8 @@ brief_analyst_agent = LlmAgent(
         "request_id and EVERY bundle of the brief: GUEST_KIT (VIP guest welcome kits for a campaign), "
         "VENUE_DISPLAY (display stands for campaign venues or showrooms) and SALES_PACK (sales folders, sales "
         "leave-behinds). Use the quantities as stated; give a region (US, EMEA or APAC) only when the brief limits a "
-        "bundle to one region. Single things the user wants as they are (for example 5 gift boxes for the US) go in items with a region; never invent a bundle type, an item or a quantity. If the tool says an item is unclear or a region is missing, return that message so the root can ask. Reply with the tool's bom_markdown "
-        "EXACTLY as returned (the shopping list), then the tool's advice_markdown EXACTLY as returned (if it is not empty), "
+        "bundle to one region. Single things the user wants as they are (for example 5 gift boxes for the US) go in items with a region; never invent a bundle type, an item or a quantity. If the tool says an item is unclear or a region is missing, return that message so the root can ask. Reply with the tool's display_markdown "
+        "copied EXACTLY as returned, character for character, with real line breaks (never the two characters backslash and n), "
         "then on a new line: advice_count. If the tool returns an error, report it "
         "and stop. Reply to the root agent with your report."
     ),
