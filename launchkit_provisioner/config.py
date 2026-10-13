@@ -27,10 +27,3 @@ AGENT_SERVICE_ACCOUNT = os.getenv("AGENT_SERVICE_ACCOUNT", "")
 # Notification emails: "Role=a@x.com,b@x.com;Other Role=c@x.com" (or just "a@x.com" for every role).
 APPROVER_EMAILS = os.getenv("APPROVER_EMAILS", "")
 
-# Private Cloud Storage bucket that hands the order pack PDF to the email workflow (created by scripts/setup_order_pack_bucket.py).
-# Empty string switches the attachment off.
-ORDER_PACK_BUCKET = os.getenv("ORDER_PACK_BUCKET", f"{PROJECT}-launchkit-order-packs" if PROJECT else "")
-
-# How the PDF path is handed to the Send Email task: "list-gs" (["gs://bucket/file"]), "text-gs", "list-path" (["bucket/file"]) or
-# "text-path". scripts/test_email_pdf.py sends one test email per form so you can see which one attaches the PDF.
-ORDER_PACK_ATTACH_FORM = os.getenv("ORDER_PACK_ATTACH_FORM", "list-gs")

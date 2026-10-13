@@ -149,14 +149,3 @@ def orders_placed_email(repo, launch, scenario, pos, transfers, saved, request_i
                f'assistant: <em>What is the status of {escape(request_id)}?</em></p>')
     return subject, _page("#0f766e", "ORDERS PLACED", launch["launch_name"], inner)
 
-
-def send_update(executor, inputs: dict, attachment: str = ""):
-    """Send one email through the update workflow. With an attachment (a gs:// path) it goes in the form set by
-    ORDER_PACK_ATTACH_FORM; if the workflow refuses it, the same email goes without the PDF so the message is never lost."""
-    from . import storage
-    if attachment:
-        try:
-            return executor.execute(config.UPDATE_TRIGGER, {**inputs, "attachment_path": storage.attachment_value(attachment)})
-        except Exception:  # noqa: BLE001
-            pass
-    return executor.execute(config.UPDATE_TRIGGER, inputs)

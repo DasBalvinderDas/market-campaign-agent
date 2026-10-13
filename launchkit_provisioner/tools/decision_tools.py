@@ -51,5 +51,5 @@ async def get_order_pack(request_id: str, tool_context=None) -> dict:
         except Exception:  # noqa: BLE001 - no artifact service in this run
             saved = False
     msg = (f"📎 **Order pack ready:** `{name}` (shopping list, vendors and warehouse moves in one PDF)." if saved else
-           "The order pack could not be attached in this chat. It is in the confirmation email.")
+           "The order pack could not be attached in this chat.")
     return {"status": "ok" if saved else "not_attached", "file": name, "bytes": len(pdf), "display_markdown": msg}

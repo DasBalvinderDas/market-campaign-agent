@@ -54,8 +54,7 @@ TRANSFER_IN = {"request_id": S, "plan_line_id": S, "depot_id": S, "sku": S, "qua
 TRANSFER_OUT = {"transfer_number": S, "execution_id": S}
 APPROVAL_IN = {"request_id": S, "launch_id": S, "approver_role": S, "amount": D, "approval_message": S}
 APPROVAL_OUT = {"decision": S}
-UPDATE_IN = {"request_id": S, "launch_id": S, "recipient_email": S, "email_subject": S, "email_body": S,
-             "attachment_path": S}
+UPDATE_IN = {"request_id": S, "launch_id": S, "recipient_email": S, "email_subject": S, "email_body": S}
 UPDATE_OUT = {"status": S}
 
 SAMPLE = {
@@ -110,18 +109,7 @@ def _trigger(number, trigger_id, start_task, inputs, outputs):
             "inputVariables": {"names": list(inputs)}, "outputVariables": {"names": list(outputs)}}
 
 
-def _attachment_value(style, empty):
-    """The Send Email task's attachment setting: "array" (a list holding the path), "string" (the path itself) or off (none).
-    True means "array" and False means off."""
-    style = "array" if style is True else ("off" if style in (False, None) else style)
-    if style == "array":
-        return {"stringArray": {"stringValues": ["$attachment_path$"]}}
-    if style in ("string", "arrayvar"):
-        return {"stringValue": "$attachment_path$"}
-    return empty
-
-
-def _email_task(task_id, next_id, body_format="html", attachments=True):
+def _email_task(task_id, next_id, body_format="html"):
     """Send Email task. Parameter keys follow Google's published foreach-loop-send-email sample."""
     empty = {"stringArray": {}}
     return {"task": "EmailTask", "taskId": task_id, "displayName": "Email the launch team",
@@ -129,7 +117,7 @@ def _email_task(task_id, next_id, body_format="html", attachments=True):
             "parameters": {
                 "To": {"key": "To", "value": {"stringArray": {"stringValues": ["$recipient_email$"]}}},
                 "Cc": {"key": "Cc", "value": empty}, "Bcc": {"key": "Bcc", "value": empty},
-                "AttachmentPath": {"key": "AttachmentPath", "value": _attachment_value(attachments, empty)},
+                "AttachmentPath": {"key": "AttachmentPath", "value": empty},
                 "Subject": {"key": "Subject", "value": {"stringValue": "$email_subject$"}},
                 "TextBody": {"key": "TextBody", "value": {"stringValue": "$email_body$"}},
                 "BodyFormat": {"key": "BodyFormat", "value": {"stringValue": body_format}},
@@ -177,7 +165,7 @@ def _execution_id():
         "outputField": _out_field("execution_id")}
 
 
-def build_version(email: bool = True, approver_emails=None, email_format: str = "html", attachments: bool = True) -> dict:
+def build_version(email: bool = True, approver_emails=None, email_format: str = "html") -> dict:
     """approver_emails: only when Google's own approval email is wanted (--platform-approval-email). By default the agent
     sends its own HTML approval email with Approve and Reject buttons and the approval task sends none."""
     """The IntegrationVersion body: four API triggers (purchase order, depot transfer, approval, launch update)."""
@@ -187,15 +175,13 @@ def build_version(email: bool = True, approver_emails=None, email_format: str = 
                         (TRANSFER_OUT, "OUT"), (APPROVAL_OUT, "OUT"), (UPDATE_OUT, "OUT")):
         for key, typ in group.items():
             params.setdefault(key, {"key": key, "displayName": key, "dataType": typ, "inputOutputType": kind})
-    if attachments == "arrayvar":          # the attachment variable itself is a list of paths
-        params["attachment_path"]["dataType"] = "STRING_ARRAY"
     tasks = [_mapping_task("1", "Build PO number", [_prefixed("PO-", "plan_line_id", "po_number"), _execution_id()]),
              _mapping_task("4", "Build transfer number",
                            [_prefixed("TR-", "plan_line_id", "transfer_number"), _execution_id()])]
     if email:
         # 2: send email (only trigger inputs are referenced, like Google's foreach-loop-send-email sample)
         # 3: set status
-        tasks += [_email_task("2", "3", email_format, attachments), _mapping_task("3", "Mark update sent", [status])]
+        tasks += [_email_task("2", "3", email_format), _mapping_task("3", "Mark update sent", [status])]
     else:
         tasks.append(_mapping_task("2", "Mark update sent", [status]))
     tasks += [_approval_task("10", approver_emails, "11", "12"),
@@ -285,27 +271,16 @@ def run_with(http, args, project):
         sys.exit(f"\nNot set up yet (missing: {', '.join(sorted(wanted - found))}). Run without --check-only to create it.")
     else:
         print("  creating the integration and publishing it ..." if not exists else "  adding a new version and publishing it ...")
-        # The attachment setting is tried in the formats the Send Email task may accept; the first one the API takes is used,
-        # and the last resort is no attachment (the emails then go out without the PDF).
-        styles = ["off"] if (getattr(args, "no_attachments", False) or args.no_email) else ["array", "string", "arrayvar", "off"]
-        for style in styles:
-            r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
-                          json=build_version(email=not args.no_email,
-                                             approver_emails=approvers if getattr(args, "platform_approval_email", False) else None,
-                                             email_format=getattr(args, "email_format", "html"), attachments=style))
-            if r.status_code == 200:
-                version = r.json()["name"]
-                exists = True                                             # the integration now exists (as a draft at least)
-                r = http.post(f"{API}/{version}:publish", json={})       # the email task is validated at publish time
-            if r.status_code == 400 and style != "off" and any(k in r.text.lower() for k in ("email task", "emailtask", "attachment_path")):
-                print(f"  the email task did not accept the attachment setting '{style}', trying the next one ...")
-                continue
-            break
+        r = http.post(f"{base}/versions", params={"newIntegration": "false" if exists else "true"},
+                      json=build_version(email=not args.no_email,
+                                         approver_emails=approvers if getattr(args, "platform_approval_email", False) else None,
+                                         email_format=getattr(args, "email_format", "html")))
         if r.status_code != 200:
             _fail(r, project)
-        if not args.no_email:
-            print("  OK  the PDF will be attached to the emails" if style != "off" else
-                  "  NOTE the email task accepts no attachment on this project: the emails go out without the PDF (it stays in the chat)")
+        version = r.json()["name"]
+        r = http.post(f"{API}/{version}:publish", json={})
+        if r.status_code != 200:
+            _fail(r, project)
         exists, found = _published_triggers(http, base)
         if not (wanted <= (found if isinstance(found, set) else set())):
             sys.exit("\nThe version was created but is not showing as published. Open the integration in the console and click Publish.")
@@ -345,8 +320,6 @@ def main():
     ap.add_argument("--email-format", choices=["html", "text"], default="html",
                     help="body format of the launch-team update email (default html: a formatted email; use text if your "
                          "project rejects html)")
-    ap.add_argument("--no-attachments", action="store_true",
-                    help="do not attach the order pack PDF to the emails (use if your Send Email task rejects the attachment path)")
     ap.add_argument("--no-email", action="store_true", help="do not add the Send Email task to send_launch_update")
     ap.add_argument("--check-only", action="store_true", help="check only; do not create anything")
     ap.add_argument("--provision-region", action="store_true",
@@ -356,7 +329,7 @@ def main():
     if args.print_definition:
         print(json.dumps(build_version(email=not args.no_email,
                                        approver_emails=approver_addresses(args.approver_email) if args.platform_approval_email else None,
-                                       email_format=args.email_format, attachments=not args.no_attachments), indent=2))
+                                       email_format=args.email_format), indent=2))
         return
     run(args, project=resolve_project(args.project))
 

@@ -24,7 +24,7 @@ the standard price. Open a **new chat** for every run. The approval email goes t
 
 **Standing campaigns.** The system always starts with three campaigns: **London Campaign** (`LAUNCH-LONDON`), **US Campaign** (`LAUNCH-USA`) and **Singapore Campaign** (`LAUNCH-SINGAPORE`), each in hand **30 days after setup**. To add to one, say its name or reference (`add to the London campaign`, `LAUNCH-USA`); partial names work. `Which campaigns do we have?` lists them. A fresh campaign works as described below.
 
-After the orders are placed, the assistant also attaches an **order pack PDF** (shopping list, vendors, warehouse moves) to the chat.
+After the orders are placed, the assistant also attaches an **order pack PDF** (shopping list, vendors, warehouse moves) to the chat. The emails carry the same shopping list and vendor tables in the message itself.
 
 Approval levels used in both stories: **up to $5,000 automatic · $5,000 to $50,000 VP Product Marketing · above $50,000 CMO.**
 

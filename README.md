@@ -99,4 +99,3 @@ model. No cloud access is needed.
 
 - `setup_bigquery.py` seeds three campaigns, London (`LAUNCH-LONDON`), US (`LAUNCH-USA`) and Singapore (`LAUNCH-SINGAPORE`), with the in-hand date 30 days after setup. `--reset-demo` / `--refresh-reference` re-bases the dates to today. The agent opens them by id or name (`open_campaign`).
 - `launchkit_provisioner/order_pack.py` builds a formatted PDF (shopping list, vendors, warehouse moves, PO numbers) with reportlab. The agent attaches it in the chat after the orders are placed (`get_order_pack`).
-- The same PDF is attached to the approval and the orders-placed emails. It travels through one private Cloud Storage bucket created by `scripts/setup_order_pack_bucket.py` (no links are sent).

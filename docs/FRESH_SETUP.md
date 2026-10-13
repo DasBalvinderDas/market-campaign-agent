@@ -74,7 +74,6 @@ python scripts/setup_bigquery.py --reset --approver-email "dasbalvinder.das@hclt
 cd ~/market-campaign-agent
 git pull origin <your-branch>
 source scripts/env_setup.sh
-python scripts/setup_order_pack_bucket.py              # once: private bucket for the PDF in the emails (name from ORDER_PACK_BUCKET in .env; setup_all.py also does it)
 python scripts/setup_application_integration.py --republish --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
 python scripts/setup_bigquery.py --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
 python scripts/setup_bigquery.py --refresh-reference   # picks up new items, vendors, prices and stock, and resets the demo
@@ -147,10 +146,3 @@ Approve shows as an approval record `LIFTED`, Reject as `REJECTED`; `PENDING` me
 | Publishing the workflows fails on the email body format | The launch-team update is an HTML email. Run `python scripts/setup_application_integration.py --email-format text --republish` to fall back to plain text |
 | 403 on Application Integration | `AGENT_SERVICE_ACCOUNT` missing in `.env` or roles missing; the deploy script says which |
 
-### The PDF order pack in the emails
-
-Both emails (approval request and orders placed) carry the order pack as a PDF attachment: shopping list, vendors, warehouse moves.
-The PDF is handed to the email workflow through one **private** Cloud Storage bucket (`<project>-launchkit-order-packs`, files deleted after 2 days, no
-links are sent). Create it once with `python scripts/setup_order_pack_bucket.py`, then republish the workflows and redeploy the agent.
-If the Send Email task ever rejects the attachment, the email is still sent without it; to switch the attachment off in the workflow run
-`python scripts/setup_application_integration.py --republish --no-attachments`.

@@ -9,7 +9,7 @@ amount. Calling it twice never orders twice (executed lines are skipped).
 """
 from concurrent.futures import ThreadPoolExecutor
 
-from . import config, emails, presentation, storage
+from . import config, emails, presentation
 from .data.seed_data import TEAM_ROLE
 
 
@@ -137,12 +137,11 @@ def execute_plan(repo, executor, request_id: str) -> dict:
     if placed_now and not remaining:
         all_pos, all_tr = repo.list_pos(request_id), repo.list_transfers(request_id)
         subject, body = _update_email(repo, launch, scenario, all_pos, all_tr, scenario["savings_usd"], request_id)
-        pack = storage.pack_path(repo, request_id)
         for email in repo.get_approver_emails(TEAM_ROLE):
             try:
-                emails.send_update(executor, {
+                executor.execute(config.UPDATE_TRIGGER, {
                     "request_id": request_id, "launch_id": launch["launch_id"], "recipient_email": email,
-                    "email_subject": subject, "email_body": body}, pack)
+                    "email_subject": subject, "email_body": body})
                 update["sent_to"].append(email)
             except Exception as exc:  # noqa: BLE001
                 update["failed"].append({"email": email, "error": str(exc)[:200]})
