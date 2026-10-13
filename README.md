@@ -28,8 +28,8 @@ executed by policy), $5,000 to $50,000 needs the **VP Product Marketing**, above
 Everything is created and controlled by scripts; nothing is built by hand.
 
 ```bash
-git clone https://github.com/dasbalvinderdas/market-campaign-agent.git && cd market-campaign-agent
-git checkout claude/budget-approval-reshape
+git clone <your-git-repository-url> && cd market-campaign-agent
+git checkout <your-branch>
 # put GOOGLE_CLOUD_PROJECT and AGENT_SERVICE_ACCOUNT in .env (see .env.example), then:
 source scripts/env_setup.sh --approver-email "you@example.com,colleague@example.com"
 python scripts/deploy_agent_engine.py

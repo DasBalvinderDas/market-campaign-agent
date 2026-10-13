@@ -2,7 +2,7 @@
 
 Run everything in Cloud Shell, from the repo folder. Replace the project, service account and approver emails with yours.
 Values used so far: project `gebu-demo-sandbox`, service account `app-svc-custom-sandbox@gebu-demo-sandbox.iam.gserviceaccount.com`,
-approvers `dasbalvinder.das@hcltech.com` and `shilpa.raina@hcltech.com`. Branch: `claude/budget-approval-reshape`.
+approvers `dasbalvinder.das@hcltech.com` and `shilpa.raina@hcltech.com`.
 BigQuery dataset: `launchkit`. Application Integration: `launchkit-workflows` (4 triggers).
 
 | I want to... | Go to |
@@ -23,9 +23,9 @@ roles. The scripts check this and print what is missing. No other Google Cloud s
 ## A. Fresh setup
 
 ```bash
-git clone https://github.com/dasbalvinderdas/market-campaign-agent.git
+git clone <your-git-repository-url>
 cd market-campaign-agent
-git checkout claude/budget-approval-reshape
+git checkout <your-branch>
 
 cat > .env <<'EOF2'
 GOOGLE_CLOUD_PROJECT=gebu-demo-sandbox
@@ -72,7 +72,7 @@ python scripts/setup_bigquery.py --reset --approver-email "dasbalvinder.das@hclt
 
 ```bash
 cd ~/market-campaign-agent
-git pull origin claude/budget-approval-reshape
+git pull origin <your-branch>
 source scripts/env_setup.sh
 python scripts/setup_application_integration.py --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
 python scripts/setup_bigquery.py --approver-email "dasbalvinder.das@hcltech.com,shilpa.raina@hcltech.com"
