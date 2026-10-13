@@ -715,7 +715,7 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
     if failed:
         out += ["", f"⚠️ **{len(failed)} order lines failed** and were not retried. Ask me for the status."]
     else:
-        out += ["", "📎 Want the details as a PDF? Say **Send me the order pack**."]
+        out += ["", "📎 The order pack PDF is in this chat. Say **Send me the order pack** for a fresh copy that lists the purchase order numbers."]
     return "\n".join(out)
 
 

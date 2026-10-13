@@ -1,3 +1,4 @@
+import asyncio
 import pytest
 
 from launchkit_provisioner import config
@@ -74,7 +75,7 @@ def test_delay_after_sign_off_reports_the_impact_and_does_not_replan(repo, monke
     rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
     brief_tools.build_requirements(rid, bundles(("GUEST_KIT", 150, ""), ("VENUE_DISPLAY", 10, ""), ("SALES_PACK", 300, "")))
     sourcing_tools.build_scenarios(rid)
-    assert decision_tools.authorize_launch(rid, "2", "go")["status"] == "pending_approval"
+    assert asyncio.run(decision_tools.authorize_launch(rid, "2", "go"))["status"] == "pending_approval"
     out = sourcing_tools.report_vendor_delay(rid, "RapidDisplay", 12)
     assert out["impact"]["affected_lines"] >= 1 and out["impact"]["still_on_time"] is False
     assert "not re-planned" in out["next_step"]
@@ -91,7 +92,7 @@ def test_the_gate_and_the_status_tools_go_through_the_flow(repo, monkeypatch):
     brief_tools.build_requirements(rid, bundles(("GUEST_KIT", 150, ""), ("VENUE_DISPLAY", 10, ""), ("SALES_PACK", 300, "")))
     sourcing_tools.build_scenarios(rid)
     assert fulfilment_tools.execute_plan(rid)["status"] == "error"                 # nothing signed off yet
-    assert decision_tools.authorize_launch(rid, "Option 2", "saves 19%")["status"] == "pending_approval"
+    assert asyncio.run(decision_tools.authorize_launch(rid, "Option 2", "saves 19%"))["status"] == "pending_approval"
     assert fulfilment_tools.execute_plan(rid)["status"] == "BLOCKED"
     assert decision_tools.get_launch_status(rid)["status"] == "PENDING"
     ex.execution = {"eventExecutionDetails": {"eventExecutionState": "SUCCEEDED"}}
@@ -113,3 +114,19 @@ def test_overview_lists_launches_and_surplus(repo):
     out = orchestration_tools.get_launch_overview()
     assert out["launches"][0]["launch_id"] == "LAUNCH-SPRING" and out["requests"] == []
     assert {"London EMEA Marketing Hub", "Dallas Marketing Depot"} <= {d["depot"] for d in out["depot_surplus"]}
+
+
+def test_the_order_pack_is_attached_when_the_choice_is_made(repo, monkeypatch):
+    monkeypatch.setattr(decision_tools, "IntegrationExecutor", lambda: FakeExecutor())
+
+    class Ctx:
+        saved = []
+
+        async def save_artifact(self, name, part):
+            Ctx.saved.append((name, part.inline_data.mime_type))
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "kits")["request_id"]
+    brief_tools.build_requirements(rid, bundles(("GUEST_KIT", 150, ""), ("VENUE_DISPLAY", 10, ""), ("SALES_PACK", 300, "")))
+    sourcing_tools.build_scenarios(rid)
+    out = asyncio.run(decision_tools.authorize_launch(rid, "2", "go", tool_context=Ctx()))
+    assert out["status"] == "pending_approval"
+    assert Ctx.saved == [(f"order-pack-{rid}.pdf", "application/pdf")] and "Order pack PDF" in out["display_markdown"]

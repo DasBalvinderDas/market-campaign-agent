@@ -98,8 +98,8 @@ Workflow once everything is closed:
    the orders, call the fulfilment_agent tool and show ONLY its summary (do not show the status table first). Otherwise show
    `display_markdown`. If rejected, say the
    held stock was released and offer to re-plan.
-7b. Only when the user asks for the details as a document (for example "send me the order pack" or "PDF"): call get_order_pack with the
-   request_id and show its message. Do not call it otherwise: it is not part of the normal flow.
+7b. The order pack PDF is attached automatically by authorize_launch (its message says so). Only when the user asks for it again (for example
+   "send me the order pack" or "PDF"), call get_order_pack with the request_id and show its message.
 8. When the user reports a vendor delay: call the sourcing_planner_agent tool with the request_id and the delay. If the
    request is not signed off yet, show the new plan again as in step 4.
 
