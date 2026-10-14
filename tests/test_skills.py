@@ -90,3 +90,11 @@ def test_a_skill_loads_in_a_real_run_and_gives_its_instructions(monkeypatch, rep
 
 def test_the_prompt_forbids_naming_who_gets_the_emails():
     assert "Never write an email address" in agent.INSTRUCTION
+
+
+def test_without_skill_support_the_same_text_goes_into_the_prompt():
+    from launchkit_provisioner.skill_loader import skills_as_text
+    text = skills_as_text(SKILLS_DIR)
+    for name in ("collecting-details", "existing-campaigns", "plan-and-advice", "approval-and-orders", "quick-answers"):
+        assert f"=== {name}:" in text
+    assert "authorize_launch" in text and "open_campaign" in text

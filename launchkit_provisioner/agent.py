@@ -9,7 +9,7 @@ from google.adk.agents import LlmAgent
 from google.adk.tools.agent_tool import AgentTool
 
 from . import config
-from .skill_loader import build_toolset
+from .skill_loader import build_toolset, skills_as_text
 from .sub_agents.brief_analyst_agent import brief_analyst_agent
 from .sub_agents.fulfilment_agent import fulfilment_agent
 from .sub_agents.sourcing_planner_agent import sourcing_planner_agent
@@ -64,7 +64,11 @@ authorize_launch.
 
 # The step-by-step instructions live in launchkit_provisioner/skills/<name>/SKILL.md. The catalog is in the system instruction
 # (EAGER), so the agent loads a skill straight away; a loaded skill stays active for the session.
-skills = build_toolset(Path(__file__).parent / "skills")
+SKILLS_DIR = Path(__file__).parent / "skills"
+skills = build_toolset(SKILLS_DIR)
+if skills is None:        # an ADK without skills: the same instructions go straight into the prompt
+    INSTRUCTION = (INSTRUCTION + skills_as_text(SKILLS_DIR)).replace(
+        "Load the matching skill (once; it stays loaded) BEFORE you act on", "Use the matching section further down BEFORE you act on")
 
 root_agent = LlmAgent(
     name="launchkit_provisioner",
@@ -76,6 +80,6 @@ root_agent = LlmAgent(
     instruction=INSTRUCTION,
     tools=[register_launch_request, create_campaign, open_campaign, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
            get_vendor_report, authorize_launch, get_launch_status, get_order_pack]
-    + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)] + [skills],
+    + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)] + ([skills] if skills is not None else []),
     on_tool_error_callback=on_tool_error,
 )
