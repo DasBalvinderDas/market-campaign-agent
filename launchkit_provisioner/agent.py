@@ -6,11 +6,10 @@ the sign-off gate (authorize_launch) and is the only agent that can approve spen
 from pathlib import Path
 
 from google.adk.agents import LlmAgent
-from google.adk.skills import load_skills_from_dir
 from google.adk.tools.agent_tool import AgentTool
-from google.adk.tools.skill_toolset import SkillDiscoveryMode, SkillToolset
 
 from . import config
+from .skill_loader import build_toolset
 from .sub_agents.brief_analyst_agent import brief_analyst_agent
 from .sub_agents.fulfilment_agent import fulfilment_agent
 from .sub_agents.sourcing_planner_agent import sourcing_planner_agent
@@ -65,8 +64,7 @@ authorize_launch.
 
 # The step-by-step instructions live in launchkit_provisioner/skills/<name>/SKILL.md. The catalog is in the system instruction
 # (EAGER), so the agent loads a skill straight away; a loaded skill stays active for the session.
-skills = SkillToolset(skills=load_skills_from_dir(Path(__file__).parent / "skills"), discovery_mode=SkillDiscoveryMode.EAGER,
-                      tool_filter=["load_skill"])
+skills = build_toolset(Path(__file__).parent / "skills")
 
 root_agent = LlmAgent(
     name="launchkit_provisioner",
