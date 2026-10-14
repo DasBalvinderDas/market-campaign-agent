@@ -111,3 +111,12 @@ def test_places_and_pack_names_are_understood_in_the_shopping_list(repo):
     out = brief_tools.build_requirements(rid, bundles=[BundleRequest(bundle_type="guest welcome kit", quantity=10, region="Singapore")],
                                          items=[ItemRequest(item="steel water bottle", quantity=150, region="Singapore")])
     assert out["status"] == "ok" and set(out["channels"]) and out["total_units"] > 150
+
+
+def test_older_adk_passes_plain_dicts_and_it_still_works(repo):
+    """Agent Engine's older ADK hands the tool plain dicts instead of typed objects."""
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
+    out = brief_tools.build_requirements(
+        rid, bundles=[{"bundle_type": "VENUE_DISPLAY", "quantity": 10, "region": "APAC"}],
+        items=[{"item": "steel water bottle", "quantity": 150, "region": "APAC"}])
+    assert out["status"] == "ok" and out["total_units"] == 160

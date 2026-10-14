@@ -140,6 +140,12 @@ class ItemRequest(BaseModel):
     region: str  # where it goes: US, EMEA or APAC
 
 
+def _plain(x) -> dict:
+    """A bundle or item as a plain dict, whether the ADK handed over a typed object or already a dict (older ADK versions
+    pass dicts through without converting them)."""
+    return x if isinstance(x, dict) else x.model_dump()
+
+
 def build_requirements(request_id: str, bundles: list[BundleRequest] | None = None,
                        items: list[ItemRequest] | None = None) -> dict:
     """Break the brief into requirement lines in one call: what is needed, per SKU and destination region. Guest kits
@@ -155,20 +161,20 @@ def build_requirements(request_id: str, bundles: list[BundleRequest] | None = No
             there are none.
     """
     repo = get_repo()
-    bundles, items = bundles or [], items or []
+    bundles, items = [_plain(b) for b in (bundles or [])], [_plain(i) for i in (items or [])]
     req = repo.get_request(request_id)
     if not req:
         return {"status": "error", "message": f"Unknown request '{request_id}'."}
     if not bundles and not items:
         return {"status": "error", "message": "Nothing to plan yet: ask the user what they need and how many."}
     try:
-        lines = (planner.expand_bundles(repo, req["launch_id"], [b.model_dump() for b in bundles]) if bundles else [])
-        lines += planner.expand_items(repo, [i.model_dump() for i in items]) if items else []
+        lines = (planner.expand_bundles(repo, req["launch_id"], bundles) if bundles else [])
+        lines += planner.expand_items(repo, items) if items else []
     except planner.PlanError as exc:
         return {"status": "error", "message": str(exc)}
     repo.replace_requirement_lines(request_id, lines)
     audit(request_id, "brief_analyst_agent", "requirements_built", lines=len(lines),
-          bundles=[b.model_dump() for b in bundles], items=[i.model_dump() for i in items])
+          bundles=bundles, items=items)
     by_channel: dict = {}
     for ln in lines:
         ch = by_channel.setdefault(ln["channel"], {"units": 0, "regions": {}})
@@ -191,7 +197,7 @@ def build_requirements(request_id: str, bundles: list[BundleRequest] | None = No
         if ln["sku"].startswith("PWR-"):
             plug = ln["sku"][4:]
             plugs[plug] = plugs.get(plug, 0) + ln["quantity"]
-    if any(b.bundle_type.upper() == "GUEST_KIT" for b in bundles) and not repo.guest_mix(req["launch_id"]):
+    if any(str(b["bundle_type"]).upper() == "GUEST_KIT" for b in bundles) and not repo.guest_mix(req["launch_id"]):
         out["note"] = ("This campaign has no guest list yet, so the standard guest mix (sizes, regions, plugs) was used. "
                        "Tell the user a real guest list can be added later.")
     if sizes:
