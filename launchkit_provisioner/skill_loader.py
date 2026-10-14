@@ -30,10 +30,14 @@ def build_toolset(skills_dir: Path):
     try:
         from google.adk.tools.skill_toolset import SkillToolset
         skills = load_skills(skills_dir)
-        try:
+        try:    # newer ADK: the skill list goes into the prompt and only load_skill is offered
             from google.adk.tools.skill_toolset import SkillDiscoveryMode
             return SkillToolset(skills=skills, discovery_mode=SkillDiscoveryMode.EAGER, tool_filter=["load_skill"])
         except (ImportError, TypeError):
+            pass
+        try:    # older ADK: only load_skill is offered (the main prompt already names the skills)
+            return SkillToolset(skills=skills, tool_filter=["load_skill"])
+        except TypeError:
             return SkillToolset(skills=skills)
     except Exception as exc:  # noqa: BLE001 - an older ADK: fall back to the prompt
         log.warning("skills are not available in this ADK (%s); using the prompt instead", exc)
