@@ -282,7 +282,7 @@ def intake_checklist(mode: str = "", campaign: str = "", people: int = 0, date_t
     quick = (campaign or "").strip().lower() in ("quick purchase", "no campaign", "none")
     items_mode = (mode or "").lower().startswith("item")
     camp_mode = (mode or "").lower().startswith("camp")
-    if not (camp_mode or items_mode) and (people or date_text or venue or (campaign and not quick)):
+    if not (camp_mode or items_mode) and (people or date_text or venue or picks or (campaign and not quick)):
         camp_mode = quick is False          # the user already gave facts: carry on as a campaign unless it is a quick purchase
         items_mode = quick
     try:

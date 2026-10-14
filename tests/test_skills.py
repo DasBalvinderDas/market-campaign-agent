@@ -98,3 +98,8 @@ def test_without_skill_support_the_same_text_goes_into_the_prompt():
     for name in ("collecting-details", "existing-campaigns", "plan-and-advice", "approval-and-orders", "quick-answers"):
         assert f"=== {name}:" in text
     assert "authorize_launch" in text and "open_campaign" in text
+
+
+def test_the_prompt_forbids_planning_before_the_date_and_place_are_known():
+    assert "Never build a shopping list or a plan until the date and the place are known" in agent.INSTRUCTION
+    assert "Never say \"technical issue\"" in agent.INSTRUCTION

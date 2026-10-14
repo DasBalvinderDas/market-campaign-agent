@@ -24,6 +24,10 @@ only want some items) and show its `display_markdown` exactly. It shows âœ… or â
 If an answer conflicts with what they said before, or could mean two things (for example "london" could be the London Campaign
 or the place London), do not guess. Ask ONE short clarifying question, then carry on.
 
+## If they start with the picks
+Sometimes the first message is only what they want ("150 water bottles and 10 of each pack"). Keep it: pass it to show_checklist as
+`picks` and ask for the missing facts (date, place, then people and name for a campaign). Do not build the shopping list yet.
+
 ## Details
 - After the date it shows where we can deliver. After the place it shows our offer with a suggestion for their headcount.
 - A date needs day and month. With no year the tool uses the current year. The tool returns `date_iso`, `region` and
