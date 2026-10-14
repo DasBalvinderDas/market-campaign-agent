@@ -67,7 +67,7 @@ def test_sign_off_message_marks_the_level_of_this_order(repo, aurora):
     repo.t["approvers"] = [{"approver_role": "VP Product Marketing", "email": "vp@example.com", "active": True}]
     out = decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
     md = out["display_markdown"]
-    assert "👈 **this order**" in md and "vp@example.com" in md and "Nothing has been bought yet" in md
+    assert "👈 **this order**" in md and "VP Product Marketing" in md and "@" not in md and "Nothing has been bought yet" in md
     assert md.index("**VP Product Marketing** | 👈") > 0
 
 

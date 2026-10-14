@@ -22,7 +22,8 @@ def test_the_approver_gets_our_own_html_email_with_two_buttons(repo, aurora):
     html = mails[0]["email_body"]
     assert html.startswith("<div") and "&#10003; Approve" in html and "&#10007; Reject" in html
     assert html.count("<a href=") == 2 and "display:inline-block;background:#16a34a" in html and "background:#dc2626" in html
-    assert mails[0]["email_subject"] == "Approval needed: Spring Product Launch Event, $37,399.50 (REQ-001)"
+    assert mails[0]["email_subject"] == "Approval needed: Spring Product Launch Event, $37,399.50"
+    assert "REQ-001" not in mails[0]["email_subject"] and "REQ-001" not in html
 
 
 def test_the_buttons_open_the_approval_page_of_this_run(repo, aurora):
@@ -58,7 +59,7 @@ def test_every_approver_of_the_role_gets_the_email(repo, aurora):
     repo.t["approvers"].append({"approver_role": "VP Product Marketing", "email": "vp2@example.com", "active": True})
     ex, out = _authorize(repo, aurora)
     assert sorted(m["recipient_email"] for m in _approval_mails(ex)) == ["vp2@example.com", "vp@example.com"]
-    assert out["approver_emails"] == ["vp@example.com", "vp2@example.com"] or sorted(out["approver_emails"]) == ["vp2@example.com", "vp@example.com"]
+    assert out["approvers_notified"] == 2 and "@" not in str(out["announce"])
 
 
 def test_the_cmo_gets_it_for_the_largest_option(repo, aurora):

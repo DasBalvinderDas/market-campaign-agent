@@ -25,7 +25,7 @@ def test_above_the_limit_a_human_must_sign_off_and_nothing_is_ordered(repo, auro
     ex = FakeExecutor()
     out = decision_flow.authorize(repo, ex, aurora, "option 2", "saves money")
     assert out["status"] == "pending_approval" and out["tier"] == "VP_SIGNOFF"
-    assert "HUMAN APPROVAL REQUIRED" in out["announce"] and "vp@example.com" in out["announce"]
+    assert "HUMAN APPROVAL REQUIRED" in out["announce"] and "VP Product Marketing" in out["announce"] and "@" not in out["announce"] and "@" not in out["display_markdown"]
     trig, inputs = ex.calls[0]
     reb = option(repo, aurora, "REBALANCE")
     assert trig == config.APPROVAL_TRIGGER and inputs["amount"] == reb["total_cost"] and inputs["launch_id"] == "LAUNCH-SPRING"
@@ -39,7 +39,7 @@ def test_above_the_limit_a_human_must_sign_off_and_nothing_is_ordered(repo, auro
 def test_choosing_eco_pushes_the_sign_off_to_the_cmo(repo, aurora):
     repo.t["approvers"] = [{"approver_role": "CMO", "email": "cmo@example.com", "active": True}]
     out = decision_flow.authorize(repo, FakeExecutor(), aurora, "eco", "")
-    assert out["tier"] == "CMO_SIGNOFF" and out["approver_role"] == "CMO" and out["approver_emails"] == ["cmo@example.com"]
+    assert out["tier"] == "CMO_SIGNOFF" and out["approver_role"] == "CMO" and out["approvers_notified"] == 1 and "cmo@example.com" not in str(out)
 
 
 def test_small_amounts_run_on_autopilot(repo):

@@ -36,7 +36,7 @@ def test_approved_plan_places_every_line_and_tells_the_team(repo, aurora):
     assert all(x["execution_status"] == "EXECUTED" for x in repo.get_scenario_lines(lines[0]["scenario_id"]))
     triggers = [c[0] for c in ex.calls]
     assert triggers.count(config.PO_TRIGGER) == n_vendors and triggers.count(config.TRANSFER_TRIGGER) == n_depots
-    assert triggers.count(config.UPDATE_TRIGGER) == 2 and sorted(out["update_sent_to"]) == ["team2@example.com", "team@example.com"]
+    assert triggers.count(config.UPDATE_TRIGGER) == 2 and out["update_sent"] == 2 and "@" not in out["display_markdown"]
     po_inputs = next(i for t, i in ex.calls if t == config.PO_TRIGGER)
     assert po_inputs["plan_line_id"].startswith("REQ-001-V-") and " x" in po_inputs["sku"]
     assert set(po_inputs["destination_region"].split(",")) <= {"US", "EMEA", "APAC"}
@@ -59,10 +59,10 @@ def test_a_failing_line_is_reported_and_retried_later(repo, aurora):
     ex = approve(repo, aurora)
     ex.fail_on = lambda t, i: t == config.PO_TRIGGER and "Venue display stand" in i["sku"]
     out = execution.execute_plan(repo, ex, aurora)
-    assert out["status"] == "partial" and out["failed"] and out["update_sent_to"] == []        # no update until all is placed
+    assert out["status"] == "partial" and out["failed"] and out["update_sent"] == 0        # no update until all is placed
     ex.fail_on = None
     ok = execution.execute_plan(repo, ex, aurora)
-    assert ok["status"] == "executed" and len(ok["update_sent_to"]) == 2 and not ok["failed"]
+    assert ok["status"] == "executed" and ok["update_sent"] == 2 and not ok["failed"]
 
 
 def test_orders_never_exceed_the_authorised_amount(repo, aurora):
@@ -80,7 +80,7 @@ def test_without_team_addresses_the_update_is_skipped_not_invented(repo, aurora)
     ex.suspensions = [{"state": "LIFTED"}]
     decision_flow.status(repo, aurora, ex)
     out = execution.execute_plan(repo, ex, aurora)
-    assert out["status"] == "executed" and out["update_sent_to"] == []
+    assert out["status"] == "executed" and out["update_sent"] == 0
     assert not [i for t, i in ex.calls if t == config.UPDATE_TRIGGER and "Orders placed" in i["email_subject"]]
 
 

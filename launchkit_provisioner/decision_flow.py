@@ -168,16 +168,16 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
     _audit(repo, request_id, "orchestrator", "approval_requested", decision_id=decision["decision_id"],
            option=scenario["option_code"], approver_role=policy["approver_role"], amount=total, tier=policy["tier"],
            execution_id=execution_id)
-    who = ", ".join(sent)
+    who = f"the {policy['approver_role']}"          # the role, never a name or an address
     return {"status": "pending_approval", "decision_id": decision["decision_id"], "tier": policy["tier"],
             "option": scenario["option_name"], "amount": total, "approver_role": policy["approver_role"],
-            "approver_emails": sent,
+            "approvers_notified": len(sent),
             "announce": (f"HUMAN APPROVAL REQUIRED: an approval email with Approve / Reject buttons has been sent to "
-                         f"{who} ({policy['approver_role']}) for {scenario['option_name']}, USD {total:,.2f}. "
+                         f"{who} for {scenario['option_name']}, USD {total:,.2f}. "
                          f"No orders are placed until it is approved."),
             "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, who, True, request_id),
             "next_step": "Start your reply with the text in `announce`, in bold, exactly, then show `display_markdown` exactly. "
-                         "Never write an email address that is not in `approver_emails`. Do NOT call the fulfilment_agent tool."}
+                         "Never write an email address or a person's name. Do NOT call the fulfilment_agent tool."}
 
 
 # ---------------------------------------------------------------------------- reading the workflow's answer

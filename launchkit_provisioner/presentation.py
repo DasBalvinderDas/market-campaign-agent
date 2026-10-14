@@ -714,7 +714,7 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
     if n_po + n_tr > 2:
         out += ["", f"❓ **How many orders?** One purchase order per vendor and one move per warehouse: **{n_po} + {n_tr}**, all placed together."]
     if update_sent_to:
-        out += ["", f"📧 The launch team got an email: {', '.join(update_sent_to)}."]
+        out += ["", "📧 The launch team has been told by email."]
     if failed:
         out += ["", f"⚠️ **{len(failed)} order lines failed** and were not retried. Ask me for the status."]
     else:

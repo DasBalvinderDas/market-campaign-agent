@@ -86,3 +86,7 @@ def test_a_skill_loads_in_a_real_run_and_gives_its_instructions(monkeypatch, rep
                                                   new_message=types.Content(role="user", parts=[types.Part(text="Choose option 2")]))]
     _a.run(go())
     assert seen["catalog"] and "authorize_launch" in seen["loaded"] and "get_order_pack" in seen["loaded"]
+
+
+def test_the_prompt_forbids_naming_who_gets_the_emails():
+    assert "Never write an email address" in agent.INSTRUCTION

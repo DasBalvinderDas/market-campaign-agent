@@ -205,7 +205,7 @@ def test_full_flow_choose_then_executive_signs_off_then_orders_are_placed(monkey
     chat = Chat(monkeypatch, repo)
     chat.say("Roll out Spring kits.")
     calls, final = chat.say("Go with option 2")
-    assert calls == ["authorize_launch"] and "HUMAN APPROVAL REQUIRED" in final and "vp@example.com" in final
+    assert calls == ["authorize_launch"] and "HUMAN APPROVAL REQUIRED" in final and "VP Product Marketing" in final and "@" not in final
     assert repo.get_decision_for_request("REQ-001")["status"] == "PENDING"
     assert not repo.list_pos("REQ-001") and not repo.list_transfers("REQ-001")
     calls, final = chat.say("What is the status of that request?")             # approver has not clicked yet

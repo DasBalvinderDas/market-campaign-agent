@@ -156,4 +156,4 @@ def execute_plan(repo, executor, request_id: str) -> dict:
             "depot_transfers": [t["transfer_number"] for t in all_tr], "failed": failed,
             "total_usd": float(scenario["total_cost"]), "savings_usd": float(scenario["savings_usd"]),
             "delivery_date": str(scenario["delivery_date"]), "buffer_hours": int(scenario["buffer_hours"]),
-            "update_sent_to": update["sent_to"], "update_failed": update["failed"]}
+            "update_sent": len(update["sent_to"]), "update_failed": len(update["failed"])}

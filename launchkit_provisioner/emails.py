@@ -106,7 +106,7 @@ def approval_email(repo, launch, scenario, lines, request_id, justification, app
         f"{p.money(-saved)} more than buying everything new" if saved < 0 else "Same as buying everything new")
     own = sum(x["quantity"] for x in lines if x["source_type"] == "DEPOT")
     bought = sum(x["quantity"] for x in lines if x["source_type"] == "VENDOR")
-    subject = f"Approval needed: {launch['launch_name']}, {p.money(scenario['total_cost'])} ({request_id})"
+    subject = f"Approval needed: {launch['launch_name']}, {p.money(scenario['total_cost'])}"
     inner = (
         f'<p style="margin-top:0">Please approve or reject this order. <b>Nothing is bought until you approve.</b></p>'
         + _kv([("Campaign", escape(launch["launch_name"])), ("Choice", escape(scenario["option_name"])),
@@ -120,8 +120,7 @@ def approval_email(repo, launch, scenario, lines, request_id, justification, app
         + '<div style="margin:22px 0 6px">' + _button(url, "&#10003; Approve", "#16a34a") + _button(url, "&#10007; Reject", "#dc2626") + "</div>"
         + '<div style="font-size:12px;color:#6b7280">Both buttons open the approval page. Sign in with your Google account and choose '
           '<b>Approve</b> or <b>Reject</b> there. If you reject, nothing is bought and the held stock is released.</div>'
-        + _bom_html(repo, request_id) + _vendors_html(repo, scenario, lines)
-        + f'<p style="margin:22px 0 0;font-size:12px;color:#6b7280">Request {escape(request_id)}.</p>')
+        + _bom_html(repo, request_id) + _vendors_html(repo, scenario, lines))
     return subject, _page("#4338ca", "APPROVAL NEEDED", launch["launch_name"], inner)
 
 
@@ -129,7 +128,7 @@ def approval_email(repo, launch, scenario, lines, request_id, justification, app
 def orders_placed_email(repo, launch, scenario, pos, transfers, saved, request_id) -> tuple[str, str]:
     """(subject, html): the summary table, then the shopping list and the vendor details."""
     p = presentation
-    subject = f"Orders placed for the {launch['launch_name']} ({request_id})"
+    subject = f"Orders placed for the {launch['launch_name']}"
     saving = (f"Saved {p.money(saved)} compared with buying everything new" if saved > 0
               else f"{p.money(-saved)} more than buying everything new" if saved < 0 else "Same as buying everything new")
     rows = [("Choice", escape(scenario["option_name"])), ("Purchase orders placed", str(len(pos))),
@@ -144,8 +143,6 @@ def orders_placed_email(repo, launch, scenario, pos, transfers, saved, request_i
                 p.money(x["total_amount"])] for x in pos]
     inner = ('<p style="margin-top:0">Good news! All orders for this campaign have been placed. Here is the summary.</p>'
              + _kv(rows) + _bom_html(repo, request_id) + _vendors_html(repo, scenario, lines)
-             + (_h("Purchase order numbers") + _table(["PO", "Vendor", "Items", "Amount"], po_rows, right=(3,)) if pos else "")
-             + f'<p style="margin:20px 0 0;color:#6b7280;font-size:13px">Request {escape(request_id)}. To see this in the chat, ask the '
-               f'assistant: <em>What is the status of {escape(request_id)}?</em></p>')
+             + (_h("Purchase order numbers") + _table(["PO", "Vendor", "Items", "Amount"], po_rows, right=(3,)) if pos else ""))
     return subject, _page("#0f766e", "ORDERS PLACED", launch["launch_name"], inner)
 
