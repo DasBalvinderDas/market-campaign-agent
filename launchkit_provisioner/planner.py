@@ -88,12 +88,48 @@ def resolve_item(assets: list[dict], text: str) -> dict:
     raise PlanError(f"No item called '{text}'. Items we can buy: " + "; ".join(sorted(a["name"] for a in assets)) + ".")
 
 
+_REGION_WORDS = {"US": ("us", "usa", "united states", "america", "canada", "north america"),
+                 "EMEA": ("emea", "uk", "united kingdom", "london", "england", "europe", "eu"),
+                 "APAC": ("apac", "singapore", "asia", "asia pacific")}
+_BUNDLE_WORDS = {"GUEST_KIT": ("guest", "welcome", "kit"), "VENUE_DISPLAY": ("display", "stand", "venue"),
+                 "SALES_PACK": ("sales", "folder", "leave")}
+
+
+def normalize_region(repo, text) -> str:
+    """US, EMEA or APAC from what the assistant passed: the region itself, a place (Singapore, London, USA), a country or a
+    venue id. Empty text stays empty; anything not understood is returned upper-cased (the caller reports it)."""
+    t = (text or "").strip().lower()
+    if not t:
+        return ""
+    if t.upper() in ("US", "EMEA", "APAC"):
+        return t.upper()
+    for v in repo.list_venues():
+        if t in (v["venue_id"].lower(), v["venue_name"].lower(), v["country"].lower()):
+            return v["region"]
+    for region, words in _REGION_WORDS.items():
+        if t in words:
+            return region
+    return t.upper()
+
+
+def normalize_bundle(text, valid) -> str:
+    """GUEST_KIT, VENUE_DISPLAY or SALES_PACK from the exact type or a name like "guest welcome kit" or "sales folders"."""
+    t = (text or "").strip()
+    if t.upper().replace(" ", "_") in valid:
+        return t.upper().replace(" ", "_")
+    low = t.lower()
+    for btype, words in _BUNDLE_WORDS.items():
+        if btype in valid and any(w in low for w in words):
+            return btype
+    return t.upper()
+
+
 def expand_items(repo: Repository, items: list[dict]) -> list[dict]:
     """Single items as they are: [{item, quantity, region}] -> requirement lines (no bundle, no split)."""
     assets = repo.list_assets()
     merged: dict = {}
     for it in items:
-        qty, region = int(it["quantity"]), (it.get("region") or "").upper()
+        qty, region = int(it["quantity"]), normalize_region(repo, it.get("region"))
         if qty <= 0:
             raise PlanError(f"The quantity for '{it['item']}' must be positive.")
         if region not in ("US", "EMEA", "APAC"):
@@ -110,7 +146,8 @@ def expand_bundles(repo: Repository, launch_id: str, bundles: list[dict]) -> lis
     merged: dict = {}
     valid = repo.list_bundle_types()
     for b in bundles:
-        btype, qty, only_region = b["bundle_type"].strip().upper(), int(b["quantity"]), (b.get("region") or "").upper()
+        btype, qty = normalize_bundle(b["bundle_type"], valid), int(b["quantity"])
+        only_region = normalize_region(repo, b.get("region"))
         if btype not in valid:
             raise PlanError(f"Unknown bundle type '{b['bundle_type']}'. Valid types: {valid}")
         if qty <= 0:

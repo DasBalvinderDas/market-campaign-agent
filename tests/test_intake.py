@@ -98,3 +98,16 @@ def test_creating_a_campaign_needs_a_future_date(repo):
     assert "not in the future" in brief_tools.create_campaign("X", "2020-01-01")["message"]
     assert "not a date" in brief_tools.create_campaign("X", "soon")["message"]
     assert "I do not know a campaign" in brief_tools.create_campaign("X", "")["message"]
+
+
+def test_places_and_pack_names_are_understood_in_the_shopping_list(repo):
+    """The assistant may pass 'Singapore' for the region and 'guest welcome kit' for a pack: both are understood."""
+    from launchkit_provisioner import planner
+    assert [planner.normalize_region(repo, x) for x in ("APAC", "Singapore", "london", "USA", "Canada", "")] == ["APAC", "APAC", "EMEA", "US", "US", ""]
+    valid = ["GUEST_KIT", "SALES_PACK", "VENUE_DISPLAY"]
+    assert [planner.normalize_bundle(x, valid) for x in ("GUEST_KIT", "guest welcome kit", "venue display stands", "sales folders")] == \
+        ["GUEST_KIT", "GUEST_KIT", "VENUE_DISPLAY", "SALES_PACK"]
+    rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
+    out = brief_tools.build_requirements(rid, bundles=[BundleRequest(bundle_type="guest welcome kit", quantity=10, region="Singapore")],
+                                         items=[ItemRequest(item="steel water bottle", quantity=150, region="Singapore")])
+    assert out["status"] == "ok" and set(out["channels"]) and out["total_units"] > 150
