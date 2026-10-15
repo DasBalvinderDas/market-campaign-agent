@@ -42,7 +42,7 @@ Open a new chat. Each step is a short message.
 | 1 | `Hi` | Says there are no campaigns yet. |
 | 2 | `We are launching the Aether Strider Pro shoe. Need everything by October 24.` | Asks how many people. |
 | 3 | `120 elite athletes.` | Asks where. Shows delivery places. |
-| 4 | `The NYC Marathon expo, so the USA. Cost center is CC-GLOBAL-BRAND-4410. Embargo lifts on November 1.` | Asks for a campaign name. |
+| 4 | `The NYC Marathon expo, so the USA. Embargo lifts on November 1.` | Asks for a campaign name. |
 | 5 | `Call it Aether Strider Pro Global Marathon Launch.` | Creates the campaign. Shows our offer. |
 | 6 | `120 VIP athlete kits with handle etching and sized singlets. 12 illuminated podiums for the expo. 250 cork buyer kits with foam samples.` | Shows the shopping list and advice. |
 | 7 | `Looks good. Check depots for spare boxes first. Is October 24 safe?` | Shows stock, vendors, three choices, other dates. |
