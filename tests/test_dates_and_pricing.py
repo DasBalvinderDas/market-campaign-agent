@@ -88,3 +88,10 @@ def test_moving_the_campaign_date_re_plans_with_the_new_price_band(repo):
     rid2 = brief_tools.register_launch_request("Spring Product Launch Event", "x", (date.today() + timedelta(days=12)).isoformat())["request_id"]
     brief_tools.build_requirements(rid2, [brief_tools.BundleRequest(bundle_type="SALES_PACK", quantity=300)])
     assert sourcing_tools.build_scenarios(rid2)["options"][0]["total_usd"] > early
+
+
+def test_a_year_the_assistant_guessed_from_the_past_is_this_year():
+    assert parse_date("2025-10-24", TODAY) == date(2026, 10, 24)           # "October 24" with last year's year added
+    assert parse_date("2024-10-24", TODAY) == date(2026, 10, 24)
+    assert parse_date("2027-10-24", TODAY) == date(2027, 10, 24)           # a later year is kept
+    assert parse_date("2026-12-24", TODAY) == date(2026, 12, 24)

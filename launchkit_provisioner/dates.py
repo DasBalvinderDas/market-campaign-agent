@@ -13,7 +13,10 @@ def parse_date(text: str, today: date | None = None) -> date | None:
         return None
     m = re.fullmatch(r"(\d{4})-(\d{1,2})-(\d{1,2})", t)
     if m:
-        return _make(int(m[1]), int(m[2]), int(m[3]))
+        # The assistant does not know today's date and may add last year's year to "October 24". A year before this one
+        # is taken as this year (a date that is still in the past is then reported by the caller).
+        year = max(int(m[1]), today.year)
+        return _make(year, int(m[2]), int(m[3]))
     t = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", t)
     day = month = year = None
     m = re.search(r"\b(\d{1,2})\s*(?:of\s+)?([a-z]{3,9})\b(?:,?\s*(\d{4}))?", t)

@@ -70,7 +70,8 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
         mode: "campaign" for a whole campaign, "items" if they only want some items. Leave empty if not clear yet.
         campaign: The campaign name the user gave (not needed for items).
         people: How many people come (campaigns).
-        date: The date everything must be in hand, as the user said it ("31st Oct") or as YYYY-MM-DD.
+        date: The date everything must be in hand, exactly as the user said it ("31st Oct", "October 24"). Never add a year
+            the user did not say: you do not know today's date, the tool uses the current year.
         venue: Where the campaign is: USA, Canada, London or Singapore (or a city in one of them).
         picks: A short summary of what they picked, once they pick.
     Returns date_iso, region and venue_name when known, `name_suggestions` (when it asks for a name: the user may say a

@@ -246,3 +246,9 @@ def test_facts_given_without_a_mode_are_not_asked_again():
 def test_picks_first_still_asks_for_the_date_and_place():
     md = orchestration_tools.show_checklist("", "", 0, "", "", "150 water bottles, 10 of each pack")["display_markdown"]
     assert "150 water bottles" in md and "Tell me about your campaign" not in md and "not needed" in md and "On which date" in md
+
+
+def test_october_24_with_a_guessed_past_year_is_not_reported_as_passed():
+    from datetime import date as _d
+    md = orchestration_tools.show_checklist("campaign", "", 0, f"{_d.today().year - 1}-12-31")["display_markdown"]
+    assert "has already passed" not in md and "How many people" in md
