@@ -24,14 +24,14 @@ SAMPLE_ATHLETES = [("Emily S.", "@emily_runs_fast", "S", "US"), ("Marcus T.", "@
                    ("David K.", "@kenya_stride", "S", "EMEA")]
 
 
-def _launches(today: date, in_hand_days: int, exact_dates: bool) -> list[dict]:
+def _launches(today: date, in_hand_days: int, exact_dates: bool, standing: bool = True) -> list[dict]:
     if exact_dates:
         dates = {"in_hand_by": date(2026, 10, 24), "embargo_date": date(2026, 11, 1)}
     else:
         dates = launch_dates(today, in_hand_days, in_hand_days + EMBARGO_GAP_DAYS)
     rows = [{"launch_id": LAUNCH_ID, "launch_name": CAMPAIGN_NAME, "product_name": "Aether Strider Pro",
              "cost_center": COST_CENTER, "owner": "Global Brand & Athletic Marketing", **dates}]
-    for launch_id, name in STANDING_CAMPAIGNS:          # the three standing campaigns stay (London, US, Singapore)
+    for launch_id, name in (STANDING_CAMPAIGNS if standing else []):   # the three standing campaigns (London, US, Singapore)
         rows.append({"launch_id": launch_id, "launch_name": name, "product_name": name, "cost_center": "CC-EVENTS-GENERAL",
                      "owner": "Marketing", **launch_dates(today)})
     return rows
@@ -139,11 +139,11 @@ DATE_PRICING = [
 ]
 
 
-def build(today: date | None = None, in_hand_days: int = IN_HAND_DAYS, exact_dates: bool = False) -> dict:
+def build(today: date | None = None, in_hand_days: int = IN_HAND_DAYS, exact_dates: bool = False, standing: bool = True) -> dict:
     """Every table of the demo as {table: [rows]}. The approvers are not included: they stay as configured."""
     today = today or date.today()
     return {
-        "launches": _launches(today, in_hand_days, exact_dates),
+        "launches": _launches(today, in_hand_days, exact_dates, standing),
         "assets": _assets(),
         "bundle_templates": _templates(),
         "guests": _athletes(),

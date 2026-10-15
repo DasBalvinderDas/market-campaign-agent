@@ -10,7 +10,7 @@ python scripts/setup_demo_aether.py --preview      # shows the three options the
 python scripts/setup_demo_aether.py                 # empties every table (approver emails stay) and loads the Aether data; asks first
 ```
 
-Options: `--yes` (no question), `--in-hand-days 25` (default 20), `--exact-dates` (the pack's 24 Oct and 1 Nov 2026).
+Options: `--no-standing` (only the Aether campaign: no London, US or Singapore campaigns), `--yes` (no question), `--in-hand-days 25` (default 20), `--exact-dates` (the pack's 24 Oct and 1 Nov 2026).
 The agent does not need a redeploy. To get the original Spring demo back: `python scripts/setup_bigquery.py --refresh-reference`.
 
 ## What is loaded

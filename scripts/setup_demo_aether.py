@@ -4,6 +4,7 @@
   python scripts/setup_demo_aether.py --preview            # show the three options the demo will produce (nothing is changed)
   python scripts/setup_demo_aether.py                       # wipe everything and load the Aether demo (asks first)
   python scripts/setup_demo_aether.py --yes                 # same, without asking
+  python scripts/setup_demo_aether.py --yes --no-standing   # ONLY the Aether campaign (no London, US, Singapore campaigns)
   python scripts/setup_demo_aether.py --yes --in-hand-days 25
   python scripts/setup_demo_aether.py --yes --exact-dates   # the pack's own dates: in hand Oct 24 2026, embargo Nov 1 2026
 
@@ -75,7 +76,7 @@ def run(args, project=""):
 
     import setup_bigquery as sb
 
-    data = aether_data.build(date.today(), args.in_hand_days, args.exact_dates)
+    data = aether_data.build(date.today(), args.in_hand_days, args.exact_dates, standing=not args.no_standing)
     print(f"Project: {project}   Dataset: {args.dataset}\n")
     preview(data)
     if args.preview:
@@ -124,6 +125,8 @@ if __name__ == "__main__":
     ap.add_argument("--in-hand-days", type=int, default=aether_data.IN_HAND_DAYS,
                     help="days from today until everything must be in hand (default 20)")
     ap.add_argument("--exact-dates", action="store_true", help="use the pack's dates (in hand 24 Oct 2026, embargo 1 Nov 2026)")
+    ap.add_argument("--no-standing", action="store_true",
+                    help="do not keep the London, US and Singapore campaigns: the Aether campaign is the only one")
     ap.add_argument("--preview", action="store_true", help="only show what the demo will produce; change nothing")
     ap.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     ap.add_argument("--skip-preflight", action="store_true")

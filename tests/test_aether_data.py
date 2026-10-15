@@ -68,6 +68,7 @@ def test_the_campaign_and_the_surplus_stock(data):
     stock = {(s["depot_id"], s["sku"]): s["on_hand"] for s in data["depot_stock"]}
     assert stock == {("DEPOT-BOS-01", "BOX-ACRYL-PREM-LID"): 50, ("DEPOT-PDX-02", "BINDER-CORK-ECO"): 100,
                      ("DEPOT-AMS-03", "DISP-PODIUM-CARB"): 0}
+    assert [x["launch_id"] for x in aether_data.build(TODAY, standing=False)["launches"]] == [aether_data.LAUNCH_ID]
     exact = aether_data.build(TODAY, exact_dates=True)["launches"][0]
     assert exact["in_hand_by"] == date(2026, 10, 24) and exact["embargo_date"] == date(2026, 11, 1)
 
@@ -136,7 +137,7 @@ def _run(monkeypatch, *, answer="YES", yes=False):
     monkeypatch.setattr(bigquery, "Client", lambda **k: client)
     monkeypatch.setattr("builtins.input", lambda *_: answer)
     args = demo.argparse.Namespace(project="p", dataset="d", location="US", in_hand_days=20, exact_dates=False, preview=False,
-                                   yes=yes, skip_preflight=True)
+                                   yes=yes, skip_preflight=True, no_standing=False)
     demo.run(args, project="p")
     return client
 
@@ -156,6 +157,6 @@ def test_without_a_yes_nothing_is_changed(monkeypatch):
 
 def test_preview_changes_nothing_and_needs_no_project(capsys):
     demo.run(demo.argparse.Namespace(project=None, dataset="d", location="US", in_hand_days=20, exact_dates=False, preview=True,
-                                     yes=False, skip_preflight=True), project="(preview)")
+                                     yes=False, skip_preflight=True, no_standing=False), project="(preview)")
     out = capsys.readouterr().out
     assert "Use our stock first, buy the rest" in out and "<- recommended" in out
