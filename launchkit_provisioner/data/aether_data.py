@@ -1,40 +1,25 @@
-"""Demo data for the "Aether Athletics" live demo: the Aether Strider Pro Global Marathon Launch.
+"""Demo data for the "Aether Athletics" live demo: the vendors, the items they hold, our own stock and the athlete size curve.
 
-Same shape as ``seed_data.SEED`` (one list of rows per table), so it loads into the same tables. Prices, lead times, depot
-stock and the athlete size curve come from the demo pack: 120 VIP athlete seeding kits, 12 illuminated podiums and 250 cork
-buyer folios, with surplus boxes in Boston and surplus cork binders in Portland.
+Same shape as ``seed_data.SEED`` (one list of rows per table), so it loads into the same tables. There is NO campaign in it:
+the demo user creates "Aether Strider Pro Global Marathon Launch" in the chat. Prices, lead times, depot stock and the athlete
+size curve come from the demo pack: VIP athlete seeding kits, illuminated expo podiums and cork buyer folios, with surplus boxes in
+Boston and surplus cork binders in Portland.
 
-Dates are relative to the day the data is loaded (in hand = today + ``in_hand_days``, embargo 8 days later, as in the pack),
-or the pack's own dates with ``exact_dates=True``.
+The athlete list (120 athletes, their sizes and handles) is kept as a standing guest list, not tied to a campaign, so the
+seeding kits get the right singlet sizes for whichever campaign asks for them.
 """
-from datetime import date, timedelta
 
-from .seed_data import SEED, STANDING_CAMPAIGNS, launch_dates
+from .seed_data import SEED
 
-LAUNCH_ID = "LAUNCH-AETHER"
-CAMPAIGN_NAME = "Aether Strider Pro Global Marathon Launch"
+GUEST_LIST_ID = "GUEST-MIX-TEMPLATE"      # the standing athlete list (see planner.STANDARD_GUEST_LIST)
+CAMPAIGN_NAME = "Aether Strider Pro Global Marathon Launch"      # what the demo user types in the chat
 COST_CENTER = "CC-GLOBAL-BRAND-4410"
-IN_HAND_DAYS = 20            # 48 hours of safety buffer on the planned delivery (the longest lead time is the podium)
-EMBARGO_GAP_DAYS = 8         # in hand Oct 24 -> embargo lifts Nov 01
 ATHLETES = 120
 
 # 120 athletes: women XS18 S24 M18, men S20 M25 L15 (the registry's sizing breakdown), added up per size
 SIZES = {"XS": 18, "S": 44, "M": 43, "L": 15}
 SAMPLE_ATHLETES = [("Emily S.", "@emily_runs_fast", "S", "US"), ("Marcus T.", "@marathon_marcus", "M", "EMEA"),
                    ("David K.", "@kenya_stride", "S", "EMEA")]
-
-
-def _launches(today: date, in_hand_days: int, exact_dates: bool, standing: bool = True) -> list[dict]:
-    if exact_dates:
-        dates = {"in_hand_by": date(2026, 10, 24), "embargo_date": date(2026, 11, 1)}
-    else:
-        dates = launch_dates(today, in_hand_days, in_hand_days + EMBARGO_GAP_DAYS)
-    rows = [{"launch_id": LAUNCH_ID, "launch_name": CAMPAIGN_NAME, "product_name": "Aether Strider Pro",
-             "cost_center": COST_CENTER, "owner": "Global Brand & Athletic Marketing", **dates}]
-    for launch_id, name in (STANDING_CAMPAIGNS if standing else []):   # the three standing campaigns (London, US, Singapore)
-        rows.append({"launch_id": launch_id, "launch_name": name, "product_name": name, "cost_center": "CC-EVENTS-GENERAL",
-                     "owner": "Marketing", **launch_dates(today)})
-    return rows
 
 
 def _athletes() -> list[dict]:
@@ -50,7 +35,7 @@ def _athletes() -> list[dict]:
     for i in range(ATHLETES):
         name, handle = (SAMPLE_ATHLETES[i][0], SAMPLE_ATHLETES[i][1]) if i < len(SAMPLE_ATHLETES) else (
             f"Athlete {i + 1:03d}", f"@aether_athlete_{i + 1:03d}")
-        rows.append({"guest_id": f"ATH-{i + 1:03d}", "launch_id": LAUNCH_ID, "handle": handle, "name": name,
+        rows.append({"guest_id": f"ATH-{i + 1:03d}", "launch_id": GUEST_LIST_ID, "handle": handle, "name": name,
                      "size": sizes[i], "region": regions[i], "plug_type": "NA"})
     return rows
 
@@ -139,11 +124,10 @@ DATE_PRICING = [
 ]
 
 
-def build(today: date | None = None, in_hand_days: int = IN_HAND_DAYS, exact_dates: bool = False, standing: bool = True) -> dict:
-    """Every table of the demo as {table: [rows]}. The approvers are not included: they stay as configured."""
-    today = today or date.today()
+def build() -> dict:
+    """Every table of the demo as {table: [rows]}. There are no campaigns, and the approvers are not included (they stay as configured)."""
     return {
-        "launches": _launches(today, in_hand_days, exact_dates, standing),
+        "launches": [],
         "assets": _assets(),
         "bundle_templates": _templates(),
         "guests": _athletes(),

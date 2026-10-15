@@ -52,8 +52,15 @@ def _scale(counts: dict, total: int) -> dict:
     return {k: v for k, v in out.items() if v}
 
 
+STANDARD_GUEST_LIST = "GUEST-MIX-TEMPLATE"      # a standing guest list (sizes, regions) that is not tied to any campaign
+
+
 def _standard_guest_mix(repo: Repository) -> list[dict]:
-    """A new campaign has no guest list yet: use the guest mix (sizes, regions, plugs) of the first event that has one."""
+    """A new campaign has no guest list yet: use the standing guest list if there is one, else the guest mix (sizes,
+    regions, plugs) of the first event that has one."""
+    mix = repo.guest_mix(STANDARD_GUEST_LIST)
+    if mix:
+        return mix
     for launch in repo.list_launches():
         mix = repo.guest_mix(launch["launch_id"])
         if mix:

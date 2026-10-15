@@ -1,4 +1,4 @@
-"""The Aether Athletics demo data: consistent, plans into the three options the demo talks about, and the script wipes then loads."""
+"""The Aether Athletics demo data: vendors and the items they hold, no campaign; consistent; plans as the demo expects; the script wipes then loads."""
 import sys
 from collections import Counter
 from datetime import date, timedelta
@@ -19,7 +19,7 @@ TODAY = date(2026, 10, 15)
 
 @pytest.fixture
 def data():
-    return aether_data.build(TODAY)
+    return aether_data.build()
 
 
 @pytest.fixture
@@ -32,13 +32,18 @@ def aether_repo(data):
     return repo
 
 
-def test_every_row_fits_its_table_and_every_reference_exists(data):
+def test_there_is_no_campaign_and_every_row_fits_its_table(data):
+    assert data["launches"] == []
     for name, rows in data.items():
         cols = {c for c, *_ in TABLES[name]["columns"]}
         required = {c for c, _, mode, _ in TABLES[name]["columns"] if mode == "REQUIRED"}
-        assert rows, name
+        if name != "launches":
+            assert rows, name
         for r in rows:
             assert set(r) <= cols and required <= set(r), (name, r)
+
+
+def test_every_reference_exists_and_every_item_has_competing_vendors(data):
     skus = {a["sku"] for a in data["assets"]}
     vendors = {v["vendor_id"] for v in data["vendors"]}
     depots = {d["depot_id"] for d in data["depots"]}
@@ -50,8 +55,9 @@ def test_every_row_fits_its_table_and_every_reference_exists(data):
     assert set(by_sku) == skus and all(len(v) >= 2 for v in by_sku.values())
 
 
-def test_120_athletes_with_the_registry_size_curve(data):
+def test_the_standing_athlete_list_has_the_registry_size_curve(data):
     guests = data["guests"]
+    assert {g["launch_id"] for g in guests} == {aether_data.GUEST_LIST_ID} == {planner.STANDARD_GUEST_LIST}
     assert len(guests) == 120 and Counter(g["size"] for g in guests) == {"XS": 18, "S": 44, "M": 43, "L": 15}
     assert Counter(g["region"] for g in guests) == {"US": 70, "EMEA": 50}
     named = {g["name"]: (g["handle"], g["size"], g["region"]) for g in guests[:3]}
@@ -59,18 +65,10 @@ def test_120_athletes_with_the_registry_size_curve(data):
     assert named["David K."] == ("@kenya_stride", "S", "EMEA")
 
 
-def test_the_campaign_and_the_surplus_stock(data):
-    by_id = {x["launch_id"]: x for x in data["launches"]}
-    a = by_id[aether_data.LAUNCH_ID]
-    assert a["launch_name"] == "Aether Strider Pro Global Marathon Launch" and a["cost_center"] == "CC-GLOBAL-BRAND-4410"
-    assert a["in_hand_by"] == TODAY + timedelta(days=20) and a["embargo_date"] == TODAY + timedelta(days=28)
-    assert {"LAUNCH-LONDON", "LAUNCH-USA", "LAUNCH-SINGAPORE"} <= set(by_id) and "LAUNCH-SPRING" not in by_id
+def test_the_surplus_stock(data):
     stock = {(s["depot_id"], s["sku"]): s["on_hand"] for s in data["depot_stock"]}
     assert stock == {("DEPOT-BOS-01", "BOX-ACRYL-PREM-LID"): 50, ("DEPOT-PDX-02", "BINDER-CORK-ECO"): 100,
                      ("DEPOT-AMS-03", "DISP-PODIUM-CARB"): 0}
-    assert [x["launch_id"] for x in aether_data.build(TODAY, standing=False)["launches"]] == [aether_data.LAUNCH_ID]
-    exact = aether_data.build(TODAY, exact_dates=True)["launches"][0]
-    assert exact["in_hand_by"] == date(2026, 10, 24) and exact["embargo_date"] == date(2026, 11, 1)
 
 
 def test_the_catalog_prices_and_lead_times_are_the_packs(data):
@@ -80,22 +78,22 @@ def test_the_catalog_prices_and_lead_times_are_the_packs(data):
             cur = best.get(o["sku"])
             if cur is None or o["unit_price"] < cur["unit_price"]:
                 best[o["sku"]] = o
-    assert (best["BOX-ACRYL-PREM-LID"]["unit_price"], best["BOX-ACRYL-PREM-LID"]["lead_days"]) == (65.0, 10)
-    assert (best["SVC-LASER-ETCH"]["unit_price"], best["SVC-LASER-ETCH"]["lead_days"]) == (20.0, 2)
-    assert (best["APP-SINGLET-M"]["unit_price"], best["APP-SINGLET-M"]["lead_days"]) == (45.0, 8)
-    assert (best["DISP-PODIUM-CARB"]["unit_price"], best["DISP-PODIUM-CARB"]["lead_days"]) == (380.0, 16)
-    assert (best["BINDER-CORK-ECO"]["unit_price"], best["BINDER-CORK-ECO"]["lead_days"]) == (22.0, 7)
-    assert (best["PACK-NUTRITION-FLASK"]["unit_price"], best["PACK-NUTRITION-FLASK"]["lead_days"]) == (27.42, 4)
+    for sku, price, lead in (("BOX-ACRYL-PREM-LID", 65.0, 10), ("SVC-LASER-ETCH", 20.0, 2), ("APP-SINGLET-M", 45.0, 8),
+                             ("DISP-PODIUM-CARB", 380.0, 16), ("BINDER-CORK-ECO", 22.0, 7), ("PACK-NUTRITION-FLASK", 27.42, 4)):
+        assert (best[sku]["unit_price"], best[sku]["lead_days"]) == (price, lead), sku
 
 
-def test_the_brief_plans_into_the_three_options(aether_repo):
-    rid = aether_repo.create_request(aether_data.LAUNCH_ID, "demo")
-    lines = planner.expand_bundles(aether_repo, aether_data.LAUNCH_ID, [
+def test_a_new_campaign_gets_the_kits_sizes_from_the_standing_list_and_plans_into_three_options(aether_repo):
+    aether_repo.create_launch({"launch_id": "EVT-NEW", "launch_name": aether_data.CAMPAIGN_NAME, "product_name": "x",
+                               "cost_center": aether_data.COST_CENTER, "owner": "m", "in_hand_by": TODAY + timedelta(days=20),
+                               "embargo_date": TODAY + timedelta(days=28)})
+    rid = aether_repo.create_request("EVT-NEW", "demo")
+    lines = planner.expand_bundles(aether_repo, "EVT-NEW", [
         {"bundle_type": "GUEST_KIT", "quantity": 120, "region": "US"}, {"bundle_type": "VENUE_DISPLAY", "quantity": 12, "region": "US"},
         {"bundle_type": "SALES_PACK", "quantity": 250, "region": "US"}])
     totals = Counter()
     for ln in lines:
-        totals[ln["sku"].rsplit("-", 1)[0] if ln["sku"].startswith("APP-SINGLET") else ln["sku"]] += ln["quantity"]
+        totals["APP-SINGLET" if ln["sku"].startswith("APP-SINGLET") else ln["sku"]] += ln["quantity"]
     assert totals == {"APP-SINGLET": 120, "BOX-ACRYL-PREM-LID": 120, "SVC-LASER-ETCH": 120, "PACK-NUTRITION-FLASK": 120,
                       "DISP-PODIUM-CARB": 12, "BINDER-CORK-ECO": 250}
     aether_repo.replace_requirement_lines(rid, lines)
@@ -108,6 +106,12 @@ def test_the_brief_plans_into_the_three_options(aether_repo):
     taken = {(x["source_id"], x["sku"]): x["quantity"] for x in scenario_lines
              if x["scenario_id"] == best["scenario_id"] and x["source_type"] == "DEPOT"}
     assert taken == {("DEPOT-BOS-01", "BOX-ACRYL-PREM-LID"): 50, ("DEPOT-PDX-02", "BINDER-CORK-ECO"): 100}
+
+
+def test_with_no_campaigns_the_assistant_says_so_and_asks_for_the_first_one():
+    from launchkit_provisioner import presentation
+    assert "no campaigns yet" in presentation.campaigns_markdown([])
+    assert "how many people, and on which date?" in presentation.capabilities_card([])
 
 
 class _Job:
@@ -131,22 +135,26 @@ class _Client:
         return _Job()
 
 
+def _args(**kw):
+    return demo.argparse.Namespace(**{"project": "p", "dataset": "d", "location": "US", "preview": False, "yes": False,
+                                      "skip_preflight": True, **kw})
+
+
 def _run(monkeypatch, *, answer="YES", yes=False):
     from google.cloud import bigquery
     client = _Client()
     monkeypatch.setattr(bigquery, "Client", lambda **k: client)
     monkeypatch.setattr("builtins.input", lambda *_: answer)
-    args = demo.argparse.Namespace(project="p", dataset="d", location="US", in_hand_days=20, exact_dates=False, preview=False,
-                                   yes=yes, skip_preflight=True, no_standing=False)
-    demo.run(args, project="p")
+    demo.run(_args(yes=yes), project="p")
     return client
 
 
-def test_the_script_empties_every_table_but_the_approvers_then_loads_the_demo(monkeypatch):
+def test_the_script_empties_every_table_but_the_approvers_then_loads_the_data(monkeypatch):
     client = _run(monkeypatch)
     truncated = {q.split("`")[1].split(".")[-1] for q in client.queries if q.startswith("TRUNCATE")}
     assert truncated == set(TABLES) - {"approvers"}
-    assert {name for name, _, _ in client.loads} == set(aether_data.build(TODAY)) and "approvers" not in {n for n, _, _ in client.loads}
+    loaded = {n for n, _, _ in client.loads}
+    assert loaded == {n for n, rows in aether_data.build().items() if rows} and "approvers" not in loaded and "launches" not in loaded
     assert all(w == "WRITE_TRUNCATE" for _, _, w in client.loads) and dict((n, c) for n, c, _ in client.loads)["guests"] == 120
 
 
@@ -156,7 +164,6 @@ def test_without_a_yes_nothing_is_changed(monkeypatch):
 
 
 def test_preview_changes_nothing_and_needs_no_project(capsys):
-    demo.run(demo.argparse.Namespace(project=None, dataset="d", location="US", in_hand_days=20, exact_dates=False, preview=True,
-                                     yes=False, skip_preflight=True, no_standing=False), project="(preview)")
+    demo.run(_args(project=None, preview=True), project="(preview)")
     out = capsys.readouterr().out
-    assert "Use our stock first, buy the rest" in out and "<- recommended" in out
+    assert "Use our stock first, buy the rest" in out and "<- recommended" in out and "not stored" in out

@@ -266,6 +266,8 @@ def campaign_created_markdown(launch: dict, how: str, people: int = 0, venue: st
 
 
 def campaigns_markdown(launches) -> str:
+    if not launches:
+        return "### 🎪 **Our campaigns**\n\nWe have no campaigns yet. Tell me about your campaign: how many people, and on which date?"
     rows = [f"| **{x['launch_name']}** | `{x['launch_id']}` | {day(x['in_hand_by'])} |" for x in launches]
     return "\n".join(["### 🎪 **Our campaigns**", "", "| Campaign | Reference | In hand by |", "|---|---|---|"] + rows
                      + ["", "Say the **name** or the **reference** to add to one of them, or start a new campaign."])
