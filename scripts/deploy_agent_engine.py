@@ -235,10 +235,12 @@ def run(args, project=""):
     if not args.skip_checks:
         os.environ["GOOGLE_CLOUD_PROJECT"] = project
         from launchkit_provisioner.repositories import get_repo
-        launches = get_repo().list_launches()
-        if not launches:
-            sys.exit("\nNo launches found in BigQuery. Run: python scripts/setup_all.py")
-        print(f"  OK  BigQuery has {len(launches)} launch(es)")
+        repo = get_repo()
+        items, vendors = repo.list_assets(), repo.list_vendors()
+        if not items or not vendors:
+            sys.exit("\nNo items or vendors found in BigQuery. Run: python scripts/setup_all.py (or scripts/setup_demo_aether.py)")
+        # A system with no campaigns yet is fine: users create them in the chat.
+        print(f"  OK  BigQuery has {len(items)} items, {len(vendors)} vendors and {len(repo.list_launches())} campaign(s)")
         import setup_application_integration as ai
         ai.run_with(_Http(), argparse.Namespace(test=False, check_only=True, provision_region=False,
                                                 no_email=False, test_email=None, approver_email=[], republish=False),

@@ -31,9 +31,7 @@ def run(args, project=""):
     if missing:
         sys.exit(f"BigQuery tables missing: {', '.join(missing)}. Run:  python scripts/setup_bigquery.py")
     launches = repo.list_launches()
-    if not launches:
-        sys.exit("No launches found. Run:  python scripts/setup_bigquery.py")
-    print("\nLaunches")
+    print("\nCampaigns" + ("" if launches else " (none yet: users create them in the chat)"))
     for x in launches:
         print(f"  {x['launch_id']:<16} {x['launch_name']}: in hand by {x['in_hand_by']}, embargo {x['embargo_date']}")
     print("\nSurplus stock in regional depots (free units)")
@@ -43,7 +41,9 @@ def run(args, project=""):
     print(f"\nOffer catalog: {len(items)} items, {len(vendors)} vendors, {len(offers)} price offers "
           f"(if these are lower than expected run: python scripts/setup_bigquery.py --refresh-reference)")
     print(f"Venues: {', '.join(v['venue_name'] for v in repo.list_venues())}; date pricing rows: {len(repo.list_date_pricing())}")
-    print("\nGuests on the seeding list:", sum(m["n"] for m in repo.guest_mix(launches[0]["launch_id"])))
+    from launchkit_provisioner import planner
+    guest_list = planner.STANDARD_GUEST_LIST if repo.guest_mix(planner.STANDARD_GUEST_LIST) or not launches else launches[0]["launch_id"]
+    print("\nGuests on the seeding list:", sum(m["n"] for m in repo.guest_mix(guest_list)))
     print("Planning rules:", ", ".join(f"{k}={v:g}" for k, v in sorted(repo.get_planning_rules().items())))
     print("\nSign-off tiers")
     for p in repo.list_policies():
