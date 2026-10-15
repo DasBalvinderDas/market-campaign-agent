@@ -54,7 +54,9 @@ def _assets() -> list[dict]:
                {"sku": "DISP-PODIUM-CARB", "name": "Illuminated carbon-finish display podium", "component_type": "DISPLAY",
                 "ship_factor": 15.0},
                {"sku": "BINDER-CORK-ECO", "name": "Cork buyer presentation folio", "component_type": "FOLDER",
-                "ship_factor": 1.2}])
+                "ship_factor": 1.2},
+               {"sku": "FOAM-CUSHION-SAMPLE", "name": "Shoe-cushion foam sample set", "component_type": "PRINT",
+                "ship_factor": 0.1}])
 
 
 def _templates() -> list[dict]:
@@ -72,6 +74,8 @@ def _templates() -> list[dict]:
          "qty_per_bundle": 1, "split_by": "NONE", "suggested_per_person": 0.1},
         {"bundle_type": "SALES_PACK", "description": "Specialty buyer presentation kit", "sku_pattern": "BINDER-CORK-ECO",
          "qty_per_bundle": 1, "split_by": "NONE", "suggested_per_person": 2.0833},
+        {"bundle_type": "SALES_PACK", "description": "Specialty buyer presentation kit", "sku_pattern": "FOAM-CUSHION-SAMPLE",
+         "qty_per_bundle": 1, "split_by": "NONE", "suggested_per_person": 2.0833},
     ]
 
 
@@ -81,7 +85,10 @@ _VENDORS = [
     # second and third vendors: always dearer or slower than the vendor above, so the pack's prices stay the best price
     ("V-PACKRIGHT", "PackRight Premium"), ("V-ETCHLAB", "EtchLab NYC"), ("V-STRIDEWEAR", "StrideWear Textiles"),
     ("V-EXPOWORKS", "ExpoWorks Displays"), ("V-LUMINA", "Lumina Stage Systems"), ("V-GREENFOLIO", "GreenFolio Co."),
-    ("V-HYDRAFUEL", "HydraFuel Labs")]
+    ("V-HYDRAFUEL", "HydraFuel Labs"),
+    # express vendors: 3 days instead of 1 to 2 weeks, at a price. They are what keeps a tight date (24 Oct from mid-October) possible
+    ("V-RUSHPACK", "RushPack Express"), ("V-SPRINTSTITCH", "SprintStitch Apparel"), ("V-FASTSTAGE", "FastStage Displays"),
+    ("V-QUICKFOAM", "QuickFoam Labs"), ("V-FOAMWORKS", "FoamWorks Ltd.")]
 
 
 def _offers() -> list[dict]:
@@ -110,17 +117,26 @@ def _offers() -> list[dict]:
     add("V-LUMINA", "DISP-PODIUM-CARB", "STANDARD", 455.0, 12, 120.0)         # faster, dearer
     add("V-GREENFOLIO", "BINDER-CORK-ECO", "STANDARD", 24.0, 8, 0.9)
     add("V-HYDRAFUEL", "PACK-NUTRITION-FLASK", "STANDARD", 29.9, 5, 1.7)
+    # express offers: ready in 3 days for a price, so a tight date can still be met
+    add("V-RUSHPACK", "BOX-ACRYL-PREM-LID", "STANDARD", 79.0, 3, 4.6)
+    add("V-RUSHPACK", "BINDER-CORK-ECO", "STANDARD", 29.0, 3, 1.0)
+    for sku, _ in _SINGLETS:
+        add("V-SPRINTSTITCH", sku, "STANDARD", 58.0, 3, 6.4)
+    add("V-FASTSTAGE", "DISP-PODIUM-CARB", "STANDARD", 520.0, 3, 125.0)
+    # the foam samples that go in every buyer kit
+    add("V-QUICKFOAM", "FOAM-CUSHION-SAMPLE", "STANDARD", 2.5, 3, 0.2)
+    add("V-FOAMWORKS", "FOAM-CUSHION-SAMPLE", "STANDARD", 3.1, 4, 0.2)
     return rows
 
 
-# Vendors charge the catalog price from 14 days ahead, a rush charge below that and an early-bird discount well ahead,
-# so the pack's prices hold on the demo date and moving the date still shows a saving or a cost.
+# Vendors charge the catalog price from 5 days ahead (the demo order is placed about 9 days before the deadline), a rush charge
+# right at the deadline and an early-bird discount well ahead, so the pack's prices hold and moving the date still shows a
+# saving or a cost.
 DATE_PRICING = [
     {"vendor_id": "*", "min_days_ahead": 45, "price_factor": 0.92, "label": "Early bird: 8% off"},
     {"vendor_id": "*", "min_days_ahead": 35, "price_factor": 0.95, "label": "Early bird: 5% off"},
-    {"vendor_id": "*", "min_days_ahead": 14, "price_factor": 1.00, "label": "Standard price"},
-    {"vendor_id": "*", "min_days_ahead": 7, "price_factor": 1.06, "label": "Rush: 6% extra"},
-    {"vendor_id": "*", "min_days_ahead": 0, "price_factor": 1.12, "label": "Rush: 12% extra"},
+    {"vendor_id": "*", "min_days_ahead": 5, "price_factor": 1.00, "label": "Standard price"},
+    {"vendor_id": "*", "min_days_ahead": 0, "price_factor": 1.12, "label": "Last minute: 12% extra"},
 ]
 
 

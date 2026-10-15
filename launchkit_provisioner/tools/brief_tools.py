@@ -9,8 +9,15 @@ from ..repositories import get_repo
 from .audit import audit
 
 
-def _ensure_campaign(repo, campaign: str, deadline_date: str):
-    """Find the campaign by id or name, or create it (a new name needs a date). Returns (launch, how, error)."""
+def _ensure_campaign(repo, campaign: str, deadline_date: str, cost_center: str = "", embargo_date: str = ""):
+    """Find the campaign by id or name, or create it (a new name needs a date). A new campaign takes the cost center and the
+    embargo date when they are given. Returns (launch, how, error)."""
+    embargo = None
+    if embargo_date:
+        try:
+            embargo = date.fromisoformat(embargo_date.strip())
+        except ValueError:
+            return None, "", f"'{embargo_date}' is not a date. Ask for the embargo date as day, month and year."
     deadline = None
     if deadline_date:
         try:
@@ -35,14 +42,15 @@ def _ensure_campaign(repo, campaign: str, deadline_date: str):
         while repo.get_launch(launch_id):
             launch_id += "-2"
         launch = {"launch_id": launch_id, "launch_name": campaign.strip(), "product_name": campaign.strip(),
-                  "cost_center": "CC-EVENTS-GENERAL", "owner": "Marketing", "in_hand_by": deadline,
-                  "embargo_date": deadline + timedelta(days=7)}
+                  "cost_center": (cost_center or "").strip() or "CC-EVENTS-GENERAL", "owner": "Marketing", "in_hand_by": deadline,
+                  "embargo_date": embargo or deadline + timedelta(days=7)}
         repo.create_launch(launch)
         how = "created"
     return launch, how, ""
 
 
-def create_campaign(campaign: str, deadline_date: str, people: int = 0, venue: str = "") -> dict:
+def create_campaign(campaign: str, deadline_date: str, people: int = 0, venue: str = "", cost_center: str = "",
+                    embargo_date: str = "") -> dict:
     """Create the campaign as soon as the user has given or picked its name. Shows a confirmation. Call it once the name
     is known (campaigns only), then carry on with show_checklist. If the campaign already exists it is found, not
     duplicated.
@@ -52,9 +60,11 @@ def create_campaign(campaign: str, deadline_date: str, people: int = 0, venue: s
         deadline_date: The date everything must be in hand, as YYYY-MM-DD (date_iso from show_checklist).
         people: How many people come.
         venue: The place (venue_name from show_checklist).
+        cost_center: The finance cost center, only if the user gave one (for example CC-GLOBAL-BRAND-4410).
+        embargo_date: The date the public embargo lifts as YYYY-MM-DD, only if the user gave one.
     """
     repo = get_repo()
-    launch, how, err = _ensure_campaign(repo, campaign, deadline_date)
+    launch, how, err = _ensure_campaign(repo, campaign, deadline_date, cost_center, embargo_date)
     if err:
         return {"status": "error", "message": err}
     audit(None, "orchestrator", "campaign_created" if how == "created" else "campaign_found", launch_id=launch["launch_id"],
@@ -98,7 +108,8 @@ def _match_campaigns(launches, text):
     return [x for x in launches if all(w in x["launch_name"].lower() or w in x["launch_id"].lower() for w in words)]
 
 
-def register_launch_request(campaign: str, summary: str, deadline_date: str = "") -> dict:
+def register_launch_request(campaign: str, summary: str, deadline_date: str = "", cost_center: str = "",
+                            embargo_date: str = "") -> dict:
     """Register a new request for a campaign (or a quick purchase) and get its request id. The campaign is found by id or
     name (for example "Spring Product Launch Event"). A new campaign name is created when a deadline_date is given. If
     the campaign exists and a different deadline_date is given, its date is updated.
@@ -107,9 +118,11 @@ def register_launch_request(campaign: str, summary: str, deadline_date: str = ""
         campaign: The campaign name the user chose. For items that are not for a campaign use "Quick purchase".
         summary: One line describing what is needed.
         deadline_date: The date everything must be in hand, as YYYY-MM-DD. Leave empty to use the date on file.
+        cost_center: The finance cost center, only if the user gave one and the campaign is new.
+        embargo_date: The date the public embargo lifts as YYYY-MM-DD, only if the user gave one and the campaign is new.
     """
     repo = get_repo()
-    launch, how, err = _ensure_campaign(repo, campaign, deadline_date)
+    launch, how, err = _ensure_campaign(repo, campaign, deadline_date, cost_center, embargo_date)
     if err:
         return {"status": "error", "message": err}
     request_id = repo.create_request(launch["launch_id"], summary)

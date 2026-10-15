@@ -5,7 +5,8 @@ description: Use once the details are closed and the user has picked what they n
 
 # From the picks to the plan
 
-1. register_launch_request(campaign, summary, deadline_date=date_iso) -> request_id (this creates a new campaign).
+1. register_launch_request(campaign, summary, deadline_date=date_iso) -> request_id (this creates a new campaign; if the campaign
+   was already created with create_campaign, it is found and not duplicated).
 2. Call the brief_analyst_agent tool with the request_id, the bundles and the items. It returns the shopping list and business
    advice together as `display_markdown` (plus advice_count).
    - advice_count above 0: reply with its `display_markdown` exactly as it is, with real line breaks, never as text with \n in it

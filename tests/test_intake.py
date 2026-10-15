@@ -120,3 +120,16 @@ def test_older_adk_passes_plain_dicts_and_it_still_works(repo):
         rid, bundles=[{"bundle_type": "VENUE_DISPLAY", "quantity": 10, "region": "APAC"}],
         items=[{"item": "steel water bottle", "quantity": 150, "region": "APAC"}])
     assert out["status"] == "ok" and out["total_units"] == 160
+
+
+def test_a_new_campaign_takes_the_cost_center_and_embargo_date_from_the_brief(repo):
+    out = brief_tools.create_campaign("Aether Strider Pro Marathon Launch", (date.today() + timedelta(days=9)).isoformat(), 0,
+                                      "USA", cost_center="CC-GLOBAL-BRAND-4410", embargo_date=(date.today() + timedelta(days=17)).isoformat())
+    assert out["status"] == "ok" and "CC-GLOBAL-BRAND-4410" in out["display_markdown"] and "embargo lifts" in out["display_markdown"]
+    launch = repo.get_launch(out["launch_id"])
+    assert launch["cost_center"] == "CC-GLOBAL-BRAND-4410" and launch["embargo_date"] == date.today() + timedelta(days=17)
+    bad = brief_tools.create_campaign("X", (date.today() + timedelta(days=9)).isoformat(), embargo_date="soon")
+    assert bad["status"] == "error"
+    # without them the campaign keeps the general cost center and no extra rows are shown
+    plain = brief_tools.create_campaign("Plain", (date.today() + timedelta(days=9)).isoformat())
+    assert repo.get_launch(plain["launch_id"])["cost_center"] == "CC-EVENTS-GENERAL" and "Cost center" not in plain["display_markdown"]

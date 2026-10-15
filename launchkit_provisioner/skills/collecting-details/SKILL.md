@@ -24,6 +24,21 @@ only want some items) and show its `display_markdown` exactly. It shows âœ… or â
 If an answer conflicts with what they said before, or could mean two things (for example "london" could be the London Campaign
 or the place London), do not guess. Ask ONE short clarifying question, then carry on.
 
+## A complete brief in one message
+Sometimes the user pastes a whole brief: a product or launch name, a cost center, a public embargo date, an in-hand date ("by Oct
+24 sharp"), what they need with quantities ("120 VIP athlete seeding kits, 12 display podiums, 250 buyer presentation kits") and
+where it goes (an event or city, for example the New York marathon expo means the USA). Take everything from it and ask for
+NOTHING that is already there:
+- campaign name: the launch or product name in the brief (for example "Aether Strider Pro Marathon Launch")
+- cost center and embargo date: pass them to create_campaign as `cost_center` and `embargo_date` (YYYY-MM-DD)
+- date: the in-hand date. A date with no year means this year
+- place: the place the brief points to (a New York event means USA). If it is really unclear, ask one short question
+- picks: turn the quantities into bundles (VIP kits = GUEST_KIT, display podiums = VENUE_DISPLAY, buyer kits and folders =
+  SALES_PACK) with the region of the place. The headcount is NOT needed when the quantities are given
+Then call show_checklist with all of it, create_campaign (with the cost center and embargo date), and carry on with the plan
+(skill `plan-and-advice`) without asking anything else. If the brief asks to check spare stock or packaging first, the plan's
+stock table is that answer; if it asks for a safe timeline, the plan's dates and buffer are that answer.
+
 ## If they start with the picks
 Sometimes the first message is only what they want ("150 water bottles and 10 of each pack"). Keep it: pass it to show_checklist as
 `picks` and ask for the missing facts (date, place, then people and name for a campaign). Do not build the shopping list yet.

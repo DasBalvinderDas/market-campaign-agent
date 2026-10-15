@@ -261,6 +261,10 @@ def campaign_created_markdown(launch: dict, how: str, people: int = 0, venue: st
         rows.append(("👥 People", f"{people:,}"))
     if venue:
         rows.append(("📍 Where", venue))
+    if launch.get("cost_center") and launch["cost_center"] != "CC-EVENTS-GENERAL":
+        rows.append(("💼 Cost center", f"`{launch['cost_center']}`"))
+    if launch.get("embargo_date") and launch["embargo_date"] != launch["in_hand_by"] + timedelta(days=7):
+        rows.append(("🔒 Public embargo lifts", day(launch["embargo_date"])))
     return "\n".join([head, "", "| | |", "|---|---|"] + [f"| **{a}** | {b} |" for a, b in rows]
                      + ["", "Next, let's see what we can offer you."])
 
@@ -294,7 +298,7 @@ def intake_checklist(mode: str = "", campaign: str = "", people: int = 0, date_t
     rows = []
     if camp_mode or not items_mode:
         rows.append(("🎪 Campaign name", campaign))
-        rows.append(("👥 How many people", f"{people}" if people else ""))
+        rows.append(("👥 How many people", f"{people}" if people else ("not needed" if picks else "")))
     elif campaign and not quick:
         rows.append(("🎪 Campaign name", campaign))
     rows += [("📅 Date it must be in hand", shown_date), ("📍 Where", venue), ("🛒 What you pick", picks)]
@@ -304,7 +308,7 @@ def intake_checklist(mode: str = "", campaign: str = "", people: int = 0, date_t
     if not (camp_mode or items_mode):
         ask = ("**Tell me about your campaign:** how many people, and on which date?\n\n"
                "Or tell me the items you need. Just talk to me, I will ask for anything that is missing.")
-    elif camp_mode and not people:
+    elif camp_mode and not people and not picks:
         ask = "**How many people will come to your campaign?**"
     elif not date_text:
         ask = "**On which date must everything be in hand?** *(Please give day and month, and the year if it is not this year.)*"

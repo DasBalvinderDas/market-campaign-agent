@@ -245,4 +245,4 @@ def test_facts_given_without_a_mode_are_not_asked_again():
 
 def test_picks_first_still_asks_for_the_date_and_place():
     md = orchestration_tools.show_checklist("", "", 0, "", "", "150 water bottles, 10 of each pack")["display_markdown"]
-    assert "150 water bottles" in md and "Tell me about your campaign" not in md and "How many people will come" in md
+    assert "150 water bottles" in md and "Tell me about your campaign" not in md and "not needed" in md and "On which date" in md

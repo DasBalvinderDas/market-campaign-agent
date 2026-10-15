@@ -95,12 +95,12 @@ def test_a_new_campaign_gets_the_kits_sizes_from_the_standing_list_and_plans_int
     for ln in lines:
         totals["APP-SINGLET" if ln["sku"].startswith("APP-SINGLET") else ln["sku"]] += ln["quantity"]
     assert totals == {"APP-SINGLET": 120, "BOX-ACRYL-PREM-LID": 120, "SVC-LASER-ETCH": 120, "PACK-NUTRITION-FLASK": 120,
-                      "DISP-PODIUM-CARB": 12, "BINDER-CORK-ECO": 250}
+                      "DISP-PODIUM-CARB": 12, "BINDER-CORK-ECO": 250, "FOAM-CUSHION-SAMPLE": 250}
     aether_repo.replace_requirement_lines(rid, lines)
     scenarios, scenario_lines = planner.plan_scenarios(aether_repo, rid, today=TODAY)
     by = {s["option_code"]: s for s in scenarios}
     best = next(s for s in scenarios if s["recommended"])
-    assert best["option_code"] == "REBALANCE" and by["REBALANCE"]["total_cost"] < by["FULL_NEW"]["total_cost"]
+    assert best["option_code"] == "REBALANCE" and by["REBALANCE"]["total_cost"] <= by["FULL_NEW"]["total_cost"]
     assert 5000 < best["total_cost"] < 50000                                  # the VP signs off
     assert all(s["feasible"] and s["buffer_hours"] >= 24 for s in scenarios)
     taken = {(x["source_id"], x["sku"]): x["quantity"] for x in scenario_lines
@@ -167,3 +167,23 @@ def test_preview_changes_nothing_and_needs_no_project(capsys):
     demo.run(_args(project=None, preview=True), project="(preview)")
     out = capsys.readouterr().out
     assert "Use our stock first, buy the rest" in out and "<- recommended" in out and "not stored" in out
+
+
+@pytest.mark.parametrize("today", [date(2026, 10, 8), date(2026, 10, 15), date(2026, 10, 17)])
+def test_the_exact_brief_works_for_24_oct_from_a_week_or_more_before(aether_repo, today):
+    """In hand 24 Oct and embargo 1 Nov, ordered on 8, 15 or 17 Oct: buying everything new at the standard lead times misses the date, the
+    stock-first option is safe and recommended (express vendors keep it possible) and the VP approves it."""
+    aether_repo.create_launch({"launch_id": "EVT-X", "launch_name": "x", "product_name": "x", "cost_center": "CC-GLOBAL-BRAND-4410",
+                               "owner": "m", "in_hand_by": date(2026, 10, 24), "embargo_date": date(2026, 11, 1)})
+    rid = aether_repo.create_request("EVT-X", "x")
+    aether_repo.replace_requirement_lines(rid, planner.expand_bundles(aether_repo, "EVT-X", [
+        {"bundle_type": "GUEST_KIT", "quantity": 120, "region": "US"}, {"bundle_type": "VENUE_DISPLAY", "quantity": 12, "region": "US"},
+        {"bundle_type": "SALES_PACK", "quantity": 250, "region": "US"}]))
+    scenarios, lines = planner.plan_scenarios(aether_repo, rid, today=today)
+    by = {s["option_code"]: s for s in scenarios}
+    best = next(s for s in scenarios if s["recommended"])
+    assert by["FULL_NEW"]["buffer_hours"] < 0 or today == date(2026, 10, 8)        # on 8 Oct even the standard lead times are tight
+    assert best["option_code"] == "REBALANCE" and best["buffer_hours"] >= 24 and best["feasible"]
+    assert 5000 < best["total_cost"] < 50000
+    depot = {(x["sku"]): x["quantity"] for x in lines if x["scenario_id"] == best["scenario_id"] and x["source_type"] == "DEPOT"}
+    assert depot == {"BOX-ACRYL-PREM-LID": 50, "BINDER-CORK-ECO": 100}

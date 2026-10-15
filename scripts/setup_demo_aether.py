@@ -32,7 +32,7 @@ from launchkit_provisioner.data import aether_data  # noqa: E402
 from launchkit_provisioner.data.schema import TABLES  # noqa: E402
 
 KEEP = {"approvers"}                         # never wiped
-SAMPLE_DAYS = 20                             # the sample campaign of the preview is in hand this many days from today
+SAMPLE_DAYS = 9                              # the sample campaign of the preview is in hand this many days from today (like 15 to 24 Oct)
 
 
 def preview(data: dict) -> list[dict]:
@@ -114,9 +114,8 @@ def run(args, project=""):
     if not n:
         print("\nWARNING: no approver emails are set, so no approval email will be sent. Run:\n"
               "  python scripts/setup_bigquery.py --approver-email \"you@example.com\"")
-    print("\nDone. No campaign exists yet and the agent needs no redeploy. Open a NEW chat and try:\n"
-          f"  Hi  ->  a campaign for 120 people on 24 Oct in the USA  ->  name it \"{aether_data.CAMPAIGN_NAME}\"  ->  use the suggested plan\n"
-          "Details and the talk-track: docs/DEMO_AETHER.md")
+    print("\nDone. No campaign exists yet. Open a NEW chat and paste the brief from docs/DEMO_AETHER.md\n"
+          "(120 VIP athlete kits, 12 display podiums, 250 buyer kits, cost center CC-GLOBAL-BRAND-4410, in hand 24 Oct).")
 
 
 if __name__ == "__main__":
