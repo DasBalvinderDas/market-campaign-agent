@@ -24,16 +24,28 @@ Option: `--yes` (no question). The agent does not need a redeploy. To get the or
 | Athletes | A standing list of 120 (XS 18, S 44, M 43, L 15; 70 in the US, 50 in EMEA) that gives every new campaign's kits the right singlet sizes. Emily S. `@emily_runs_fast`, Marcus T. `@marathon_marcus`, David K. `@kenya_stride` are the first three |
 | Also | Delivery places (USA, Canada, London, Singapore), shipping lanes, planning rules, approval levels (up to $5,000 automatic, $5,000 to $50,000 VP, above that CMO) and date pricing |
 
-## The chat (new chat)
+## The chat (open a new chat and talk, step by step)
 
-Paste this brief (the assistant reads the campaign name, cost center, dates, place and quantities from it and asks for nothing else):
+Nothing is pasted in one go. Say it the way a marketer would, and the assistant asks for what it still needs. After each of your messages it shows a small
+✅/⬜ table of what it knows and asks the one next question.
 
-> We need to roll out the global marketing collateral for the Aether Strider Pro marathon shoe launch under cost center CC-GLOBAL-BRAND-4410. Our public race-day embargo lifts on November 1 for NYC Marathon weekend, so all assets must be in hands by October 24 sharp. Here's what we need: 1. 120 VIP elite athlete seeding kits with custom handle laser etching and sized race singlets. 2. 12 illuminated shoe display podiums for our NYC Marathon expo pop-ups. 3. 250 cork buyer presentation kits with foam samples for specialty running retailers. Check if we have any spare boxes or packaging in our regional depots first, make sure the timeline is safe for Oct 24.
+| # | You say | The assistant |
+|---|---|---|
+| 1 | `Hi` | Greets you, says we have no campaigns yet, and asks about yours |
+| 2 | `We are launching the Aether Strider Pro marathon shoe, and everything has to be in hands by October 24 sharp.` | Has the date (this year); asks **how many people** |
+| 3 | `120 elite athletes.` | Has the headcount; asks **where** and shows where we can deliver (USA, Canada, London, Singapore, with vendors and warehouses) |
+| 4 | `It is for the NYC Marathon expo, so the USA. The cost center is CC-GLOBAL-BRAND-4410 and our public embargo lifts on November 1.` | Has the place; asks the **campaign name** and offers name ideas |
+| 5 | `Call it Aether Strider Pro Global Marathon Launch.` | **Creates the campaign** (cost center, embargo 1 Nov, in hand 24 Oct) and shows our offer: packs, single items, our stock, prices, ready-by dates |
+| 6 | `I need 120 VIP athlete seeding kits with handle laser etching and sized race singlets, 12 illuminated podiums for the expo pop-ups, and 250 cork buyer presentation kits with foam samples.` | Builds the **shopping list** (Bill of Materials) and gives advice (spares and anything missing) |
+| 7 | `Looks good. Please check our depots for spare boxes or packaging first, and make sure the timeline is safe for October 24.` | Shows the plan: **our stock** (50 boxes in Boston, 100 cork folios in Portland), the **vendors compared**, the **three choices** with the delivery date and safety buffer, and **other dates** |
+| 8 | `Go with option 2.` | Asks the **VP** to approve (email with Approve and Reject buttons); the order pack PDF appears in the chat |
+| 9 | The VP clicks **Approve**, then you say `What is the status of that request?` | **Orders placed**: the purchase orders, the warehouse moves and the launch-team email |
 
-Then:
-1. It creates the campaign (cost center, embargo 1 Nov, in hand 24 Oct), shows the shopping list and any advice: say `Looks good`.
-2. It shows our stock (**50 boxes in Boston, 100 cork folios in Portland**), the vendors compared, the three choices and the other dates. **Choose option 2** (the recommended one).
-3. The VP clicks **Approve** in the email, then `What is the status of that request?`: orders are placed, the order pack PDF is in the chat.
+Tips for the demo
+- If the assistant asks something you already told it, just answer again; it keeps what you said.
+- Step 7 can be split in two ("Looks good", then "Is the timeline safe for October 24?") if you want to pause on the stock table.
+- The same story also works in fewer, longer messages, for example steps 2 to 4 in one sentence. The assistant takes whatever you give it and asks only for the rest.
+- If you want to show the "no headcount needed" path, give the quantities first (step 6) and the assistant keeps them and asks for the date and place.
 
 ## What to expect (computed by the planner, ordering on 15 Oct for 24 Oct)
 
