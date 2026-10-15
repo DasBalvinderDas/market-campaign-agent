@@ -1,65 +1,80 @@
-# Live demo: Aether Strider Pro Global Marathon Launch
+# Aether demo
 
-A different story on the same assistant: a running-shoe launch with 120 VIP athlete kits, 12 expo podiums and 250 cork buyer folios.
+A running-shoe launch. Talk to the assistant step by step.
 
-## Load the data (wipes everything first)
+## Load the data
 
 ```bash
 cd ~/market-campaign-agent && source .venv/bin/activate
-python scripts/setup_demo_aether.py --preview      # shows the three options the demo will produce, changes nothing
-python scripts/setup_demo_aether.py                 # empties every table (approver emails stay) and loads the Aether data; asks first
+python scripts/setup_demo_aether.py --preview   # shows the options, changes nothing
+python scripts/setup_demo_aether.py             # wipes everything, loads Aether data
 ```
 
-Option: `--yes` (no question). The agent does not need a redeploy. To get the original Spring demo back: `python scripts/setup_bigquery.py --refresh-reference`.
-**No campaign is created.** You create it in the chat, like any new campaign.
+- It asks you to type YES first.
+- Add `--yes` to skip that question.
+- No campaign is created.
+- You create it in the chat.
+- Approver emails stay as they are.
+- Go back to Spring: `python scripts/setup_bigquery.py --refresh-reference`
 
 ## What is loaded
 
 | Part | Content |
 |---|---|
-| Vendors | 18: Apex Luxury Packaging, Metro NYC Engraving, Apex Technical Apparel, Midwest Exhibit Fabricators, EcoPackaging Ltd., BioHydrate Nutrition, and a second or third vendor for every item |
-| Items and prices | Box $65 (10 days), bib plate $20 (2), singlet XS to L $45 (8), podium $380 (16), cork folio $22 (7), flask kit $27.42 (4), foam samples $2.50 (3); eco box $74 and organic singlet $52; express offers at 3 days (box $79, cork folio $29, singlet $58, podium $520) |
-| Our stock | **50 boxes in Boston**, **100 cork folios in Portland**, **0 podiums in Amsterdam** |
-| Packs | **VIP athlete seeding kit** = presentation box + laser-etched bib plate + sized race singlet + flask kit; **display podium**; **buyer presentation kit** = cork folio + foam sample set |
-| Athletes | A standing list of 120 (XS 18, S 44, M 43, L 15; 70 in the US, 50 in EMEA) that gives every new campaign's kits the right singlet sizes. Emily S. `@emily_runs_fast`, Marcus T. `@marathon_marcus`, David K. `@kenya_stride` are the first three |
-| Also | Delivery places (USA, Canada, London, Singapore), shipping lanes, planning rules, approval levels (up to $5,000 automatic, $5,000 to $50,000 VP, above that CMO) and date pricing |
+| Vendors | 18, with two or three per item |
+| Items | Box, bib plate, singlet, podium, cork folio, flask, foam |
+| Express offers | 3-day delivery at a higher price |
+| Our stock | 50 boxes in Boston |
+| | 100 cork folios in Portland |
+| | 0 podiums in Amsterdam |
+| Packs | Athlete kit, display podium, buyer kit |
+| Athletes | A standing list of 120 with sizes |
+| Approval | Up to $5,000 automatic |
+| | $5,000 to $50,000: VP |
+| | Above that: CMO |
 
-## The chat (open a new chat and talk, step by step)
+## The chat
 
-Nothing is pasted in one go. Say it the way a marketer would, and the assistant asks for what it still needs. After each of your messages it shows a small
-✅/⬜ table of what it knows and asks the one next question.
+Open a new chat. Each step is a short message.
 
 | # | You say | The assistant |
 |---|---|---|
-| 1 | `Hi` | Greets you, says we have no campaigns yet, and asks about yours |
-| 2 | `We are launching the Aether Strider Pro marathon shoe, and everything has to be in hands by October 24 sharp.` | Has the date (this year); asks **how many people** |
-| 3 | `120 elite athletes.` | Has the headcount; asks **where** and shows where we can deliver (USA, Canada, London, Singapore, with vendors and warehouses) |
-| 4 | `It is for the NYC Marathon expo, so the USA. The cost center is CC-GLOBAL-BRAND-4410 and our public embargo lifts on November 1.` | Has the place; asks the **campaign name** and offers name ideas |
-| 5 | `Call it Aether Strider Pro Global Marathon Launch.` | **Creates the campaign** (cost center, embargo 1 Nov, in hand 24 Oct) and shows our offer: packs, single items, our stock, prices, ready-by dates |
-| 6 | `I need 120 VIP athlete seeding kits with handle laser etching and sized race singlets, 12 illuminated podiums for the expo pop-ups, and 250 cork buyer presentation kits with foam samples.` | Builds the **shopping list** (Bill of Materials) and gives advice (spares and anything missing) |
-| 7 | `Looks good. Please check our depots for spare boxes or packaging first, and make sure the timeline is safe for October 24.` | Shows the plan: **our stock** (50 boxes in Boston, 100 cork folios in Portland), the **vendors compared**, the **three choices** with the delivery date and safety buffer, and **other dates** |
-| 8 | `Go with option 2.` | Asks the **VP** to approve (email with Approve and Reject buttons); the order pack PDF appears in the chat |
-| 9 | The VP clicks **Approve**, then you say `What is the status of that request?` | **Orders placed**: the purchase orders, the warehouse moves and the launch-team email |
+| 1 | `Hi` | Says there are no campaigns yet. |
+| 2 | `We are launching the Aether Strider Pro shoe. Need everything by October 24.` | Asks how many people. |
+| 3 | `120 elite athletes.` | Asks where. Shows delivery places. |
+| 4 | `The NYC Marathon expo, so the USA. Cost center is CC-GLOBAL-BRAND-4410. Embargo lifts on November 1.` | Asks for a campaign name. |
+| 5 | `Call it Aether Strider Pro Global Marathon Launch.` | Creates the campaign. Shows our offer. |
+| 6 | `120 VIP athlete kits with handle etching and sized singlets. 12 illuminated podiums for the expo. 250 cork buyer kits with foam samples.` | Shows the shopping list and advice. |
+| 7 | `Looks good. Check depots for spare boxes first. Is October 24 safe?` | Shows stock, vendors, three choices, other dates. |
+| 8 | `Go with option 2.` | Asks the VP to approve. Attaches the PDF. |
+| 9 | VP clicks **Approve**. Then: `What is the status?` | Places all the orders. |
 
-Tips for the demo
-- If the assistant asks something you already told it, just answer again; it keeps what you said.
-- Step 7 can be split in two ("Looks good", then "Is the timeline safe for October 24?") if you want to pause on the stock table.
-- The same story also works in fewer, longer messages, for example steps 2 to 4 in one sentence. The assistant takes whatever you give it and asks only for the rest.
-- If you want to show the "no headcount needed" path, give the quantities first (step 6) and the assistant keeps them and asks for the date and place.
+Tips:
+- Answer again if it asks something twice.
+- Longer messages work too.
+- Give quantities first to skip the headcount.
 
-## What to expect (computed by the planner, ordering on 15 Oct for 24 Oct)
+## What to expect
+
+Ordering on 15 Oct for 24 Oct.
 
 | Option | Total | Arrives | Note |
 |---|---|---|---|
-| 1. Buy everything new | about $30,290 | 2 Nov | **misses 24 Oct**: the standard lead times (a podium takes 16 days) are too long |
-| 2. Use our stock first (recommended) | about $30,110 | 21 Oct | 72-hour safety buffer. 50 boxes from Boston and 100 folios from Portland; express vendors for the slow items; the VP approves |
-| 3. Eco | about $36,960 | 21 Oct | eco materials where they are fast enough, dearer |
+| 1. Everything new | $30,290 | 2 Nov | Misses 24 Oct |
+| 2. Our stock first | $30,110 | 21 Oct | Recommended. 72-hour buffer |
+| 3. Eco | $36,960 | 21 Oct | Dearer |
 
-Express vendors (RushPack Express, SprintStitch Apparel, FastStage Displays) deliver in 3 days at a higher price. They are what makes 24 Oct possible
-from mid-October. The same brief ordered on 8 Oct also works (the stock-first option arrives 22 Oct); on 18 Oct it is just possible (no safety buffer, flagged as moderate risk); from 19 Oct 24 Oct is no longer possible
-and the assistant flags it as high risk. The numbers come from the data, so they differ from the demo pack's mock-up ($31,400 / $21,850 / $24,600).
+- Option 2 uses 50 boxes from Boston.
+- It also uses 100 folios from Portland.
+- Express vendors make 24 Oct possible.
+- Ordering on 8 Oct also works.
+- On 18 Oct there is no buffer.
+- From 19 Oct it is high risk.
+- Numbers come from the data.
+- They differ from the demo pack's mock-up.
 
-## Not in this demo (yet)
+## Not in this demo
 
-The pack also shows a cost-center budget check ($140,000 left), a SAP purchase order number and a Slack post. This assistant has no budget table, no SAP link
-and no Slack step: its orders are Application Integration purchase orders and a launch-team email.
+- Cost-center budget check
+- SAP purchase order number
+- Slack post
