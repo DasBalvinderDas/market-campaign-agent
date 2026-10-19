@@ -44,24 +44,29 @@ The demo date must be 9 or more days away.
 | Any day | Today plus 9 days |
 
 Closer dates are flagged as risky. That is correct.
-The examples below use October 24.
+The examples below use October 24. Change it in both prompts.
 
-## Option A: one prompt
+## Option A: two prompts
 
-Open a new chat. Paste this in one go.
+Open a new chat. Send two prompts.
 
-> Create a campaign called Aether Strider Pro Global Marathon Launch. It is for 120 elite athletes in the USA. Everything is needed by October 24. I need 120 VIP athlete kits. Add handle etching and sized singlets. Also 12 illuminated podiums for the expo. And 250 cork buyer kits with foam samples. Check depots for spare boxes first. Is October 24 safe?
+**Prompt 1: the campaign**
 
-It has all five facts:
+> Create a campaign called Aether Strider Pro Global Marathon Launch. It is for 120 elite athletes in the USA. Everything is needed by October 24.
+
+It has the four campaign facts:
 1. Campaign name
 2. How many people
 3. Date
 4. Place
-5. What you need
 
-So the assistant asks nothing more. It will:
-- Create the campaign.
-- Show the shopping list and advice.
+The assistant creates the campaign. It shows our offer. Then it asks what you need.
+
+**Prompt 2: what you need**
+
+> I need 120 VIP athlete kits. Add handle etching and sized singlets. Also 12 illuminated podiums for the expo. And 250 cork buyer kits with foam samples. Check depots for spare boxes first. Is October 24 safe?
+
+The assistant shows the shopping list and advice.
 
 Then:
 
