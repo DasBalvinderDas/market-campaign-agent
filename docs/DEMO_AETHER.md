@@ -33,7 +33,45 @@ python scripts/setup_demo_aether.py             # wipes everything, loads Aether
 | | $5,000 to $50,000: VP |
 | | Above that: CMO |
 
-## The chat
+## Pick the date first
+
+The demo date must be 9 or more days away.
+
+| Today is | Use this date |
+|---|---|
+| 15 Oct | October 24 |
+| 19 Oct | October 28 |
+| Any day | Today plus 9 days |
+
+Closer dates are flagged as risky. That is correct.
+The examples below use October 24.
+
+## Option A: one prompt
+
+Open a new chat. Paste this in one go.
+
+> Create a campaign called Aether Strider Pro Global Marathon Launch. It is for 120 elite athletes in the USA. Everything is needed by October 24. I need 120 VIP athlete kits. Add handle etching and sized singlets. Also 12 illuminated podiums for the expo. And 250 cork buyer kits with foam samples. Check depots for spare boxes first. Is October 24 safe?
+
+It has all five facts:
+1. Campaign name
+2. How many people
+3. Date
+4. Place
+5. What you need
+
+So the assistant asks nothing more. It will:
+- Create the campaign.
+- Show the shopping list and advice.
+
+Then:
+
+| # | You say | The assistant |
+|---|---|---|
+| 1 | `Looks good.` | Shows stock, vendors, three choices, other dates. |
+| 2 | `Go with option 2.` | Asks the VP to approve. Attaches the PDF. |
+| 3 | VP clicks **Approve**. Then: `What is the status?` | Places all the orders. |
+
+## Option B: step by step
 
 Open a new chat. Each step is a short message.
 
@@ -51,7 +89,6 @@ Open a new chat. Each step is a short message.
 
 Tips:
 - Answer again if it asks something twice.
-- Longer messages work too.
 - Give quantities first to skip the headcount.
 
 ## What to expect
