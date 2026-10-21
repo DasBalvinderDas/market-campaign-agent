@@ -134,9 +134,17 @@ async def show_checklist(mode: str = "", campaign: str = "", people: int = 0, da
     out = checklist(mode, campaign, people, date, venue, picks)
     quick = (campaign or "").strip().lower() in ("quick purchase", "no campaign", "none")
     items_mode = (mode or "").lower().startswith("item") or quick
-    if campaign and not quick and not items_mode and not picks and out.get("date_iso") and out.get("place"):
-        from .brief_tools import create_campaign
-        made = await create_campaign(campaign, out["date_iso"], people, out["place"], tool_context=tool_context)
+    if campaign and not quick and not items_mode and out.get("date_iso") and out.get("place"):
+        from .brief_tools import make_campaign
+        state = getattr(tool_context, "state", None)
+        key = f"catalog_sent_{campaign.strip().lower()}"
+        sent = bool(state.get(key)) if state is not None else False
+        made = await make_campaign(campaign, out["date_iso"], people, out["place"], tool_context=tool_context, attach=not sent)
+        if made.get("status") == "ok" and state is not None:
+            try:
+                state[key] = True
+            except Exception:  # noqa: BLE001
+                pass
         if made.get("status") == "ok":
             out.update(launch_id=made["launch_id"], launch_name=made["launch_name"], display_markdown=made["display_markdown"])
     return out

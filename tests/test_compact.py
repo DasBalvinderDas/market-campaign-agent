@@ -124,3 +124,14 @@ def test_the_checklist_creates_the_campaign_and_attaches_the_catalog_once_name_d
     assert "Javits Center, New York, USA" in md and "What do you need?" in md and out["region"] == "US"
     items = asyncio.run(orchestration_tools.show_checklist("items", "", 0, when, "USA", tool_context=_Ctx()))
     assert "launch_id" not in items                                          # items only: no campaign is made
+
+
+def test_the_catalog_is_sent_once_per_chat_even_if_the_checklist_is_called_again(repo):
+    ctx = _Ctx()
+    ctx.state = {}
+    when = date.today().replace(year=date.today().year + 1).isoformat()
+    args = ("campaign", "Again Launch", 0, when, "London, UK")
+    asyncio.run(orchestration_tools.show_checklist(*args, tool_context=ctx))
+    ctx.saved.clear()
+    out = asyncio.run(orchestration_tools.show_checklist(*args, "150 bottles", tool_context=ctx))
+    assert not ctx.saved and "launch_id" in out and "attached as a PDF" in out["display_markdown"]

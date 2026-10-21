@@ -19,6 +19,8 @@ async def _attach_catalog(repo, tool_context, deadline=None, place="") -> bool:
     try:
         data = await asyncio.to_thread(catalog_pdf.build_pdf, repo, deadline, place)
     except Exception:  # noqa: BLE001 - the campaign must never fail because the PDF could not be made
+        import logging
+        logging.getLogger(__name__).exception("could not build the catalog PDF")
         return False
     return await attach_pdf(tool_context, "catalog.pdf", data)
 
@@ -76,13 +78,19 @@ async def create_campaign(campaign: str, deadline_date: str, people: int = 0, ve
         cost_center: The finance cost center, only if the user gave one (for example CC-GLOBAL-BRAND-4410).
         embargo_date: The date the public embargo lifts as YYYY-MM-DD, only if the user gave one.
     """
+    return await make_campaign(campaign, deadline_date, people, venue, cost_center, embargo_date, tool_context)
+
+
+async def make_campaign(campaign: str, deadline_date: str, people: int = 0, venue: str = "", cost_center: str = "",
+                        embargo_date: str = "", tool_context=None, attach: bool = True) -> dict:
+    """Create (or find) the campaign and attach the catalog PDF. `attach` False skips the PDF (it is already in the chat)."""
     repo = get_repo()
     launch, how, err = _ensure_campaign(repo, campaign, deadline_date, cost_center, embargo_date)
     if err:
         return {"status": "error", "message": err}
     audit(None, "orchestrator", "campaign_created" if how == "created" else "campaign_found", launch_id=launch["launch_id"],
           name=launch["launch_name"], people=people, venue=venue, in_hand_by=str(launch["in_hand_by"]))
-    attached = await _attach_catalog(repo, tool_context, launch["in_hand_by"], venue)
+    attached = await _attach_catalog(repo, tool_context, launch["in_hand_by"], venue) if attach else True
     return {"status": "ok", "campaign_status": how, "launch_id": launch["launch_id"], "launch_name": launch["launch_name"],
             "in_hand_by": str(launch["in_hand_by"]),
             "display_markdown": presentation.campaign_created_markdown(launch, how, people, venue, catalog=attached)}
