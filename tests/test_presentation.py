@@ -115,48 +115,48 @@ def _iso(days):
 
 
 def test_nothing_known_asks_for_name_date_city_and_country():
-    c = orchestration_tools.show_checklist()["display_markdown"]
+    c = orchestration_tools.checklist()["display_markdown"]
     assert "campaign name, the date, the city and the country" in c and len(c.split("\n\n")) == 2
 
 
 def test_a_natural_first_message_is_enough_and_the_next_question_is_the_name():
-    out = orchestration_tools.show_checklist("campaign", "", 300, "31st Oct")
+    out = orchestration_tools.checklist("campaign", "", 300, "31st Oct")
     md = out["display_markdown"]
     assert "300" in md and out["date_iso"].endswith("-10-31") and "campaign name" in md and "What is the campaign called?" in md
     assert "city and country" in md and "Dallas" not in md        # no vendors, warehouses or catalog as text
 
 
 def test_questions_come_in_order_name_date_place_then_picks():
-    assert "What is the campaign called?" in orchestration_tools.show_checklist("campaign")["display_markdown"]
-    assert "On which date" in orchestration_tools.show_checklist("campaign", "Summer Sale")["display_markdown"]
-    assert "Which city and country?" in orchestration_tools.show_checklist("campaign", "Summer Sale", 0, _iso(25))["display_markdown"]
-    named = orchestration_tools.show_checklist("campaign", "Summer Sale", 0, _iso(25), "London, UK")
+    assert "What is the campaign called?" in orchestration_tools.checklist("campaign")["display_markdown"]
+    assert "On which date" in orchestration_tools.checklist("campaign", "Summer Sale")["display_markdown"]
+    assert "Which city and country?" in orchestration_tools.checklist("campaign", "Summer Sale", 0, _iso(25))["display_markdown"]
+    named = orchestration_tools.checklist("campaign", "Summer Sale", 0, _iso(25), "London, UK")
     assert named["region"] == "EMEA" and "What do you need?" in named["display_markdown"] and "catalog PDF" in named["display_markdown"]
     assert "People" not in named["display_markdown"] and "how many people" not in named["display_markdown"].lower()
 
 
 def test_canada_is_served_from_the_us_region():
-    out = orchestration_tools.show_checklist("campaign", "", 100, _iso(25), "Toronto, Canada")
+    out = orchestration_tools.checklist("campaign", "", 100, _iso(25), "Toronto, Canada")
     assert out["region"] == "US" and out["venue_name"] == "Canada"
 
 
 def test_an_unknown_place_is_asked_again_without_losing_what_we_know():
-    md = orchestration_tools.show_checklist("campaign", "Summer Sale", 100, _iso(25), "Mars")["display_markdown"]
+    md = orchestration_tools.checklist("campaign", "Summer Sale", 100, _iso(25), "Mars")["display_markdown"]
     assert "I do not serve 'Mars' yet" in md and "Singapore" in md and "Summer Sale" in md
 
 
 def test_a_date_in_the_past_or_unreadable_is_explained():
-    assert "has already passed" in orchestration_tools.show_checklist("campaign", "X", 100, "2020-01-01")["display_markdown"]
-    assert "could not read the date" in orchestration_tools.show_checklist("campaign", "X", 100, "sometime soon")["display_markdown"]
+    assert "has already passed" in orchestration_tools.checklist("campaign", "X", 100, "2020-01-01")["display_markdown"]
+    assert "could not read the date" in orchestration_tools.checklist("campaign", "X", 100, "sometime soon")["display_markdown"]
 
 
 def test_items_only_needs_a_date_a_place_and_the_pick_but_no_name_or_headcount():
-    md = orchestration_tools.show_checklist("items", "", 0, _iso(25), "USA")["display_markdown"]
+    md = orchestration_tools.checklist("items", "", 0, _iso(25), "USA")["display_markdown"]
     assert "campaign name" not in md and "people" not in md and "What do you need?" in md
 
 
 def test_the_suggested_plan_for_the_headcount_is_still_returned_but_not_listed():
-    out = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
+    out = orchestration_tools.checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
     assert "suggested plan" not in out["display_markdown"]
     assert out["suggested"]["bundles"] == [{"bundle_type": "GUEST_KIT", "quantity": 30, "region": "US"},
                                            {"bundle_type": "SALES_PACK", "quantity": 30, "region": "US"},
@@ -178,7 +178,7 @@ def test_bar_is_a_tiny_picture():
 
 
 def test_the_name_question_comes_with_ideas_built_from_the_season_place_and_size():
-    out = orchestration_tools.show_checklist("campaign", "", 300, _iso(25), "Singapore")
+    out = orchestration_tools.checklist("campaign", "", 300, _iso(25), "Singapore")
     names = out["name_suggestions"]
     assert len(names) == 4 and any("Singapore" in n for n in names) and any("300-Guest" in n for n in names)
     assert names[0] in out["display_markdown"]
@@ -195,35 +195,35 @@ def test_name_ideas_are_the_same_every_time_and_follow_the_season_and_size():
 
 
 def test_no_name_ideas_once_a_name_is_given():
-    out = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
+    out = orchestration_tools.checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
     assert "name_suggestions" not in out and "What do you need?" in out["display_markdown"]
 
 
 def test_a_date_without_a_year_is_this_year():
     from datetime import date
-    md = orchestration_tools.show_checklist("campaign", "", 300, "31st Oct")["display_markdown"]
+    md = orchestration_tools.checklist("campaign", "", 300, "31st Oct")["display_markdown"]
     assert f"31 Oct {date.today().year}" in md
 
 
 def test_facts_given_without_a_mode_are_not_asked_again():
-    md = orchestration_tools.show_checklist("", "", 300, _iso(25), "London")["display_markdown"]
+    md = orchestration_tools.checklist("", "", 300, _iso(25), "London")["display_markdown"]
     assert "Tell me the campaign name" not in md and "What is the campaign called?" in md
-    assert "Tell me the campaign name" in orchestration_tools.show_checklist("", "", 0, "", "")["display_markdown"]
+    assert "Tell me the campaign name" in orchestration_tools.checklist("", "", 0, "", "")["display_markdown"]
 
 
 def test_picks_first_still_asks_for_the_missing_facts():
-    md = orchestration_tools.show_checklist("", "", 0, "", "", "150 water bottles, 10 of each pack")["display_markdown"]
+    md = orchestration_tools.checklist("", "", 0, "", "", "150 water bottles, 10 of each pack")["display_markdown"]
     assert "150 water bottles" in md and "Still needed" in md and "date" in md
 
 
 def test_october_24_with_a_guessed_past_year_is_not_reported_as_passed():
     from datetime import date as _d
-    md = orchestration_tools.show_checklist("campaign", "", 0, f"{_d.today().year - 1}-12-31")["display_markdown"]
+    md = orchestration_tools.checklist("campaign", "", 0, f"{_d.today().year - 1}-12-31")["display_markdown"]
     assert "has already passed" not in md and "campaign name" in md
 
 
 def test_new_york_usa_is_the_usa_and_other_cities_are_recognised():
     for text, venue in [("New York, USA", "USA"), ("Toronto, Canada", "Canada"), ("London, UK", "London"), ("United States", "USA")]:
-        assert orchestration_tools.show_checklist("campaign", "X", 0, _iso(25), text)["venue_name"] == venue
+        assert orchestration_tools.checklist("campaign", "X", 0, _iso(25), text)["venue_name"] == venue
 
 

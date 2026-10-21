@@ -62,14 +62,14 @@ def test_the_order_pack_is_announced_inside_the_last_line(repo, aurora, monkeypa
 
 
 def test_a_date_without_a_year_is_the_current_year():
-    md = orchestration_tools.show_checklist("campaign", "X", 0, "31st Oct", "New York, USA")
+    md = orchestration_tools.checklist("campaign", "X", 0, "31st Oct", "New York, USA")
     assert md["date_iso"] == f"{date.today().year}-10-31" and md["region"] == "US"
 
 
 def test_the_city_is_kept_with_the_country():
-    out = orchestration_tools.show_checklist("campaign", "X", 0, "2099-01-05", "New York, USA")
+    out = orchestration_tools.checklist("campaign", "X", 0, "2099-01-05", "New York, USA")
     assert out["place"] == "New York, USA" and out["venue_name"] == "USA" and "📍 New York, USA" in out["display_markdown"]
-    assert orchestration_tools.show_checklist("campaign", "X", 0, "2099-01-05", "USA")["place"] == "USA"
+    assert orchestration_tools.checklist("campaign", "X", 0, "2099-01-05", "USA")["place"] == "USA"
 
 
 def test_the_carbon_note_explains_what_green_means():
@@ -109,3 +109,18 @@ def test_a_bare_greeting_gets_the_full_card_from_the_shortcut(repo):
     assert ask("Hello!")  is not None and ask("what can you do?") is not None
     assert ask("Hi", "Hi") is None                                  # not the first message of the chat
     assert ask("Hi, create a campaign for 31 Oct") is None
+
+
+def test_the_checklist_creates_the_campaign_and_attaches_the_catalog_once_name_date_and_place_are_known(repo):
+    ctx = _Ctx()
+    when = date.today().replace(year=date.today().year + 1).isoformat()
+    part = asyncio.run(orchestration_tools.show_checklist("campaign", "Aether Launch", 0, when, "", tool_context=ctx))
+    assert "launch_id" not in part and not ctx.saved                         # the place is missing: only a question
+    out = asyncio.run(orchestration_tools.show_checklist("campaign", "Aether Launch", 0, when, "Javits Center, New York, USA",
+                                                         tool_context=ctx))
+    md = out["display_markdown"]
+    _shape(md)
+    assert out["launch_id"] == "EVT-AETHER-LAUNCH" and "catalog.pdf" in ctx.saved
+    assert "Javits Center, New York, USA" in md and "What do you need?" in md and out["region"] == "US"
+    items = asyncio.run(orchestration_tools.show_checklist("items", "", 0, when, "USA", tool_context=_Ctx()))
+    assert "launch_id" not in items                                          # items only: no campaign is made

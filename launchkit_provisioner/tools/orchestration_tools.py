@@ -59,8 +59,8 @@ def get_vendor_report(request_id: str) -> dict:
             + presentation.vendor_report(repo, request_id)}
 
 
-def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: str = "", venue: str = "",
-                   picks: str = "") -> dict:
+def checklist(mode: str = "", campaign: str = "", people: int = 0, date: str = "", venue: str = "",
+              picks: str = "") -> dict:
     """The interviewer. Shows what we know so far (✅/⬜) and the ONE next question. When the date is known it also shows
     where we can deliver (vendors and warehouses), and when the place is known it shows our offer with a suggested plan
     for the headcount. Call it on EVERY question turn with everything the user has said so far (leave the rest empty).
@@ -109,6 +109,36 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
         out.update(region=region, venue_name=v["venue_name"], place=place)
         if people and (mode or "").lower().startswith("camp"):
             out["suggested"] = presentation.suggested_plan(repo, people, region)
+    return out
+
+
+async def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: str = "", venue: str = "",
+                         picks: str = "", tool_context=None) -> dict:
+    """The interviewer. Call it on EVERY question turn with everything the user has said so far (leave the rest empty).
+    It shows what we know (✅/⬜) and the ONE next question. As soon as the campaign name, the date and the place (city and
+    country) are all known it CREATES the campaign itself and attaches the catalog PDF to the chat: then its
+    `display_markdown` is the confirmation and the question "What do you need?". Show `display_markdown` exactly and do not
+    call create_campaign. Users talk naturally: pass what you can read from their words.
+
+    Args:
+        mode: "campaign" for a whole campaign, "items" if they only want some items. Leave empty if not clear yet.
+        campaign: The campaign name the user gave (not needed for items).
+        people: How many people come. Optional: leave 0 if the user did not say.
+        date: The date everything must be in hand, exactly as the user said it ("31st Oct", "November 15"). Never add a year.
+        venue: Where the campaign is, as the user said it ("Javits Center, New York, USA"). We serve USA, Canada, London and
+            Singapore.
+        picks: A short summary of what they picked, once they pick.
+    Returns date_iso, region, venue_name, `place` and `name_suggestions` (when it asks for a name: the user may say a number
+    to pick one) and `suggested` (bundles and items for the headcount). Use date_iso as deadline_date and region for every pick.
+    """
+    out = checklist(mode, campaign, people, date, venue, picks)
+    quick = (campaign or "").strip().lower() in ("quick purchase", "no campaign", "none")
+    items_mode = (mode or "").lower().startswith("item") or quick
+    if campaign and not quick and not items_mode and not picks and out.get("date_iso") and out.get("place"):
+        from .brief_tools import create_campaign
+        made = await create_campaign(campaign, out["date_iso"], people, out["place"], tool_context=tool_context)
+        if made.get("status") == "ok":
+            out.update(launch_id=made["launch_id"], launch_name=made["launch_name"], display_markdown=made["display_markdown"])
     return out
 
 

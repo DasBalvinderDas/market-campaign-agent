@@ -272,7 +272,8 @@ def campaign_created_markdown(launch: dict, how: str, people: int = 0, venue: st
     if launch.get("embargo_date") and launch["embargo_date"] != launch["in_hand_by"] + timedelta(days=7):
         facts.append(f"🔒 Public embargo lifts {day(launch['embargo_date'])}")
     return (two_lines(f"{head}: {launch['launch_name']}**", " · ".join(facts)) + "\n\n"
-            + ("📎 Our catalog is attached as a PDF. " if catalog else "") + "**What do you need?**")
+            + ("📎 Our catalog is attached as a PDF. " if catalog else "")
+            + "**What do you need?** Tell me the items and how many, for example 100 kits and 10 display stands.")
 
 
 def campaigns_markdown(launches) -> str:
