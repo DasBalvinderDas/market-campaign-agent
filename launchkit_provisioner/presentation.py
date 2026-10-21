@@ -12,7 +12,8 @@ ICON = {"FULL_NEW": "🛒", "REBALANCE": "♻️", "ECO": "🌱"}
 _UNITS = {"GUEST_KIT": "kits", "VENUE_DISPLAY": "stands", "SALES_PACK": "folders"}
 
 
-CARBON_NOTE = ("CO₂ is each vendor's estimate per item times the quantity, plus a little for transport. "
+CARBON_NOTE = ("CO₂ is the carbon dioxide released to make and ship your items. Each vendor gives a figure per item and we "
+               "multiply it by the quantity; items from our own stock only add the move between warehouses. "
                "Eco means recycled or organic materials, not necessarily biodegradable.")
 
 
@@ -936,8 +937,10 @@ def order_body(repo, request_id: str, scenario: dict, decision: dict, update_sen
     dlines = [ln for ln in lines if ln["source_type"] == "DEPOT"]
     items = sum(ln["quantity"] for ln in lines)
     own = sum(ln["quantity"] for ln in dlines)
-    n_po = len(repo.list_pos(request_id)) or len({ln["source_id"] for ln in vlines})          # one per vendor
-    n_tr = len(repo.list_transfers(request_id)) or len({ln["source_id"] for ln in dlines})    # one per warehouse
+    pos = {p["vendor_id"]: p["po_number"] for p in repo.list_pos(request_id)}
+    moves_no = [t["transfer_number"] for t in repo.list_transfers(request_id)]
+    n_po = len(pos) or len({ln["source_id"] for ln in vlines})          # one per vendor
+    n_tr = len(moves_no) or len({ln["source_id"] for ln in dlines})    # one per warehouse
     eco_plan = scenario["option_code"] == "ECO"
 
     by_vendor: dict = {}
@@ -966,7 +969,7 @@ def order_body(repo, request_id: str, scenario: dict, decision: dict, update_sen
     saved = (f"**{money(scenario['savings_usd'])}** saved" if scenario["savings_usd"] > 0
              else f"{money(-scenario['savings_usd'])} more" if scenario["savings_usd"] < 0 else "same")
     out = [f"## ✅ Done! All your orders are placed",
-           f"> 🎪 **{launch['launch_name']}** · {scenario['option_name']} · `{request_id}`", "",
+           f"> 🎪 **{launch['launch_name']}** · {scenario['option_name']} · Request **{request_id}**", "",
            "| 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 Pollution |", "|---|---|---|---|---|",
            f"| **{money(total)}** | {saved} | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) | "
            f"{plural(n_po, 'purchase order')} + {plural(n_tr, 'warehouse move')} | {scenario['carbon_kg']:,.0f} kg |",
@@ -977,9 +980,9 @@ def order_body(repo, request_id: str, scenario: dict, decision: dict, update_sen
            f"2. 🏭 We compared vendors and bought from **{len(by_vendor)}** of them." if len(by_vendor) != 1 else "2. 🏭 We compared vendors and picked the best one.",
            f"3. ♻️ We took **{own:,} items from our own stock** {bar(100 * own / items) if items else ''}, so we did not buy them twice.",
            f"4. ✍️ {approval}", "", "### 🏭 Who we bought from, and why", "",
-           "| 🏭 Vendor | 🧩 What | 💵 Amount | 🧠 Why |", "|---|---|---|---|"]
+           "| 🏭 Vendor | 🧾 Purchase order | 🧩 What | 💵 Amount | 🧠 Why |", "|---|---|---|---|---|"]
     for vid, v in sorted(by_vendor.items(), key=lambda kv: -kv[1]["amount"]):
-        out.append(f"| **{vendors.get(vid, vid)}** | {item_names(v['skus'])} ({v['units']:,}) | {money(v['amount'])} | "
+        out.append(f"| **{vendors.get(vid, vid)}** | **{pos.get(vid, '-')}** | {item_names(v['skus'])} ({v['units']:,}) | {money(v['amount'])} | "
                    f"{' · '.join(sorted(v['why']))} |")
     if dlines:
         agg: dict = {}
@@ -988,7 +991,8 @@ def order_body(repo, request_id: str, scenario: dict, decision: dict, update_sen
             agg.setdefault(w, {})
             agg[w][_item_label(assets, ln["sku"])] = agg[w].get(_item_label(assets, ln["sku"]), 0) + ln["quantity"]
         out += ["", "♻️ **From our own warehouses** (" + plural(n_tr, "move") + "): "
-                + " · ".join(f"**{w}**: " + ", ".join(f"{i} {q:,}" for i, q in items_.items()) for w, items_ in agg.items())]
+                + " · ".join(f"**{w}**: " + ", ".join(f"{i} {q:,}" for i, q in items_.items()) for w, items_ in agg.items())
+                + ((" · Move numbers: " + ", ".join(f"**{n}**" for n in moves_no)) if moves_no else "")]
     if n_po + n_tr > 2:
         out += ["", f"❓ **How many orders?** One purchase order per vendor and one move per warehouse: **{n_po} + {n_tr}**, all placed together."]
     if update_sent_to:
@@ -996,7 +1000,7 @@ def order_body(repo, request_id: str, scenario: dict, decision: dict, update_sen
     if failed:
         out += ["", f"⚠️ **{len(failed)} order lines failed** and were not retried. Ask me for the status."]
     else:
-        out += ["", "📎 The order pack PDF is in this chat. Say **Send me the order pack** for a fresh copy that lists the purchase order numbers."]
+        out += ["", "📎 The order pack PDF, now with the purchase order numbers, is in this chat. Keep the request number and the purchase order numbers to track your orders."]
     return "\n".join(out)
 
 

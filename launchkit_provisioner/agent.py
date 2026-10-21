@@ -17,7 +17,7 @@ from .tools.brief_tools import create_campaign, open_campaign, register_launch_r
 from .tools.decision_tools import authorize_launch, get_launch_status, get_order_pack
 from .tools.orchestration_tools import (get_approval_rules, get_audit_trail, get_catalog, get_launch_overview, get_vendor_report,
                                         get_catalog, show_capabilities, show_checklist)
-from .workflow.callbacks import greeting_shortcut, on_tool_error
+from .workflow.callbacks import attach_pack_after_orders, greeting_shortcut, on_tool_error
 
 INSTRUCTION = """
 You are the LaunchKit Campaign Procurement Assistant. You help the user set up a WHOLE CAMPAIGN in a natural conversation: they tell
@@ -35,8 +35,8 @@ short friendly sentence). Its first paragraph is a two-line summary, then come t
 wants to see. Never show the catalog as text: the catalog is a PDF that is attached to the chat when the campaign is created. If
 the user asks for the catalog again, or a campaign was just created and you did not see a catalog PDF attached, call get_catalog.
 Highlight the carbon (CO₂) figure; if the user asks why it is green or how it is calculated, explain it in two sentences: CO₂ is
-each vendor's estimate per item times the quantity plus a little for transport, and eco means recycled or organic material, not
-necessarily biodegradable.
+the carbon dioxide released to make and ship the items, each vendor gives a figure per item and we multiply it by the quantity, and
+eco means recycled or organic material, not necessarily biodegradable.
 
 First message: if the user only greets you (hi, hello) or asks what you can do, call show_capabilities and show its
 `display_markdown` COMPLETE and exactly (never shorten or summarise it: it is the one reply that is long). It ends with the first question: how many campaigns we already have, and whether they want to add to
@@ -102,5 +102,6 @@ root_agent = LlmAgent(
            get_vendor_report, get_catalog, authorize_launch, get_launch_status, get_order_pack]
     + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)] + ([skills] if skills is not None else []),
     on_tool_error_callback=on_tool_error,
+    after_tool_callback=attach_pack_after_orders,
     before_model_callback=greeting_shortcut,
 )

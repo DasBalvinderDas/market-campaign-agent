@@ -26,7 +26,7 @@ def test_the_plan_starts_with_two_lines_then_the_full_tables_and_the_carbon_is_h
     md = out["display_markdown"]
     first = md.split("\n\n")[0]
     assert first.count("\n") == 1                                  # the summary is exactly two lines
-    assert "🌱 **CO₂:" in first and "not necessarily biodegradable" in first and "times the quantity" in first
+    assert "🌱 **CO₂:" in first and "not necessarily biodegradable" in first and "carbon dioxide" in first and "multiply it by the quantity" in first
     assert "Choose option" in first
     for part in ("What we already have in stock", "Vendors we compared", "Your 3 choices", "Could another date save you money?"):
         assert part in md
@@ -137,3 +137,30 @@ def test_the_catalog_is_sent_once_per_chat_even_if_the_checklist_is_called_again
     ctx.saved.clear()
     out = asyncio.run(orchestration_tools.show_checklist(*args, "150 bottles", tool_context=ctx))
     assert not ctx.saved and "launch_id" in out and "attached as a PDF" in out["display_markdown"]
+
+
+def test_the_order_pack_follows_the_orders_and_purchase_order_numbers_are_bold(repo, aurora):
+    from conftest import FakeExecutor
+    from launchkit_provisioner import decision_flow, execution
+    from launchkit_provisioner.workflow.callbacks import attach_pack_after_orders
+
+    repo.t["approvers"] = [{"approver_role": r, "email": f"{r[:2].lower()}@example.com", "active": True}
+                           for r in ("VP Product Marketing", "CMO", "Launch Team")]
+    ex = FakeExecutor()
+    decision_flow.authorize(repo, ex, aurora, "2", "because")
+    repo.decide(repo.get_decision_for_request(aurora)["decision_id"], "APPROVED", "Application Integration approval", "ok")
+    out = execution.execute_plan(repo, ex, aurora)
+    md = out["display_markdown"]
+    for po in repo.list_pos(aurora):
+        assert f"**{po['po_number']}**" in md
+    assert f"Request **{aurora}**" in md and "Move numbers:" in md
+
+    class _Tool:
+        name = "fulfilment_agent"
+
+    ctx = _Ctx()
+    asyncio.run(attach_pack_after_orders(_Tool(), {"request": f"Request {aurora} is approved"}, ctx, {"result": "x"}))
+    assert any("purchase-orders" in k for k in ctx.saved)
+    ctx2 = _Ctx()
+    asyncio.run(attach_pack_after_orders(type("T", (), {"name": "other"})(), {"request": aurora}, ctx2, {}))
+    assert not ctx2.saved

@@ -43,3 +43,26 @@ def greeting_shortcut(callback_context, llm_request):
     except Exception:  # noqa: BLE001
         logging.getLogger(__name__).exception("greeting shortcut failed")
         return None
+
+
+async def attach_pack_after_orders(tool, args, tool_context, tool_response):
+    """When the orders are placed, put a fresh order pack PDF (now with the purchase order numbers) in the chat. Best effort:
+    it never changes the answer."""
+    try:
+        import re
+
+        from .. import order_pack
+        from ..repositories import get_repo
+        from ..tools.files import attach_pdf
+        if getattr(tool, "name", "") != "fulfilment_agent":
+            return None
+        m = re.search(r"REQ-[A-Za-z0-9]+", str(args))
+        if not m:
+            return None
+        repo = get_repo()
+        if not repo.list_pos(m[0]):                 # nothing was ordered (blocked or failed): no pack
+            return None
+        await attach_pdf(tool_context, f"order-pack-{m[0]}-purchase-orders.pdf", order_pack.build_pdf(repo, m[0]))
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("could not attach the order pack after the orders")
+    return None

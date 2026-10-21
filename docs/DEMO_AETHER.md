@@ -97,11 +97,21 @@ Then:
 
 ## How the carbon is worked out
 
-- Each vendor gives a CO₂ estimate per item.
+- CO₂ is carbon dioxide from making and shipping.
+- Each vendor gives a figure per item.
 - We multiply it by the quantity.
-- We add a little for transport.
+- Items from our stock only add warehouse moves.
 - Eco means recycled or organic materials.
 - Eco does not always mean biodegradable.
+- The plan reply explains this in plain words.
+
+## Tracking the orders
+
+- The request number is in bold.
+- Every purchase order number is in bold.
+- Warehouse move numbers are in bold too.
+- Both numbers appear in the order pack PDF.
+- The PDF arrives again when orders are placed.
 
 ## What to expect
 
