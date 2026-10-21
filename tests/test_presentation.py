@@ -14,12 +14,11 @@ def _approved(repo, aurora, option="2"):
     return ex
 
 
-def test_greeting_card_invites_a_natural_conversation():
+def test_greeting_card_is_two_lines_then_the_first_question():
     card = orchestration_tools.show_capabilities()["display_markdown"]
-    assert "Campaign Procurement Assistant" in card and "Just talk to me" in card and "300 people on 31st Oct" in card
-    assert "where we can deliver" in card and "best date" in card and "Compare **vendors**" in card
-    assert "how many people, and on which date?" in card
-    assert "We already have **4 campaigns**" in card and "**London Campaign**" in card and "add to one of them, or create a new campaign" in card
+    first, second = card.split("\n\n")
+    assert first.count("\n") == 1 and "name, date, city and country" in second
+    assert "We have **4 campaigns**" in card and "London Campaign" in card
 
 
 def test_bom_is_short_one_row_per_pack_with_what_is_inside(repo, aurora):
@@ -31,10 +30,11 @@ def test_bom_is_short_one_row_per_pack_with_what_is_inside(repo, aurora):
     assert md.count("\n|") <= 7                                    # header, separator and three packs: short for a demo
 
 
-def test_build_requirements_returns_the_bom_for_the_chat(repo):
+def test_build_requirements_returns_a_short_list_for_the_chat(repo):
     rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
     out = brief_tools.build_requirements(rid, [brief_tools.BundleRequest(bundle_type="SALES_PACK", quantity=30)])
-    assert "Leather sales folder" in out["bom_markdown"] and "Product brochure" in out["bom_markdown"]
+    md = out["display_markdown"]
+    assert "Leather sales folder" in md and "Product brochure" in md and len(md.split("\n\n")) == 2 and md.split("\n\n")[0].count("\n") == 1
 
 
 def test_vendor_report_shows_vendors_compared_and_why_the_faster_one_was_used(repo, aurora):
@@ -63,23 +63,20 @@ def test_approval_rules_show_all_three_levels(repo):
     assert "Nobody, it is automatic" in md and "**VP Product Marketing**" in md and "**CMO**" in md
 
 
-def test_sign_off_message_marks_the_level_of_this_order(repo, aurora):
+def test_sign_off_message_names_the_approver_in_two_lines(repo, aurora):
     repo.t["approvers"] = [{"approver_role": "VP Product Marketing", "email": "vp@example.com", "active": True}]
     out = decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
     md = out["display_markdown"]
-    assert "👈 **this order**" in md and "VP Product Marketing" in md and "@" not in md and "Nothing has been bought yet" in md
-    assert md.index("**VP Product Marketing** | 👈") > 0
+    assert "VP Product Marketing" in md and "@" not in md and "Nothing is bought until it is approved" in md and md.count("\n\n") == 1
 
 
-def test_order_summary_explains_vendors_and_why_so_many_orders(repo, aurora):
+def test_order_summary_is_two_lines_and_a_short_paragraph(repo, aurora):
     ex = _approved(repo, aurora)
     out = execution.execute_plan(repo, ex, aurora)
     md = out["display_markdown"]
-    assert "Done! All your orders are placed" in md and "What we did, in 4 lines" in md
-    assert "7 purchase orders + 3 warehouse moves" in md and "How many orders?" in md and "**7 + 3**" in md
-    assert "RapidDisplay" in md and "cheaper vendors were too slow" in md
-    assert "♻️ **From our own warehouses** (3 moves): **London**: Black gift box 60" in md and "**Dallas**: Leather sales folder 120" in md
-    assert "is $5,000.00 to $50,000.00, so **VP Product Marketing** approved it" in md and "🟩" in md
+    first, rest = md.split("\n\n")
+    assert first.count("\n") == 1 and "All orders placed" in first and "7 purchase orders + 3 warehouse moves" in first
+    assert "CO₂" in first and "Dallas: 120 Leather sales folder" in rest
 
 
 def test_launch_team_update_is_a_formatted_html_email(repo, aurora):
@@ -90,11 +87,11 @@ def test_launch_team_update_is_a_formatted_html_email(repo, aurora):
     assert "Orders placed for the Spring Product Launch Event" in update[0]["email_subject"]
 
 
-def test_status_and_board_are_tables(repo, aurora):
+def test_status_is_two_lines_and_the_board_is_a_table(repo, aurora):
     _approved(repo, aurora)
     md = decision_flow.status(repo, aurora, executor=FakeExecutor())["display_markdown"]
-    assert "Status of" in md and "| **Status** |" in md and "Placing your orders now" in md and "Not placed yet" in md
-    assert "REBALANCE" not in md and "Application Integration" not in md and "lines" not in md
+    assert "Placing your orders now" in md and "orders not placed yet" in md and md.split("\n\n")[0].count("\n") == 1
+    assert "REBALANCE" not in md and "Application Integration" not in md
     board = orchestration_tools.get_launch_overview()["display_markdown"]
     assert "Event status board" in board and "Stock we already own" in board
     assert "What happened" in orchestration_tools.get_audit_trail()["display_markdown"]
@@ -117,28 +114,25 @@ def _iso(days):
     return (date.today() + timedelta(days=days)).isoformat()
 
 
-def test_nothing_known_asks_to_tell_about_the_campaign():
+def test_nothing_known_asks_for_name_date_city_and_country():
     c = orchestration_tools.show_checklist()["display_markdown"]
-    assert "Tell me about your campaign" in c and "Just talk to me" in c
+    assert "campaign name, the date, the city and the country" in c and len(c.split("\n\n")) == 2
 
 
-def test_a_natural_first_message_is_enough_and_the_next_question_is_where():
+def test_a_natural_first_message_is_enough_and_the_next_question_is_the_name():
     out = orchestration_tools.show_checklist("campaign", "", 300, "31st Oct")
     md = out["display_markdown"]
-    assert "300" in md and out["date_iso"].endswith("-10-31")
-    assert md.count("✅") == 2 and "Where is your campaign?" in md
-    assert "where can we deliver?" in md and "**USA**" in md and "**Canada**" in md and "**London**" in md and "**Singapore**" in md
-    assert "UK and European vendors" in md and "Dallas Marketing Depot" in md
+    assert "300" in md and out["date_iso"].endswith("-10-31") and "campaign name" in md and "What is the campaign called?" in md
+    assert "city and country" in md and "Dallas" not in md        # no vendors, warehouses or catalog as text
 
 
-def test_questions_come_in_order_people_date_place_name_then_picks():
-    assert "How many people" in orchestration_tools.show_checklist("campaign")["display_markdown"]
-    assert "On which date" in orchestration_tools.show_checklist("campaign", "", 300)["display_markdown"]
-    assert "Where is your campaign?" in orchestration_tools.show_checklist("campaign", "", 300, _iso(25))["display_markdown"]
-    named = orchestration_tools.show_checklist("campaign", "", 300, _iso(25), "London")
-    assert named["region"] == "EMEA" and "What would you like to call your campaign?" in named["display_markdown"]
-    offer = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "London")["display_markdown"]
-    assert "What would you like from our offer?" in offer and "What we can offer you" in offer
+def test_questions_come_in_order_name_date_place_then_picks():
+    assert "What is the campaign called?" in orchestration_tools.show_checklist("campaign")["display_markdown"]
+    assert "On which date" in orchestration_tools.show_checklist("campaign", "Summer Sale")["display_markdown"]
+    assert "Which city and country?" in orchestration_tools.show_checklist("campaign", "Summer Sale", 0, _iso(25))["display_markdown"]
+    named = orchestration_tools.show_checklist("campaign", "Summer Sale", 0, _iso(25), "London, UK")
+    assert named["region"] == "EMEA" and "What do you need?" in named["display_markdown"] and "catalog PDF" in named["display_markdown"]
+    assert "People" not in named["display_markdown"] and "how many people" not in named["display_markdown"].lower()
 
 
 def test_canada_is_served_from_the_us_region():
@@ -147,49 +141,26 @@ def test_canada_is_served_from_the_us_region():
 
 
 def test_an_unknown_place_is_asked_again_without_losing_what_we_know():
-    md = orchestration_tools.show_checklist("campaign", "", 100, _iso(25), "Mars")["display_markdown"]
-    assert "I do not serve 'Mars' yet" in md and "**Singapore**" in md and md.count("✅") == 2
+    md = orchestration_tools.show_checklist("campaign", "Summer Sale", 100, _iso(25), "Mars")["display_markdown"]
+    assert "I do not serve 'Mars' yet" in md and "Singapore" in md and "Summer Sale" in md
 
 
 def test_a_date_in_the_past_or_unreadable_is_explained():
-    assert "has already passed" in orchestration_tools.show_checklist("campaign", "", 100, "2020-01-01")["display_markdown"]
-    assert "could not read the date" in orchestration_tools.show_checklist("campaign", "", 100, "sometime soon")["display_markdown"]
+    assert "has already passed" in orchestration_tools.show_checklist("campaign", "X", 100, "2020-01-01")["display_markdown"]
+    assert "could not read the date" in orchestration_tools.show_checklist("campaign", "X", 100, "sometime soon")["display_markdown"]
 
 
 def test_items_only_needs_a_date_a_place_and_the_pick_but_no_name_or_headcount():
     md = orchestration_tools.show_checklist("items", "", 0, _iso(25), "USA")["display_markdown"]
-    assert "How many people" not in md and "Campaign name" not in md
-    assert "What would you like from our offer?" in md and "Single items" in md and md.index("Single items") < md.index("Ready-made packs")
+    assert "campaign name" not in md and "people" not in md and "What do you need?" in md
 
 
-def test_the_offer_shows_a_suggested_plan_for_the_headcount():
+def test_the_suggested_plan_for_the_headcount_is_still_returned_but_not_listed():
     out = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
-    md = out["display_markdown"]
-    assert "💡 For 300 people" in md and "use the suggested plan" in md
+    assert "suggested plan" not in out["display_markdown"]
     assert out["suggested"]["bundles"] == [{"bundle_type": "GUEST_KIT", "quantity": 30, "region": "US"},
                                            {"bundle_type": "SALES_PACK", "quantity": 30, "region": "US"},
                                            {"bundle_type": "VENUE_DISPLAY", "quantity": 3, "region": "US"}]
-    assert {"item": "Name badge with lanyard", "quantity": 300, "region": "US"} in out["suggested"]["items"]
-    assert len(out["suggested"]["items"]) == 3                       # three things on top of the packs: short for a demo
-
-
-def test_the_offer_shows_stock_in_every_warehouse_because_it_can_be_moved():
-    md = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "Singapore")["display_markdown"]
-    assert "| **Leather sales folder** | 120 Dallas |" in md and "| **Steel water bottle** | 150 Dallas, 80 Singapore |" in md
-
-
-def test_the_offer_prices_follow_the_date():
-    near = orchestration_tools.show_checklist("campaign", "S", 100, _iso(10), "USA")["display_markdown"]
-    far = orchestration_tools.show_checklist("campaign", "S", 100, _iso(50), "USA")["display_markdown"]
-    std = orchestration_tools.show_checklist("campaign", "S", 100, _iso(25), "USA")["display_markdown"]
-    assert "rush: 12% extra" in near and "$9.52" in near            # 8.5 * 1.12 (steel water bottle)
-    assert "early bird: 8% off" in far and "$7.82" in far            # 8.5 * 0.92
-    assert "standard price" in std and "$8.50" in std
-
-
-def test_the_offer_marks_what_cannot_make_the_date():
-    md = orchestration_tools.show_checklist("items", "", 0, _iso(3), "USA")["display_markdown"]
-    assert "🔴 too late" in md
 
 
 def test_the_plan_starts_with_an_in_short_box(repo):
@@ -210,8 +181,7 @@ def test_the_name_question_comes_with_ideas_built_from_the_season_place_and_size
     out = orchestration_tools.show_checklist("campaign", "", 300, _iso(25), "Singapore")
     names = out["name_suggestions"]
     assert len(names) == 4 and any("Singapore" in n for n in names) and any("300-Guest" in n for n in names)
-    md = out["display_markdown"]
-    assert "Pick one of these, or type your own" in md and "| 1 | **" + names[0] + "** |" in md and "create the campaign right away" in md
+    assert names[0] in out["display_markdown"]
 
 
 def test_name_ideas_are_the_same_every_time_and_follow_the_season_and_size():
@@ -226,7 +196,7 @@ def test_name_ideas_are_the_same_every_time_and_follow_the_season_and_size():
 
 def test_no_name_ideas_once_a_name_is_given():
     out = orchestration_tools.show_checklist("campaign", "Summer Sale", 300, _iso(25), "USA")
-    assert "name_suggestions" not in out and "What we can offer you" in out["display_markdown"]
+    assert "name_suggestions" not in out and "What do you need?" in out["display_markdown"]
 
 
 def test_a_date_without_a_year_is_this_year():
@@ -237,18 +207,23 @@ def test_a_date_without_a_year_is_this_year():
 
 def test_facts_given_without_a_mode_are_not_asked_again():
     md = orchestration_tools.show_checklist("", "", 300, _iso(25), "London")["display_markdown"]
-    assert "Tell me about your campaign" not in md and "What would you like to call your campaign?" in md
-    md = orchestration_tools.show_checklist("", "", 0, _iso(25), "")["display_markdown"]
-    assert "How many people will come to your campaign?" in md
-    assert "Tell me about your campaign" in orchestration_tools.show_checklist("", "", 0, "", "")["display_markdown"]
+    assert "Tell me the campaign name" not in md and "What is the campaign called?" in md
+    assert "Tell me the campaign name" in orchestration_tools.show_checklist("", "", 0, "", "")["display_markdown"]
 
 
-def test_picks_first_still_asks_for_the_date_and_place():
+def test_picks_first_still_asks_for_the_missing_facts():
     md = orchestration_tools.show_checklist("", "", 0, "", "", "150 water bottles, 10 of each pack")["display_markdown"]
-    assert "150 water bottles" in md and "Tell me about your campaign" not in md and "not needed" in md and "On which date" in md
+    assert "150 water bottles" in md and "Still needed" in md and "date" in md
 
 
 def test_october_24_with_a_guessed_past_year_is_not_reported_as_passed():
     from datetime import date as _d
     md = orchestration_tools.show_checklist("campaign", "", 0, f"{_d.today().year - 1}-12-31")["display_markdown"]
-    assert "has already passed" not in md and "How many people" in md
+    assert "has already passed" not in md and "campaign name" in md
+
+
+def test_new_york_usa_is_the_usa_and_other_cities_are_recognised():
+    for text, venue in [("New York, USA", "USA"), ("Toronto, Canada", "Canada"), ("London, UK", "London"), ("United States", "USA")]:
+        assert orchestration_tools.show_checklist("campaign", "X", 0, _iso(25), text)["venue_name"] == venue
+
+

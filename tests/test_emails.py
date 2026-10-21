@@ -59,7 +59,7 @@ def test_every_approver_of_the_role_gets_the_email(repo, aurora):
     repo.t["approvers"].append({"approver_role": "VP Product Marketing", "email": "vp2@example.com", "active": True})
     ex, out = _authorize(repo, aurora)
     assert sorted(m["recipient_email"] for m in _approval_mails(ex)) == ["vp2@example.com", "vp@example.com"]
-    assert out["approvers_notified"] == 2 and "@" not in str(out["announce"])
+    assert out["approvers_notified"] == 2 and "@" not in str(out["display_markdown"])
 
 
 def test_the_cmo_gets_it_for_the_largest_option(repo, aurora):

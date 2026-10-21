@@ -46,55 +46,61 @@ The demo date must be 9 or more days away.
 Closer dates are flagged as risky. That is correct.
 The examples below use October 24. Change it in both prompts.
 
-## Option A: two prompts
+## The demo: two prompts
 
 Open a new chat. Send two prompts.
 
+Replies are short. Each has two paragraphs at most.
+The first paragraph is a two-line summary.
+The catalog is never shown as text.
+It arrives as a PDF in the chat.
+
 **Prompt 1: the campaign**
 
-> Create a campaign called Aether Strider Pro Global Marathon Launch. It is for 120 elite athletes in the USA. Everything is needed by October 24.
+> Create a campaign called Aether Strider Pro Global Marathon Launch. It is needed by October 24, in New York, USA.
 
-It has the four campaign facts:
+It has four campaign facts:
 1. Campaign name
-2. How many people
-3. Date
-4. Place
+2. Date
+3. City
+4. Country
 
-The assistant creates the campaign. It shows our offer. Then it asks what you need.
+- No year means the current year.
+- The number of people is optional.
+- The assistant creates the campaign.
+- It attaches the catalog PDF.
+- Then it asks what you need.
 
-**Prompt 2: what you need**
+**Prompt 2: what to procure**
 
-> I need 120 VIP athlete kits. Add handle etching and sized singlets. Also 12 illuminated podiums for the expo. And 250 cork buyer kits with foam samples. Check depots for spare boxes first. Is October 24 safe?
+> I need 120 VIP athlete kits with handle etching and sized singlets. Also 12 illuminated podiums for the expo. And 250 cork buyer kits with foam samples. Check depots for spare boxes first. Is October 24 safe?
 
-The assistant shows the shopping list and advice.
+The assistant shows a short shopping list and advice.
 
 Then:
 
 | # | You say | The assistant |
 |---|---|---|
-| 1 | `Looks good.` | Shows stock, vendors, three choices, other dates. |
-| 2 | `Go with option 2.` | Asks the VP to approve. Attaches the PDF. |
+| 1 | `Looks good.` | Shows the best plan and three choices. |
+| 2 | `Choose option 2.` | Asks the VP to approve. Attaches the PDF. |
 | 3 | VP clicks **Approve**. Then: `What is the status?` | Places all the orders. |
 
-## Option B: step by step
+## The plan reply
 
-Open a new chat. Each step is a short message.
+- The first line names the best option.
+- It shows price, arrival day and spare time.
+- It shows what comes from our stock.
+- The second line highlights the carbon.
+- The carbon is marked with a 🌱.
+- The greenest option is bold in the table.
 
-| # | You say | The assistant |
-|---|---|---|
-| 1 | `Hi` | Says there are no campaigns yet. |
-| 2 | `We are launching the Aether Strider Pro shoe. Need everything by October 24.` | Asks how many people. |
-| 3 | `120 elite athletes.` | Asks where. Shows delivery places. |
-| 4 | `The NYC Marathon expo, so the USA.` | Asks for a campaign name. |
-| 5 | `Call it Aether Strider Pro Global Marathon Launch.` | Creates the campaign. Shows our offer. |
-| 6 | `120 VIP athlete kits with handle etching and sized singlets. 12 illuminated podiums for the expo. 250 cork buyer kits with foam samples.` | Shows the shopping list and advice. |
-| 7 | `Looks good. Check depots for spare boxes first. Is October 24 safe?` | Shows stock, vendors, three choices, other dates. |
-| 8 | `Go with option 2.` | Asks the VP to approve. Attaches the PDF. |
-| 9 | VP clicks **Approve**. Then: `What is the status?` | Places all the orders. |
+## How the carbon is worked out
 
-Tips:
-- Answer again if it asks something twice.
-- Give quantities first to skip the headcount.
+- Each vendor gives a CO₂ estimate per item.
+- We multiply it by the quantity.
+- We add a little for transport.
+- Eco means recycled or organic materials.
+- Eco does not always mean biodegradable.
 
 ## What to expect
 

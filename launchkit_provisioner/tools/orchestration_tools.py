@@ -66,13 +66,16 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
     for the headcount. Call it on EVERY question turn with everything the user has said so far (leave the rest empty).
     Users talk naturally ("a campaign for 300 people on 31st Oct"): pass what you can read from their words.
 
+    The catalog is never listed as text: it is a PDF that is attached when the campaign is created.
+
     Args:
         mode: "campaign" for a whole campaign, "items" if they only want some items. Leave empty if not clear yet.
         campaign: The campaign name the user gave (not needed for items).
-        people: How many people come (campaigns).
+        people: How many people come (campaigns). Optional: leave 0 if the user did not say.
         date: The date everything must be in hand, exactly as the user said it ("31st Oct", "October 24"). Never add a year
             the user did not say: you do not know today's date, the tool uses the current year.
-        venue: Where the campaign is: USA, Canada, London or Singapore (or a city in one of them).
+        venue: Where the campaign is, city and country as the user said them ("New York, USA"). We serve USA, Canada, London
+            and Singapore.
         picks: A short summary of what they picked, once they pick.
     Returns date_iso, region and venue_name when known, `name_suggestions` (when it asks for a name: the user may say a
     number to pick one, use the matching name), and `suggested` (bundles and items for the headcount) for
@@ -87,23 +90,15 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
         note = f"I could not read the date '{date}'."
     elif d and d <= _date.today():
         note, d = f"{d} has already passed. Ask for a later date (or the year, if they mean next year).", None
-    v = None
-    unknown = ""
-    if venue:
-        t = venue.strip().lower()
-        v = next((x for x in repo.list_venues() if t in (x["venue_name"].lower(), x["country"].lower(), x["venue_id"].lower())
-                  or x["venue_name"].lower() in t or t in x["country"].lower()), None)
-        unknown = "" if v else venue
+    v = _find_venue(repo.list_venues(), venue) if venue else None
+    unknown = venue if (venue and not v) else ""
     iso = d.isoformat() if d else ""
     region = v["region"] if v else ""
-    venues_md = presentation.venues_markdown(repo, people, presentation.day(d) if d else "") if (d and not v) else ""
-    catalog = (presentation.catalog_markdown(repo, d, "items" if (mode or "").lower().startswith("item") else "campaign",
-                                              people=people, region=region)
-               if (d and v and not picks and (campaign or (mode or "").lower().startswith("item"))) else "")
+    places = [x["venue_name"] for x in repo.list_venues()]
     names = (presentation.name_suggestions(people, d, v["venue_name"] if v else "")
              if (d and v and not campaign and (mode or "").lower().startswith("camp")) else [])
-    md = presentation.intake_checklist(mode, campaign, people, iso, v["venue_name"] if v else "", picks, venues_md, catalog,
-                                       unknown, note, names)
+    md = presentation.intake_checklist(mode, campaign, people, iso, v["venue_name"] if v else "", picks, "", "",
+                                       unknown, note, names, places)
     out = {"status": "ok", "display_markdown": md}
     if names:
         out["name_suggestions"] = names
@@ -114,3 +109,44 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
         if people and (mode or "").lower().startswith("camp"):
             out["suggested"] = presentation.suggested_plan(repo, people, region)
     return out
+
+
+_ALIASES = {"us": "usa", "u.s.": "usa", "united states": "usa", "america": "usa", "uk": "london", "united kingdom": "london",
+            "england": "london", "britain": "london"}
+
+
+def _find_venue(venues: list[dict], text: str):
+    """The place we serve that the text names: "USA", "New York, USA", "London, UK", "Toronto, Canada"."""
+    t = text.strip().lower()
+    words = [w.strip() for w in t.replace("/", ",").split(",") if w.strip()] + [t]
+    for part in reversed(words):                   # the country is usually said last
+        part = _ALIASES.get(part, part)
+        for x in venues:
+            if part in (x["venue_name"].lower(), x["country"].lower(), x["venue_id"].lower()):
+                return x
+    for x in venues:
+        names = (x["venue_name"].lower(), x["country"].lower())
+        if any(n in t for n in names) or any(a in t.split() or a in t for a in [k for k, val in _ALIASES.items()
+                                                                              if val == x["venue_name"].lower() and len(k) > 2]):
+            return x
+    return None
+
+
+async def get_catalog(deadline_date: str = "", place: str = "", tool_context=None) -> dict:
+    """Attach the catalog PDF to the chat (what we can offer, our stock, prices and ready-by dates). Call it only when the
+    user asks for the catalog again. Never list the catalog as text.
+
+    Args:
+        deadline_date: Optional date as YYYY-MM-DD, for date-specific prices.
+        place: Optional place, for the heading.
+    """
+    from datetime import date as _d
+
+    from .brief_tools import _attach_catalog
+    try:
+        d = _d.fromisoformat(deadline_date) if deadline_date else None
+    except ValueError:
+        d = None
+    ok = await _attach_catalog(get_repo(), tool_context, d, place)
+    return {"status": "ok" if ok else "error",
+            "display_markdown": "📎 Our catalog is attached as a PDF." if ok else "The catalog PDF could not be made just now."}

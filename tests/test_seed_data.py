@@ -55,6 +55,7 @@ def test_suggested_amounts_per_person_exist_for_the_campaign_extras():
 
 
 def test_three_standing_campaigns_open_by_id_or_name(repo):
+    import asyncio
     from datetime import date, timedelta
     from launchkit_provisioner.tools import brief_tools
     names = {x["launch_id"]: x for x in repo.list_launches()}
@@ -62,11 +63,11 @@ def test_three_standing_campaigns_open_by_id_or_name(repo):
         assert (names[lid]["in_hand_by"] - date.today()) == timedelta(days=30)
     for text, lid in [("LAUNCH-LONDON", "LAUNCH-LONDON"), ("london", "LAUNCH-LONDON"), ("London Campaign", "LAUNCH-LONDON"),
                       ("the US campaign", "LAUNCH-USA"), ("singapore", "LAUNCH-SINGAPORE")]:
-        r = brief_tools.open_campaign(text)
+        r = asyncio.run(brief_tools.open_campaign(text))
         assert r["status"] == "ok" and r["launch_id"] == lid, (text, r)
         assert "Campaign opened" in r["display_markdown"]
-    assert "**London Campaign**" in brief_tools.open_campaign("")["display_markdown"]
-    assert brief_tools.open_campaign("mars")["status"] == "error"
+    assert "**London Campaign**" in asyncio.run(brief_tools.open_campaign(""))["display_markdown"]
+    assert asyncio.run(brief_tools.open_campaign("mars"))["status"] == "error"
     # adding to an existing campaign finds it (no duplicate)
     req = brief_tools.register_launch_request("london", "more bottles")
     assert req["launch_name"] == "London Campaign" and req["campaign_status"] == "found"

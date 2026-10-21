@@ -25,7 +25,7 @@ def test_above_the_limit_a_human_must_sign_off_and_nothing_is_ordered(repo, auro
     ex = FakeExecutor()
     out = decision_flow.authorize(repo, ex, aurora, "option 2", "saves money")
     assert out["status"] == "pending_approval" and out["tier"] == "VP_SIGNOFF"
-    assert "HUMAN APPROVAL REQUIRED" in out["announce"] and "VP Product Marketing" in out["announce"] and "@" not in out["announce"] and "@" not in out["display_markdown"]
+    assert "Approval needed" in out["display_markdown"] and "VP Product Marketing" in out["display_markdown"] and "@" not in out["display_markdown"]
     trig, inputs = ex.calls[0]
     reb = option(repo, aurora, "REBALANCE")
     assert trig == config.APPROVAL_TRIGGER and inputs["amount"] == reb["total_cost"] and inputs["launch_id"] == "LAUNCH-SPRING"

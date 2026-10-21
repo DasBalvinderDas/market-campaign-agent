@@ -111,7 +111,7 @@ def test_a_new_campaign_gets_the_kits_sizes_from_the_standing_list_and_plans_int
 def test_with_no_campaigns_the_assistant_says_so_and_asks_for_the_first_one():
     from launchkit_provisioner import presentation
     assert "no campaigns yet" in presentation.campaigns_markdown([])
-    assert "how many people, and on which date?" in presentation.capabilities_card([])
+    assert "name, the date, the city and the country" in presentation.capabilities_card([])
 
 
 class _Job:

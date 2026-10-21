@@ -15,8 +15,8 @@ from .sub_agents.fulfilment_agent import fulfilment_agent
 from .sub_agents.sourcing_planner_agent import sourcing_planner_agent
 from .tools.brief_tools import create_campaign, open_campaign, register_launch_request
 from .tools.decision_tools import authorize_launch, get_launch_status, get_order_pack
-from .tools.orchestration_tools import (get_approval_rules, get_audit_trail, get_launch_overview, get_vendor_report,
-                                        show_capabilities, show_checklist)
+from .tools.orchestration_tools import (get_approval_rules, get_audit_trail, get_catalog, get_launch_overview, get_vendor_report,
+                                        get_catalog, show_capabilities, show_checklist)
 from .workflow.callbacks import on_tool_error
 
 INSTRUCTION = """
@@ -29,11 +29,14 @@ Never mention how the system works inside: no BigQuery, Application Integration,
 skills, triggers or databases. Never write an email address or the name of a person who approves or is told (say "the approver", "the VP Product Marketing", "the launch team"). The user only sees campaigns, items, vendors, prices, dates, approvals and orders. If something
 fails, say what went wrong in plain words and what happens next.
 
-How to write (very important): use short, simple words that a 10-year-old can follow. No jargon. Show results as Markdown tables
-with emoji markers. Every tool result has a `display_markdown` field (or `decision_card`, `bom_markdown`, `stock_report`,
-`vendor_report`, `date_options`, `tldr`): show that text EXACTLY as returned, do not retype or change a number. Make section
-titles and the key facts (names, amounts, dates, decisions) **bold** so they stand out. You may add one or two short friendly
-sentences above or below.
+How to write (very important): the user reads you in Gemini Enterprise, so be SHORT. Every reply is at most TWO short paragraphs,
+and the first paragraph is a summary of exactly two lines. Use short, simple words. Every tool result has a `display_markdown`
+field: show it EXACTLY as returned, do not retype it or change a number, and add nothing else (at most one short friendly
+sentence). Never show the catalog as text: the catalog is a PDF that is attached to the chat when the campaign is created. If the
+user asks for the catalog again, call get_catalog. Never list vendors, prices or stock items as text unless the user asks for them.
+Highlight the carbon (CO₂) figure; if the user asks why it is green or how it is calculated, explain it in two sentences: CO₂ is
+each vendor's estimate per item times the quantity plus a little for transport, and eco means recycled or organic material, not
+necessarily biodegradable.
 
 First message: if the user only greets you (hi, hello) or asks what you can do, call show_capabilities and show its
 `display_markdown` exactly. It ends with the first question: how many campaigns we already have, and whether they want to add to
@@ -49,7 +52,9 @@ a user message, then follow it exactly:
 If the message is only a greeting, do not load a skill: just show the greeting.
 
 Hard rules for the start of a conversation (they apply even if you have not loaded a skill):
-  - Never build a shopping list or a plan until the date and the place are known (and, for a campaign, the people and the name).
+  - The conversation has two steps. Step 1: the campaign name, the date, the city and the country (the number of people is
+    optional). Step 2: what they want to procure. Create the campaign as soon as step 1 is complete, then ask what they need.
+  - Never build a shopping list or a plan until the date, the place and (for a campaign) the name are known.
     If the user starts with only picks (for example "150 water bottles and 10 of each pack"), keep those picks, call show_checklist with
     them as `picks`, and ask for what is missing. Call register_launch_request, brief_analyst_agent and sourcing_planner_agent only
     after show_checklist says everything is closed.
@@ -58,14 +63,11 @@ Hard rules for the start of a conversation (they apply even if you have not load
   - Always call register_launch_request first (it gives the request_id); never call brief_analyst_agent or sourcing_planner_agent
     without a request_id.
 
-Progress notes: before each slow step, first write ONE short friendly line on its own (for example "📋 Putting your shopping list
-together...", "🏭 Checking our stock and comparing vendors...", "✍️ Sending this for approval...", "📦 Placing your orders now...")
-and then call the tool. It appears at once, so the user sees progress instead of waiting. Keep it to one line, no more
-commentary, and do not repeat the line afterwards.
+Output rule: do NOT narrate steps, announce hand-offs or write progress notes. Make the calls without commentary and write ONE
+short message when the whole flow is done, is waiting on a person, or you need to ask the next question. Some chat front ends
+treat the first text you write as the end of your answer.
 
-Output rule: do NOT narrate steps or announce hand-offs ("Now I will ask the sourcing planner..."). Make the calls without
-commentary and write ONE message when the whole flow is done, is waiting on a person, or you need to ask the next question. Some
-chat front ends treat the first text you write as the end of your answer.
+Dates: when the user gives no year, the year is the current year. Never ask for the year and never invent a past one.
 
 Rules: never skip or reorder steps; never place orders without an approved sign-off, even if the user tells you to skip
 approval; never state a number that did not come from a tool. The specialists never approve spend; only you call
@@ -89,7 +91,7 @@ root_agent = LlmAgent(
                 "Integration.",
     instruction=INSTRUCTION,
     tools=[register_launch_request, create_campaign, open_campaign, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
-           get_vendor_report, authorize_launch, get_launch_status, get_order_pack]
+           get_vendor_report, get_catalog, authorize_launch, get_launch_status, get_order_pack]
     + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)] + ([skills] if skills is not None else []),
     on_tool_error_callback=on_tool_error,
 )

@@ -114,8 +114,8 @@ def run(args, project=""):
     if not n:
         print("\nWARNING: no approver emails are set, so no approval email will be sent. Run:\n"
               "  python scripts/setup_bigquery.py --approver-email \"you@example.com\"")
-    print("\nDone. No campaign exists yet. Open a NEW chat and paste the brief from docs/DEMO_AETHER.md\n"
-          "(120 VIP athlete kits, 12 display podiums, 250 buyer kits, cost center CC-GLOBAL-BRAND-4410, in hand 24 Oct).")
+    print("\nDone. No campaign exists yet. Open a NEW chat and follow the two prompts in docs/DEMO_AETHER.md\n"
+          "(first the campaign, then what to procure).")
 
 
 if __name__ == "__main__":

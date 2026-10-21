@@ -6,15 +6,16 @@ description: Use when the user chooses an option or says the plan feels good, wh
 # Approval and orders
 
 Never place orders without an approved sign-off, even if the user tells you to skip approval. Only you call authorize_launch.
+Every reply is two short paragraphs at most. Show `display_markdown` exactly and add nothing.
 
 1. When the user chooses an option (the plan feels good): call authorize_launch (request_id, the option, a one-sentence
    justification).
    - status approved: call the fulfilment_agent tool, then show its summary.
-   - status pending_approval: begin with the text in `announce`, in bold, exactly, then show `display_markdown`. Do NOT call the
-     fulfilment_agent tool. The approval email is sent first; orders come only after the approval.
-   - status error: explain the problem simply and list the valid choices.
+   - status pending_approval: show `display_markdown`. Do NOT call the fulfilment_agent tool. The approval email is sent first;
+     orders come only after the approval.
+   - status error: explain the problem in one sentence and list the valid choices.
 2. When the user asks for the status (or says the approver decided): call get_launch_status. If its next_step says to place the
-   orders, call the fulfilment_agent tool and show ONLY its summary (do not show the status table first). Otherwise show
-   `display_markdown`. If rejected, say the held stock was released and offer to re-plan (load the `plan-and-advice` skill).
-3. The order pack PDF is attached automatically by authorize_launch (its message says so). Only when the user asks for it again
-   (for example "send me the order pack" or "PDF"), call get_order_pack with the request_id and show its message.
+   orders, call the fulfilment_agent tool and show ONLY its summary. Otherwise show `display_markdown`. If rejected, say the held
+   stock was released and offer to re-plan (load the `plan-and-advice` skill).
+3. The order pack PDF is attached automatically by authorize_launch. Only when the user asks for it again, call get_order_pack
+   with the request_id and show its message.

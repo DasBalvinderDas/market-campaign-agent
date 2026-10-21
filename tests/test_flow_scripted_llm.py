@@ -129,7 +129,7 @@ class ScriptedLlm(BaseLlm):
             if not names:
                 return fc("authorize_launch", request_id=rid, option="2", justification="saves money, keeps a safety buffer")
             r = since[0][1]
-            return text("**" + r.get("announce", r.get("message", "")) + "**")
+            return text(r.get("display_markdown", r.get("message", "")))
         # a new brief
         if "register_launch_request" not in names:
             return fc("register_launch_request", campaign="LAUNCH-SPRING", summary=_user_text(contents)[:60])
@@ -205,7 +205,7 @@ def test_full_flow_choose_then_executive_signs_off_then_orders_are_placed(monkey
     chat = Chat(monkeypatch, repo)
     chat.say("Roll out Spring kits.")
     calls, final = chat.say("Go with option 2")
-    assert calls == ["authorize_launch"] and "HUMAN APPROVAL REQUIRED" in final and "VP Product Marketing" in final and "@" not in final
+    assert calls == ["authorize_launch"] and "Approval needed" in final and "VP Product Marketing" in final and "@" not in final
     assert repo.get_decision_for_request("REQ-001")["status"] == "PENDING"
     assert not repo.list_pos("REQ-001") and not repo.list_transfers("REQ-001")
     calls, final = chat.say("What is the status of that request?")             # approver has not clicked yet

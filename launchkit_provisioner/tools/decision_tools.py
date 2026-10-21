@@ -21,7 +21,7 @@ async def authorize_launch(request_id: str, option: str, justification: str, too
         if name:
             out["order_pack"] = name
             if out.get("display_markdown"):
-                out["display_markdown"] += f"\n\n📎 **Order pack PDF:** `{name}` (shopping list, vendors and warehouse moves) is attached to this chat."
+                out["display_markdown"] = out["display_markdown"].rstrip() + " 📎 Order pack PDF attached."
     return out
 
 

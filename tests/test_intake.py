@@ -1,4 +1,5 @@
 """The guided questions: finding or creating the event, a date on file or a new one, and single items."""
+import asyncio
 from datetime import date, timedelta
 
 from launchkit_provisioner import planner
@@ -41,11 +42,15 @@ def test_a_new_event_without_a_guest_list_uses_the_standard_mix(repo):
     assert out["status"] == "ok" and out["total_units"] == 80 and "standard guest mix" in out["note"]
 
 
+def _create(*a, **kw):
+    return asyncio.run(brief_tools.create_campaign(*a, **kw))
+
+
 def test_a_single_item_is_taken_as_it_is(repo):
     rid = brief_tools.register_launch_request("Quick purchase", "20 stands", _future(30))["request_id"]
     out = brief_tools.build_requirements(rid, items=[ItemRequest(item="venue display stands", quantity=3, region="US")])
-    assert out["status"] == "ok" and out["total_units"] == 3 and "| Venue display stand | **3** |" in out["bom_markdown"]
-    assert out["display_markdown"].startswith(out["bom_markdown"]) and "\\n" not in out["display_markdown"]
+    assert out["status"] == "ok" and out["total_units"] == 3 and "| **Venue display stand** | **3**" in out["display_markdown"]
+    assert "\\n" not in out["display_markdown"] and len(out["display_markdown"].split("\n\n")) <= 2
     plan = sourcing_tools.build_scenarios(rid)
     assert plan["status"] == "ok" and "buying selected items works fine" in plan["decision_card"]
 
@@ -78,26 +83,27 @@ def test_a_single_item_needs_a_region_and_a_known_item(repo):
 
 
 def test_the_campaign_is_created_as_soon_as_the_name_is_given(repo):
-    out = brief_tools.create_campaign("Autumn Summit 2026", _future(25), 300, "USA")
+    out = _create("Autumn Summit 2026", _future(25), 300, "USA")
     assert out["status"] == "ok" and out["campaign_status"] == "created" and out["launch_id"] == "EVT-AUTUMN-SUMMIT-2026"
     assert repo.get_launch("EVT-AUTUMN-SUMMIT-2026")["in_hand_by"] == date.today() + timedelta(days=25)
     md = out["display_markdown"]
-    assert "Your campaign is created!" in md and "**Autumn Summit 2026**" in md and "| **👥 People** | 300 |" in md and "| **📍 Where** | USA |" in md
+    assert "Campaign created" in md and "Autumn Summit 2026" in md and "300 people" in md and "USA" in md
+    assert len(md.split("\n\n")) <= 2 and md.split("\n\n")[0].count("\n") == 1          # two paragraphs, the first has two lines
     assert any(a["action"] == "campaign_created" for a in repo.list_audit())
 
 
 def test_creating_it_again_finds_it_and_the_request_uses_the_same_campaign(repo):
-    first = brief_tools.create_campaign("Autumn Summit 2026", _future(25), 300, "USA")
-    again = brief_tools.create_campaign("autumn summit 2026", _future(25), 300, "USA")
+    first = _create("Autumn Summit 2026", _future(25), 300, "USA")
+    again = _create("autumn summit 2026", _future(25), 300, "USA")
     assert again["campaign_status"] == "found" and again["launch_id"] == first["launch_id"]
     req = brief_tools.register_launch_request("Autumn Summit 2026", "x", _future(25))
     assert req["campaign_status"] == "found" and len([x for x in repo.list_launches() if x["launch_name"] == "Autumn Summit 2026"]) == 1
 
 
 def test_creating_a_campaign_needs_a_future_date(repo):
-    assert "not in the future" in brief_tools.create_campaign("X", "2020-01-01")["message"]
-    assert "not a date" in brief_tools.create_campaign("X", "soon")["message"]
-    assert "I do not know a campaign" in brief_tools.create_campaign("X", "")["message"]
+    assert "not in the future" in _create("X", "2020-01-01")["message"]
+    assert "not a date" in _create("X", "soon")["message"]
+    assert "I do not know a campaign" in _create("X", "")["message"]
 
 
 def test_places_and_pack_names_are_understood_in_the_shopping_list(repo):
@@ -123,13 +129,13 @@ def test_older_adk_passes_plain_dicts_and_it_still_works(repo):
 
 
 def test_a_new_campaign_takes_the_cost_center_and_embargo_date_from_the_brief(repo):
-    out = brief_tools.create_campaign("Aether Strider Pro Marathon Launch", (date.today() + timedelta(days=9)).isoformat(), 0,
+    out = _create("Aether Strider Pro Marathon Launch", (date.today() + timedelta(days=9)).isoformat(), 0,
                                       "USA", cost_center="CC-GLOBAL-BRAND-4410", embargo_date=(date.today() + timedelta(days=17)).isoformat())
     assert out["status"] == "ok" and "CC-GLOBAL-BRAND-4410" in out["display_markdown"] and "embargo lifts" in out["display_markdown"]
     launch = repo.get_launch(out["launch_id"])
     assert launch["cost_center"] == "CC-GLOBAL-BRAND-4410" and launch["embargo_date"] == date.today() + timedelta(days=17)
-    bad = brief_tools.create_campaign("X", (date.today() + timedelta(days=9)).isoformat(), embargo_date="soon")
+    bad = _create("X", (date.today() + timedelta(days=9)).isoformat(), embargo_date="soon")
     assert bad["status"] == "error"
     # without them the campaign keeps the general cost center and no extra rows are shown
-    plain = brief_tools.create_campaign("Plain", (date.today() + timedelta(days=9)).isoformat())
+    plain = _create("Plain", (date.today() + timedelta(days=9)).isoformat())
     assert repo.get_launch(plain["launch_id"])["cost_center"] == "CC-EVENTS-GENERAL" and "Cost center" not in plain["display_markdown"]

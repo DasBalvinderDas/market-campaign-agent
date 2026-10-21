@@ -7,6 +7,19 @@ from pydantic import BaseModel
 from .. import advisor, planner, presentation
 from ..repositories import get_repo
 from .audit import audit
+from .files import attach_pdf
+
+
+async def _attach_catalog(repo, tool_context, deadline=None, place="") -> bool:
+    """Attach the catalog PDF to the chat. The catalog is never shown as text."""
+    import asyncio
+
+    from .. import catalog_pdf
+    try:
+        data = await asyncio.to_thread(catalog_pdf.build_pdf, repo, deadline, place)
+    except Exception:  # noqa: BLE001 - the campaign must never fail because the PDF could not be made
+        return False
+    return await attach_pdf(tool_context, "catalog.pdf", data)
 
 
 def _ensure_campaign(repo, campaign: str, deadline_date: str, cost_center: str = "", embargo_date: str = ""):
@@ -49,8 +62,8 @@ def _ensure_campaign(repo, campaign: str, deadline_date: str, cost_center: str =
     return launch, how, ""
 
 
-def create_campaign(campaign: str, deadline_date: str, people: int = 0, venue: str = "", cost_center: str = "",
-                    embargo_date: str = "") -> dict:
+async def create_campaign(campaign: str, deadline_date: str, people: int = 0, venue: str = "", cost_center: str = "",
+                          embargo_date: str = "", tool_context=None) -> dict:
     """Create the campaign as soon as the user has given or picked its name. Shows a confirmation. Call it once the name
     is known (campaigns only), then carry on with show_checklist. If the campaign already exists it is found, not
     duplicated.
@@ -69,12 +82,13 @@ def create_campaign(campaign: str, deadline_date: str, people: int = 0, venue: s
         return {"status": "error", "message": err}
     audit(None, "orchestrator", "campaign_created" if how == "created" else "campaign_found", launch_id=launch["launch_id"],
           name=launch["launch_name"], people=people, venue=venue, in_hand_by=str(launch["in_hand_by"]))
+    attached = await _attach_catalog(repo, tool_context, launch["in_hand_by"], venue)
     return {"status": "ok", "campaign_status": how, "launch_id": launch["launch_id"], "launch_name": launch["launch_name"],
             "in_hand_by": str(launch["in_hand_by"]),
-            "display_markdown": presentation.campaign_created_markdown(launch, how, people, venue)}
+            "display_markdown": presentation.campaign_created_markdown(launch, how, people, venue, catalog=attached)}
 
 
-def open_campaign(campaign: str = "") -> dict:
+async def open_campaign(campaign: str = "", tool_context=None) -> dict:
     """Open a campaign that already exists, by its reference or its name (a part of the name is fine, for example "london").
     Use it when the user wants to add something to an existing campaign, for example the London, US or Singapore
     campaign, or asks which campaigns there are (leave campaign empty). Shows the campaign and its date. Afterwards carry on
@@ -95,7 +109,8 @@ def open_campaign(campaign: str = "") -> dict:
     launch = hits[0]
     audit(None, "orchestrator", "campaign_opened", launch_id=launch["launch_id"], name=launch["launch_name"])
     return {"status": "ok", "launch_id": launch["launch_id"], "launch_name": launch["launch_name"],
-            "date_iso": str(launch["in_hand_by"]), "display_markdown": presentation.campaign_created_markdown(launch, "opened")}
+            "date_iso": str(launch["in_hand_by"]), "display_markdown": presentation.campaign_created_markdown(
+                launch, "opened", catalog=await _attach_catalog(repo, tool_context, launch["in_hand_by"]))}
 
 
 def _match_campaigns(launches, text):
@@ -194,12 +209,11 @@ def build_requirements(request_id: str, bundles: list[BundleRequest] | None = No
         ch["units"] += ln["quantity"]
         ch["regions"][ln["region"]] = ch["regions"].get(ln["region"], 0) + ln["quantity"]
     out = {"status": "ok", "request_id": request_id, "requirement_lines": len(lines), "channels": by_channel,
-           "total_units": sum(ln["quantity"] for ln in lines), "bom_markdown": presentation.bom_markdown(repo, request_id)}
+           "total_units": sum(ln["quantity"] for ln in lines)}
     tips = advisor.suggestions(repo, request_id)
     out["advice_count"] = len(tips)
-    out["advice_markdown"] = presentation.advice_markdown(tips)
-    # One ready-to-show block (shopping list, then the advice): the agents copy it as it is, so the tables stay intact.
-    out["display_markdown"] = out["bom_markdown"] + ("\n\n" + out["advice_markdown"] if out["advice_markdown"] else "")
+    # One short ready-to-show block (two lines, then one small table): the agents copy it as it is.
+    out["display_markdown"] = presentation.bom_compact(repo, request_id, tips)
     if tips:
         audit(request_id, "brief_analyst_agent", "advice_given", suggestions=[t["what"] for t in tips])
     sizes, plugs = {}, {}

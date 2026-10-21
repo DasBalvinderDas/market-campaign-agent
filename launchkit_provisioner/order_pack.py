@@ -52,6 +52,7 @@ def build_pdf(repo, request_id: str, decision: dict | None = None) -> bytes:
         ["Total", p.money(scenario["total_cost"])], ["Compared with buying new", saving],
         ["Everything arrives", f"{p.day(scenario['delivery_date'])} ({scenario['buffer_hours'] // 24} days before the "
                                f"{p.day(launch['in_hand_by'])} deadline)"],
+        ["Carbon (CO2)", f"{float(scenario['carbon_kg']):,.0f} kg. {_plain(p.CARBON_NOTE)}"],
         ["Approval", f"{decision.get('approver_role') or '-'} · {decision.get('status', '')}"],
         ["Cost center", str(launch.get("cost_center") or "n/a")]], [55, 115]))
     rows, total, regions = p.bom_rows(repo, request_id)
