@@ -12,9 +12,9 @@ ICON = {"FULL_NEW": "🛒", "REBALANCE": "♻️", "ECO": "🌱"}
 _UNITS = {"GUEST_KIT": "kits", "VENUE_DISPLAY": "stands", "SALES_PACK": "folders"}
 
 
-CARBON_NOTE = ("CO₂ is the carbon dioxide released to make and ship your items. Each vendor gives a figure per item and we "
-               "multiply it by the quantity; items from our own stock only add the move between warehouses. "
-               "Eco means recycled or organic materials, not necessarily biodegradable.")
+CARBON_NOTE = ("CO₂ is the carbon dioxide released to make and ship your items: making is the vendor's figure per item times the "
+               "quantity, and shipping is the item's weight factor times the distance from the vendor or our warehouse to you. "
+               "Items from our own stock only add the shipping. Eco means recycled or organic materials, not necessarily biodegradable.")
 
 
 def two_lines(first: str, second: str) -> str:
@@ -436,7 +436,7 @@ def decision_card(request_id: str, launch: dict, scenarios: list[dict], policies
                                        for i, s in enumerate(scenarios)]),
         ("📅 Everything arrives", [day(s["delivery_date"]) for s in scenarios]),
         ("⏳ Spare time before the deadline", [spare(s["buffer_hours"], min_buffer) for s in scenarios]),
-        ("🌍 Pollution (CO₂)", [f"{s['carbon_kg']:,.0f} kg" for s in scenarios]),
+        ("🌍 CO₂ (making + shipping)", [f"{s['carbon_kg']:,.0f} kg" for s in scenarios]),
         ("🛠️ How we get it", [_how(s) for s in scenarios]),
         ("✍️ Who has to say OK", [who(float(s["total_cost"])) for s in scenarios]),
     ]
@@ -667,7 +667,7 @@ def order_lead(repo, request_id: str, scenario: dict, decision: dict, update_sen
     moves = "; ".join(f"{w}: " + ", ".join(f"{q:,} {i}" for i, q in items_.items()) for w, items_ in agg.items())
     first = f"✅ **All orders placed: {money(total)}** · {plural(n_po, 'purchase order')} + {plural(n_tr, 'warehouse move')}"
     second = (f"📅 Arrives **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) · "
-              f"♻️ {own:,} items from our own stock · 🌱 **CO₂ {scenario['carbon_kg']:,.0f} kg** · {approval}")
+              f"♻️ {own:,} items from our own stock · 🌱 **CO₂ {scenario['carbon_kg']:,.0f} kg (making + shipping)** · {approval}")
     detail = ([f"**Bought from:** {bought}."] if bought else []) + ([f"**From our warehouses:** {moves}."] if moves else [])
     tail = (f"⚠️ **{len(failed)} order lines failed** and were not retried. Ask me for the status." if failed
             else "📎 The order pack PDF is in this chat." + (" The launch team has been told by email." if update_sent_to else ""))
@@ -770,9 +770,9 @@ def plan_markdown(repo, request_id: str, scenarios: list[dict], policies: list[d
         return f"{float(s['carbon_kg']):,.0f} kg"
 
     if green is best:
-        carbon = f"🌱 **CO₂: {kg(best)}**, the lowest of the three."
+        carbon = f"🌱 **CO₂ (making + shipping): {kg(best)}**, the lowest of the three."
     else:
-        carbon = (f"🌱 **CO₂: {kg(best)}.** The greenest is **Option {gi}** at **{kg(green)}** "
+        carbon = (f"🌱 **CO₂ (making + shipping): {kg(best)}.** The greenest is **Option {gi}** at **{kg(green)}** "
                   f"({float(best['carbon_kg']) - float(green['carbon_kg']):,.0f} kg less).")
     second = f"{carbon} {CARBON_NOTE}"
     table = ["| Option | Total | Arrives | Spare time | 🌱 CO₂ | OK from |", "|---|---|---|---|---|---|"]
@@ -970,7 +970,7 @@ def order_body(repo, request_id: str, scenario: dict, decision: dict, update_sen
              else f"{money(-scenario['savings_usd'])} more" if scenario["savings_usd"] < 0 else "same")
     out = [f"## ✅ Done! All your orders are placed",
            f"> 🎪 **{launch['launch_name']}** · {scenario['option_name']} · Request **{request_id}**", "",
-           "| 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 Pollution |", "|---|---|---|---|---|",
+           "| 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 CO₂ (making + shipping) |", "|---|---|---|---|---|",
            f"| **{money(total)}** | {saved} | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) | "
            f"{plural(n_po, 'purchase order')} + {plural(n_tr, 'warehouse move')} | {scenario['carbon_kg']:,.0f} kg |",
            "", "### 📖 What we did, in 4 lines",

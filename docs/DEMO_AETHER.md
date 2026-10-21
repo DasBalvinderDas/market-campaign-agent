@@ -98,12 +98,17 @@ Then:
 ## How the carbon is worked out
 
 - CO₂ is carbon dioxide from making and shipping.
-- Each vendor gives a figure per item.
+- Making is the vendor's figure per item.
 - We multiply it by the quantity.
-- Items from our stock only add warehouse moves.
+- Shipping is the item's weight factor.
+- We multiply it by the lane distance.
+- We use 0.1 kg per factor per 1,000 km.
+- Items from our stock only add shipping.
 - Eco means recycled or organic materials.
 - Eco does not always mean biodegradable.
-- The plan reply explains this in plain words.
+- Vendor figures are demo estimates.
+- Real vendors would supply their own.
+- Every reply with CO₂ says "making + shipping".
 
 ## Tracking the orders
 

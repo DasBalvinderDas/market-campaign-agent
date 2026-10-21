@@ -136,7 +136,7 @@ def orders_placed_email(repo, launch, scenario, pos, transfers, saved, request_i
             ("Price compared with buying new", escape(saving)),
             ("Everything arrives", f"{p.day(scenario['delivery_date'])} ({scenario['buffer_hours'] // 24} days before the "
                                    f"{p.day(launch['in_hand_by'])} deadline)"),
-            ("Pollution (CO2)", f"{scenario['carbon_kg']:,.0f} kg")]
+            ("CO2 (making + shipping)", f"{scenario['carbon_kg']:,.0f} kg")]
     lines = repo.get_scenario_lines(scenario["scenario_id"])
     names = {v["vendor_id"]: v["vendor_name"] for v in repo.list_vendors()}
     po_rows = [[f"<b>{escape(x['po_number'])}</b>", escape(names.get(x["vendor_id"], x["vendor_id"])), escape(x["sku"]),

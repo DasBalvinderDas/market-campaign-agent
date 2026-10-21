@@ -253,6 +253,13 @@ class _Ctx:
         return self._depots.get(sku, [])
 
 
+def _ship_carbon(ctx: _Ctx, qty: int, factor: float, origin: str, dest: str) -> float:
+    """Shipping CO2 in kg: quantity x ship factor x lane distance (per 1,000 km) x the freight factor. 0 when the lane has no
+    distance on file (then the caller falls back or counts nothing)."""
+    km = float(ctx.rules.get(f"LANE_KM_{origin}_{dest}", 0.0))
+    return qty * factor * km / 1000.0 * float(ctx.rules.get("TRANSPORT_KG_PER_FACTOR_PER_1000KM", 0.1))
+
+
 def _vendor_line(ctx: _Ctx, line: dict, offer: dict) -> dict:
     lane = ctx.lane(offer["home_region"], line["region"])
     factor = float(ctx.asset(line["sku"])["ship_factor"])
@@ -263,14 +270,16 @@ def _vendor_line(ctx: _Ctx, line: dict, offer: dict) -> dict:
     return {"source_type": "VENDOR", "source_id": offer["vendor_id"], "variant": offer["variant"],
             "unit_price": price, "shipping_cost": shipping,
             "line_total": round(qty * price + shipping, 2), "days_to_deliver": days,
-            "carbon_kg": round(qty * float(offer["carbon_kg"]), 2)}
+            # making (the vendor's figure per item) plus shipping (weight factor x distance of the lane)
+            "carbon_kg": round(qty * float(offer["carbon_kg"]) + _ship_carbon(ctx, qty, factor, offer["home_region"], line["region"]), 2)}
 
 
 def _depot_line(ctx: _Ctx, line: dict, depot: dict, qty: int) -> dict:
     lane = ctx.lane(depot["region"], line["region"])
     factor = float(ctx.asset(line["sku"])["ship_factor"])
     shipping = round(qty * factor * lane["cost_per_unit"], 2)
-    carbon = round(qty * factor * ctx.rules.get("TRANSFER_CARBON_KG_PER_FACTOR", 0.4), 2)
+    ship = _ship_carbon(ctx, qty, factor, depot["region"], line["region"])
+    carbon = round(ship if ship else qty * factor * ctx.rules.get("TRANSFER_CARBON_KG_PER_FACTOR", 0.4), 2)
     return {"source_type": "DEPOT", "source_id": depot["depot_id"], "variant": None, "unit_price": 0.0,
             "shipping_cost": shipping, "line_total": shipping,
             "days_to_deliver": int(ctx.rules.get("DEPOT_HANDLING_DAYS", 1)) + lane["days"], "carbon_kg": carbon}

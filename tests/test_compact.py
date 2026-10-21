@@ -26,7 +26,7 @@ def test_the_plan_starts_with_two_lines_then_the_full_tables_and_the_carbon_is_h
     md = out["display_markdown"]
     first = md.split("\n\n")[0]
     assert first.count("\n") == 1                                  # the summary is exactly two lines
-    assert "🌱 **CO₂:" in first and "not necessarily biodegradable" in first and "carbon dioxide" in first and "multiply it by the quantity" in first
+    assert "🌱 **CO₂ (making + shipping):" in first and "not necessarily biodegradable" in first and "carbon dioxide" in first and "distance" in first
     assert "Choose option" in first
     for part in ("What we already have in stock", "Vendors we compared", "Your 3 choices", "Could another date save you money?"):
         assert part in md
@@ -164,3 +164,12 @@ def test_the_order_pack_follows_the_orders_and_purchase_order_numbers_are_bold(r
     ctx2 = _Ctx()
     asyncio.run(attach_pack_after_orders(type("T", (), {"name": "other"})(), {"request": aurora}, ctx2, {}))
     assert not ctx2.saved
+
+
+def test_shipping_is_added_to_every_vendor_line_by_weight_and_distance(repo):
+    from launchkit_provisioner import planner
+    ctx = type("C", (), {"rules": repo.get_planning_rules()})()
+    near = planner._ship_carbon(ctx, 10, 2.0, "US", "US")
+    far = planner._ship_carbon(ctx, 10, 2.0, "US", "APAC")
+    assert near == 10 * 2.0 * 1.5 * 0.1 and far == 10 * 2.0 * 12 * 0.1 and far > near
+    assert planner._ship_carbon(ctx, 10, 2.0, "US", "MARS") == 0
