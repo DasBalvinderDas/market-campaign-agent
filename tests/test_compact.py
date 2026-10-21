@@ -91,3 +91,21 @@ def test_the_prompt_carries_todays_date():
     from launchkit_provisioner import agent
     text = agent._instruction()
     assert date.today().isoformat() in text and "Never tell the user a date has passed" in text
+
+
+def test_a_bare_greeting_gets_the_full_card_from_the_shortcut(repo):
+    from google.adk.models import LlmRequest
+    from google.genai import types
+
+    from launchkit_provisioner.workflow.callbacks import greeting_shortcut
+
+    def ask(*texts):
+        req = LlmRequest(contents=[types.Content(role="user", parts=[types.Part(text=t)]) for t in texts])
+        return greeting_shortcut(None, req)
+
+    out = ask("Hi")
+    card = out.content.parts[0].text
+    assert "Campaign Procurement Assistant" in card and "| 📎 |" in card and "First question" in card
+    assert ask("Hello!")  is not None and ask("what can you do?") is not None
+    assert ask("Hi", "Hi") is None                                  # not the first message of the chat
+    assert ask("Hi, create a campaign for 31 Oct") is None

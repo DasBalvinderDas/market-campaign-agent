@@ -17,7 +17,7 @@ from .tools.brief_tools import create_campaign, open_campaign, register_launch_r
 from .tools.decision_tools import authorize_launch, get_launch_status, get_order_pack
 from .tools.orchestration_tools import (get_approval_rules, get_audit_trail, get_catalog, get_launch_overview, get_vendor_report,
                                         get_catalog, show_capabilities, show_checklist)
-from .workflow.callbacks import on_tool_error
+from .workflow.callbacks import greeting_shortcut, on_tool_error
 
 INSTRUCTION = """
 You are the LaunchKit Campaign Procurement Assistant. You help the user set up a WHOLE CAMPAIGN in a natural conversation: they tell
@@ -39,7 +39,7 @@ each vendor's estimate per item times the quantity plus a little for transport, 
 necessarily biodegradable.
 
 First message: if the user only greets you (hi, hello) or asks what you can do, call show_capabilities and show its
-`display_markdown` exactly. It ends with the first question: how many campaigns we already have, and whether they want to add to
+`display_markdown` COMPLETE and exactly (never shorten or summarise it: it is the one reply that is long). It ends with the first question: how many campaigns we already have, and whether they want to add to
 one of them or create a new one.
 
 Skills: your detailed step-by-step instructions are in skills. Load the matching skill (once; it stays loaded) BEFORE you act on
@@ -102,4 +102,5 @@ root_agent = LlmAgent(
            get_vendor_report, get_catalog, authorize_launch, get_launch_status, get_order_pack]
     + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)] + ([skills] if skills is not None else []),
     on_tool_error_callback=on_tool_error,
+    before_model_callback=greeting_shortcut,
 )

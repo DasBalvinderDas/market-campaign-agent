@@ -9,3 +9,37 @@ def on_tool_error(tool, args, tool_context, error):
     return {"status": "error", "tool": getattr(tool, "name", str(tool)),
             "message": f"{type(error).__name__}: {str(error)[:500]}",
             "next_step": "Tell the user this tool failed, quote the message, and stop. Do not retry or invent data."}
+
+
+_GREETINGS = {"hi", "hello", "hey", "hi there", "hello there", "hey there", "hiya", "hola", "greetings", "good morning",
+              "good afternoon", "good evening", "help", "what can you do", "what do you do", "who are you", "start"}
+
+
+def _is_greeting(text: str) -> bool:
+    import re
+    return re.sub(r"[^a-z ]", "", (text or "").lower()).strip() in _GREETINGS
+
+
+def greeting_shortcut(callback_context, llm_request):
+    """A bare greeting always gets the full capabilities card, word for word: the model would shorten it. Anything that
+    goes wrong here returns None, so the model answers as usual."""
+    try:
+        from google.adk.models import LlmResponse
+        from google.genai import types
+
+        from ..presentation import capabilities_card
+        from ..repositories import get_repo
+        last = (llm_request.contents or [None])[-1]
+        parts = getattr(last, "parts", None) or []
+        if getattr(last, "role", "user") != "user" or any(getattr(p, "function_response", None) for p in parts):
+            return None
+        text = " ".join(p.text for p in parts if getattr(p, "text", None))
+        users = [c for c in llm_request.contents if getattr(c, "role", "") == "user"
+                 and any(getattr(p, "text", None) for p in (c.parts or []))]
+        if len(users) != 1 or not _is_greeting(text):          # only the very first message of a chat
+            return None
+        card = capabilities_card(get_repo().list_launches())
+        return LlmResponse(content=types.Content(role="model", parts=[types.Part(text=card)]))
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("greeting shortcut failed")
+        return None
