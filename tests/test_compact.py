@@ -66,5 +66,11 @@ def test_a_date_without_a_year_is_the_current_year():
     assert md["date_iso"] == f"{date.today().year}-10-31" and md["region"] == "US"
 
 
+def test_the_city_is_kept_with_the_country():
+    out = orchestration_tools.show_checklist("campaign", "X", 0, "2099-01-05", "New York, USA")
+    assert out["place"] == "New York, USA" and out["venue_name"] == "USA" and "📍 New York, USA" in out["display_markdown"]
+    assert orchestration_tools.show_checklist("campaign", "X", 0, "2099-01-05", "USA")["place"] == "USA"
+
+
 def test_the_carbon_note_explains_what_green_means():
     assert "recycled or organic" in presentation.CARBON_NOTE and "biodegradable" in presentation.CARBON_NOTE

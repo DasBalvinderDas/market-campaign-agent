@@ -58,12 +58,12 @@ It arrives as a PDF in the chat.
 
 **Prompt 1: the campaign**
 
-> Create a campaign called Aether Strider Pro Global Marathon Launch. It is needed by November 15, in New York, USA.
+> Create a campaign called Aether Strider Pro Global Marathon Launch. It is needed by November 15, at the Javits Center, New York, USA.
 
 It has four campaign facts:
 1. Campaign name
 2. Date
-3. City
+3. Place and city
 4. Country
 
 - No year means the current year.

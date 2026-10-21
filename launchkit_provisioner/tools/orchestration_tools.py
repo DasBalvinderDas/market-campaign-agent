@@ -77,7 +77,7 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
         venue: Where the campaign is, city and country as the user said them ("New York, USA"). We serve USA, Canada, London
             and Singapore.
         picks: A short summary of what they picked, once they pick.
-    Returns date_iso, region and venue_name when known, `name_suggestions` (when it asks for a name: the user may say a
+    Returns date_iso, region, venue_name and `place` (the city and country as the user said them) when known, `name_suggestions` (when it asks for a name: the user may say a
     number to pick one, use the matching name), and `suggested` (bundles and items for the headcount) for
     "use the suggested plan". Use date_iso as deadline_date and region for every pick.
     """
@@ -97,7 +97,8 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
     places = [x["venue_name"] for x in repo.list_venues()]
     names = (presentation.name_suggestions(people, d, v["venue_name"] if v else "")
              if (d and v and not campaign and (mode or "").lower().startswith("camp")) else [])
-    md = presentation.intake_checklist(mode, campaign, people, iso, v["venue_name"] if v else "", picks, "", "",
+    place = _place_label(venue, v) if v else ""
+    md = presentation.intake_checklist(mode, campaign, people, iso, place, picks, "", "",
                                        unknown, note, names, places)
     out = {"status": "ok", "display_markdown": md}
     if names:
@@ -105,7 +106,7 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
     if iso:
         out["date_iso"] = iso
     if v:
-        out.update(region=region, venue_name=v["venue_name"])
+        out.update(region=region, venue_name=v["venue_name"], place=place)
         if people and (mode or "").lower().startswith("camp"):
             out["suggested"] = presentation.suggested_plan(repo, people, region)
     return out
@@ -113,6 +114,12 @@ def show_checklist(mode: str = "", campaign: str = "", people: int = 0, date: st
 
 _ALIASES = {"us": "usa", "u.s.": "usa", "united states": "usa", "america": "usa", "uk": "london", "united kingdom": "london",
             "england": "london", "britain": "london"}
+
+
+def _place_label(text: str, v: dict) -> str:
+    """The place as the user said it ("New York, USA"), so the city is not lost; just the served place if they gave only that."""
+    t = " ".join(text.split()).strip(" ,")
+    return t if t and t.lower() not in (v["venue_name"].lower(), v["country"].lower(), v["venue_id"].lower()) else v["venue_name"]
 
 
 def _find_venue(venues: list[dict], text: str):

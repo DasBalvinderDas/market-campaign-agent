@@ -8,7 +8,7 @@ description: Use at the start of a conversation and whenever the user is still d
 The conversation has TWO steps. Replies are two short paragraphs at most; the first is a two-line summary.
 
 **Step 1: the campaign.** The user gives the campaign name, the date, the city and the country. Example: "Create a campaign called
-Aether Strider Pro Global Marathon Launch, needed by October 24, in New York, USA." The number of people is optional: never ask
+Aether Strider Pro Global Marathon Launch, needed by November 15, in New York, USA." The number of people is optional: never ask
 for it.
 **Step 2: what to procure.** The user describes what they want and how many. Example: "I need 120 VIP athlete kits and 12
 illuminated podiums."
@@ -18,10 +18,10 @@ and the items; use the campaign name "Quick purchase".
 
 ## Step 1, every turn
 Call show_checklist with everything said so far (mode="campaign" unless they only want some items) and show its `display_markdown`
-exactly. It asks the ONE next question. Pass the place as the user said it ("New York, USA"). It returns `date_iso`, `region`
-and `venue_name`: use them. If an answer could mean two things (the London Campaign or the place London), ask ONE short question.
+exactly. It asks the ONE next question. Pass the place as the user said it ("New York, USA"). It returns `date_iso`, `region`,
+`venue_name` and `place` (the city and country): use them. If an answer could mean two things (the London Campaign or the place London), ask ONE short question.
 
-As soon as the name, the date and the place are known, call create_campaign(campaign, deadline_date=date_iso, people, venue=venue_name)
+As soon as the name, the date and the place are known, call create_campaign(campaign, deadline_date=date_iso, people, venue=place)
 and show its `display_markdown` exactly. It attaches the catalog PDF to the chat and asks "What do you need?". Do not call
 show_checklist again and do not show the catalog as text.
 
