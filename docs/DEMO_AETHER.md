@@ -35,16 +35,17 @@ python scripts/setup_demo_aether.py             # wipes everything, loads Aether
 
 ## Pick the date first
 
-The demo date must be 9 or more days away.
+Use a date 25 or more days away.
+Then all three choices arrive in time.
+Nothing asks you to pick another date.
 
 | Today is | Use this date |
 |---|---|
-| 15 Oct | October 24 |
-| 19 Oct | October 28 |
-| Any day | Today plus 9 days |
+| 21 Oct | November 15 |
+| Any day | Today plus 25 days |
 
-Closer dates are flagged as risky. That is correct.
-The examples below use October 24. Change it in both prompts.
+Closer dates make "buy everything new" miss the deadline.
+The examples below use November 15. Change it in prompt 1.
 
 ## The demo: two prompts
 
@@ -57,7 +58,7 @@ It arrives as a PDF in the chat.
 
 **Prompt 1: the campaign**
 
-> Create a campaign called Aether Strider Pro Global Marathon Launch. It is needed by October 24, in New York, USA.
+> Create a campaign called Aether Strider Pro Global Marathon Launch. It is needed by November 15, in New York, USA.
 
 It has four campaign facts:
 1. Campaign name
@@ -73,7 +74,7 @@ It has four campaign facts:
 
 **Prompt 2: what to procure**
 
-> I need 120 VIP athlete kits with handle etching and sized singlets. Also 12 illuminated podiums for the expo. And 250 cork buyer kits with foam samples. Check depots for spare boxes first. Is October 24 safe?
+> I need 120 VIP athlete kits with handle etching and sized singlets. Also 12 illuminated podiums for the expo. And 250 cork buyer kits with foam samples. Check depots for spare boxes first.
 
 The assistant shows a short shopping list and advice.
 
@@ -104,20 +105,18 @@ Then:
 
 ## What to expect
 
-Ordering on 15 Oct for 24 Oct.
+Ordering on 21 Oct for 15 Nov.
 
-| Option | Total | Arrives | Note |
-|---|---|---|---|
-| 1. Everything new | $30,290 | 2 Nov | Misses 24 Oct |
-| 2. Our stock first | $30,110 | 21 Oct | Recommended. 72-hour buffer |
-| 3. Eco | $36,960 | 21 Oct | Dearer |
+| Option | Total | Spare time |
+|---|---|---|
+| 1. Everything new | $30,290 | 7 days |
+| 2. Our stock first | $24,840 | 7 days |
+| 3. Eco | $32,210 | 7 days |
 
-- Option 2 uses 50 boxes from Boston.
+- Option 2 is recommended.
+- It uses 50 boxes from Boston.
 - It also uses 100 folios from Portland.
-- Express vendors make 24 Oct possible.
-- Ordering on 8 Oct also works.
-- On 18 Oct there is no buffer.
-- From 19 Oct it is high risk.
+- The VP approves it.
 - Numbers come from the data.
 - They differ from the demo pack's mock-up.
 
