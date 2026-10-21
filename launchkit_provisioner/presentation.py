@@ -48,17 +48,33 @@ def spare(hours, min_buffer=24) -> str:
 
 # ---------------------------------------------------------------------------- the first hello
 def capabilities_card(launches=None) -> str:
-    return (two_lines("👋 **Hi! I plan and buy campaign materials for you.**",
-                      "I check our stock, compare vendors, find the best date and place orders once approved.")
-            + "\n\n" + _first_question(launches))
+    """The greeting. The only detailed reply: what the assistant can do, then the first question."""
+    return """## 👋 Hi! I am your Campaign Procurement Assistant
+> Tell me about your campaign. I check our stock, compare vendors, find the best date, and place the orders once the right person says OK.
+
+| | I can | In simple words |
+|---|---|---|
+| 📍 | Know **where we can deliver** | Vendors and warehouses in the USA, Canada, London and Singapore |
+| 📎 | Share **our catalog** | A PDF with stock, best prices and ready-by dates |
+| 🧾 | Make your **shopping list** | Exact items, amounts and places |
+| 💡 | Spot **what you may be missing** | Spares, extra items, dates that are too tight |
+| 🏭 | Compare **vendors** | Prices, ready-by dates, late vendors |
+| 📅 | Find the **best date** | Vendors charge less when you order early, more for a rush |
+| 🌱 | Show the **carbon** | CO₂ of every choice, and how it is worked out |
+| ✍️ | Get the **right OK** | Small = automatic · bigger = manager · biggest = CMO |
+| 📦 | **Place all the orders** | At once, with a short summary |
+
+**Just talk to me in two steps.** First: *"Create a campaign called Summer Launch, needed by 15 Nov, in New York, USA."* Then tell me what you need. Only need a few items? Tell me which.
+
+""" + _first_question(launches)
 
 
 def _first_question(launches) -> str:
     if not launches:
-        return "**Tell me your campaign name, the date, the city and the country.**"
-    names = ", ".join(x["launch_name"] for x in launches[:3]) + (" and more" if len(launches) > 3 else "")
-    return (f"We have **{plural(len(launches), 'campaign')}** ({names}). "
-            "**Add to one, or tell me a new campaign's name, date, city and country.**")
+        return "### 👉 First question\n**Tell me your campaign name, the date, the city and the country.**"
+    names = ", ".join(f"**{x['launch_name']}**" for x in launches)
+    return (f"### 👉 First question\nWe already have **{plural(len(launches), 'campaign')}**: {names}.\n\n"
+            "**Add to one of them, or create a new one?** Say its name, or tell me the new campaign's name, date, city and country.")
 
 
 def _fits(ready: date, deadline: date | None) -> str:

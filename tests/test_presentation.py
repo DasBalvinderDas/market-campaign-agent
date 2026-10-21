@@ -14,11 +14,11 @@ def _approved(repo, aurora, option="2"):
     return ex
 
 
-def test_greeting_card_is_two_lines_then_the_first_question():
+def test_greeting_card_lists_the_capabilities_then_the_first_question():
     card = orchestration_tools.show_capabilities()["display_markdown"]
-    first, second = card.split("\n\n")
-    assert first.count("\n") == 1 and "name, date, city and country" in second
-    assert "We have **4 campaigns**" in card and "London Campaign" in card
+    assert "Campaign Procurement Assistant" in card and "Share **our catalog**" in card and "Show the **carbon**" in card
+    assert "Place all the orders" in card and "name, the date, the city and the country" in card or "name, date, city and country" in card
+    assert "We already have **4 campaigns**" in card and "**London Campaign**" in card
 
 
 def test_bom_is_short_one_row_per_pack_with_what_is_inside(repo, aurora):
