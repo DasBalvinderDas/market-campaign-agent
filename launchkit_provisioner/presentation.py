@@ -583,7 +583,7 @@ def approval_rules_markdown(policies: list[dict]) -> str:
             + "\n\n📧 The approver gets an email with **Approve** and **Reject**. Nothing is bought until they approve.")
 
 
-def sign_off_markdown(scenario: dict, policies: list[dict], policy: dict, who: str, human: bool, request_id: str) -> str:
+def sign_off_lead(scenario: dict, policies: list[dict], policy: dict, who: str, human: bool, request_id: str) -> str:
     total = float(scenario["total_cost"])
     if human:
         return (two_lines(f"✍️ **Approval needed from {who}** for **{scenario['option_name']}**, **{money(total)}**.",
@@ -637,7 +637,7 @@ def tldr(repo, request_id: str, scenarios: list[dict], policies: list[dict]) -> 
     return "\n".join(out)
 
 
-def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_sent_to: list, failed: list) -> str:
+def order_lead(repo, request_id: str, scenario: dict, decision: dict, update_sent_to: list, failed: list) -> str:
     """Orders placed: two lines of summary, then who we bought from, in one short paragraph."""
     lines = repo.get_scenario_lines(scenario["scenario_id"])
     assets = {a["sku"]: a for a in repo.list_assets()}
@@ -673,7 +673,7 @@ def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_
     return two_lines(first, second) + "\n\n" + " ".join(detail + [tail])
 
 
-def status_markdown(request_id: str, d: dict, option_name: str = "", n_po: int = 0, n_tr: int = 0, placed: bool = False,
+def status_lead(request_id: str, d: dict, option_name: str = "", n_po: int = 0, n_tr: int = 0, placed: bool = False,
                     note=None) -> str:
     """Where a request stands, in two lines: the state, then the choice, the amount and the orders."""
     icon = {"PENDING": "⏳", "APPROVED": "✅", "REJECTED": "❌", "FAILED": "⚠️"}.get(d["status"], "ℹ️")
@@ -736,7 +736,7 @@ def _icon(name: str) -> str:
             "🖼️" if any(w in n for w in ("podium", "stand", "display")) else "🧩")
 
 
-def bom_compact(repo, request_id: str, tips: list[dict] | None = None) -> str:
+def bom_lead_unused(repo, request_id: str, tips: list[dict] | None = None) -> str:
     """The shopping list as two summary lines and one small table. The advice is one line."""
     rows, total_items, _regions = bom_rows(repo, request_id)
     first = f"🧾 **Your shopping list: {total_items:,} items** in {plural(len(rows), 'line')}."
@@ -869,3 +869,151 @@ def catalog_data(repo, deadline: date | None = None, today: date | None = None) 
                       "eco": price(e) if e else None})
     band = price_factor(rules, "*", window)[1] if window is not None else ""
     return {"packs": packs, "items": items, "band": band, "today": today, "deadline": deadline}
+
+
+# ---------------------------------------------------------------------------- the full replies: a two-line summary, then the tables
+def bom_lead(repo, request_id: str, tips: list[dict] | None = None) -> str:
+    rows, total_items, _regions = bom_rows(repo, request_id)
+    first = f"🧾 **Your shopping list: {total_items:,} items** in {plural(len(rows), 'line')}."
+    second = ("💡 A few tips are below. Say **Looks good** to go on, or tell me what to add." if tips
+              else "✅ Nothing important is missing. Say **Looks good** to continue.")
+    return two_lines(first, second)
+
+
+def bom_full(repo, request_id: str, tips: list[dict] | None = None) -> str:
+    out = bom_lead(repo, request_id, tips) + "\n\n" + bom_markdown(repo, request_id)
+    return out + ("\n\n" + advice_markdown(tips) if tips else "")
+
+
+def plan_lead(repo, request_id: str, scenarios: list[dict], policies: list[dict], min_buffer=24) -> str:
+    """The two summary lines of the plan: the best choice and the highlighted carbon."""
+    return plan_markdown(repo, request_id, scenarios, policies, min_buffer).split("\n\n")[0]
+
+
+def sign_off_markdown(scenario: dict, policies: list[dict], policy: dict, who: str, human: bool, request_id: str) -> str:
+    body = sign_off_body(scenario, policies, policy, who, human, request_id).split("\n", 2)[2].lstrip("\n")
+    return sign_off_lead(scenario, policies, policy, who, human, request_id).split("\n\n")[0] + "\n\n" + body
+
+
+def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_sent_to: list, failed: list) -> str:
+    lead = order_lead(repo, request_id, scenario, decision, update_sent_to, failed).split("\n\n")[0]
+    return lead + "\n\n" + order_body(repo, request_id, scenario, decision, update_sent_to, failed)
+
+
+def status_markdown(request_id: str, d: dict, option_name: str = "", n_po: int = 0, n_tr: int = 0, placed: bool = False,
+                    note=None) -> str:
+    lead = status_lead(request_id, d, option_name, n_po, n_tr, placed).split("\n\n")[0]
+    return lead + "\n\n" + status_body(request_id, d, option_name, n_po, n_tr, placed, note)
+
+
+def sign_off_body(scenario: dict, policies: list[dict], policy: dict, who: str, human: bool, request_id: str) -> str:
+    total = float(scenario["total_cost"])
+    out = [f"### ✍️ Step 5: Getting the OK",
+           f"You chose **{scenario['option_name']}** for **{money(total)}**.", "",
+           approval_ladder(policies, total), ""]
+    if human:
+        out += [f"📧 **An email with Approve and Reject buttons is on its way to {who}.**", "",
+                "| Step | What happens | Status |", "|---|---|---|",
+                "| 1 | Email sent to the approver | ✅ Done |",
+                "| 2 | Approver clicks **Approve** or **Reject** | ⏳ Waiting |",
+                "| 3 | You ask: *What is the status of " + request_id + "?* | ⏳ After step 2 |",
+                "| 4 | We place all the orders | ⏳ After approval |", "",
+                "🔒 The stock we planned to use is **held for you** while you wait. Nothing has been bought yet."]
+    else:
+        out += ["✅ This is within the automatic limit, so **no approval is needed**. I am placing the orders now."]
+    return "\n".join(out)
+
+
+def order_body(repo, request_id: str, scenario: dict, decision: dict, update_sent_to: list, failed: list) -> str:
+    lines = repo.get_scenario_lines(scenario["scenario_id"])
+    offers = repo.list_vendor_offers_all()
+    assets = {a["sku"]: a for a in repo.list_assets()}
+    vendors = {v["vendor_id"]: v["vendor_name"] for v in repo.list_vendors()}
+    depots = {d["depot_id"]: d["depot_name"] for d in repo.list_depot_free()}
+    launch = repo.get_launch(repo.get_request(request_id)["launch_id"])
+    policies = repo.list_policies()
+    vlines = [ln for ln in lines if ln["source_type"] == "VENDOR"]
+    dlines = [ln for ln in lines if ln["source_type"] == "DEPOT"]
+    items = sum(ln["quantity"] for ln in lines)
+    own = sum(ln["quantity"] for ln in dlines)
+    n_po = len(repo.list_pos(request_id)) or len({ln["source_id"] for ln in vlines})          # one per vendor
+    n_tr = len(repo.list_transfers(request_id)) or len({ln["source_id"] for ln in dlines})    # one per warehouse
+    eco_plan = scenario["option_code"] == "ECO"
+
+    by_vendor: dict = {}
+    for ln in vlines:
+        v = by_vendor.setdefault(ln["source_id"], {"orders": 0, "units": 0, "amount": 0.0, "skus": set(), "why": set()})
+        v["orders"] += 1
+        v["units"] += ln["quantity"]
+        v["amount"] += float(ln["line_total"])
+        v["skus"].add(ln["sku"])
+        v["why"].add(_why(ln, offers, eco_plan))
+
+    def item_names(skus):
+        names = []
+        for sku in sorted(skus):
+            n = _item_label(assets, sku)
+            if n not in names:
+                names.append(n)
+        return ", ".join(names)
+
+    n_products = len(item_names({ln["sku"] for ln in lines}).split(", "))
+    n_regions = len({ln["region"] for ln in lines})
+    total = float(scenario["total_cost"])
+    rng, who = _band(policies, total)
+    approval = (f"{money(total)} is {rng}, so **{decision['approver_role']}** approved it ✅"
+                if who and decision.get("decided_by") != "autopilot" else f"{money(total)} is {rng}, so **no approval was needed** ✅")
+    saved = (f"**{money(scenario['savings_usd'])}** saved" if scenario["savings_usd"] > 0
+             else f"{money(-scenario['savings_usd'])} more" if scenario["savings_usd"] < 0 else "same")
+    out = [f"## ✅ Done! All your orders are placed",
+           f"> 🎪 **{launch['launch_name']}** · {scenario['option_name']} · `{request_id}`", "",
+           "| 💵 Total | 💸 Compared with buying new | 📅 Arrives | 🧾 Orders | 🌍 Pollution |", "|---|---|---|---|---|",
+           f"| **{money(total)}** | {saved} | **{day(scenario['delivery_date'])}** ({spare(scenario['buffer_hours'])[2:]}) | "
+           f"{plural(n_po, 'purchase order')} + {plural(n_tr, 'warehouse move')} | {scenario['carbon_kg']:,.0f} kg |",
+           "", "### 📖 What we did, in 4 lines",
+           (f"1. 🛍️ You asked for **{items:,} items**: {plural(n_products, 'product')} for {plural(n_regions, 'region')}."
+            if launch["launch_name"] == "Quick purchase" else
+            f"1. 🎪 We planned **one whole campaign**: **{items:,} items**, {plural(n_products, 'different product')}, {plural(n_regions, 'region')}."),
+           f"2. 🏭 We compared vendors and bought from **{len(by_vendor)}** of them." if len(by_vendor) != 1 else "2. 🏭 We compared vendors and picked the best one.",
+           f"3. ♻️ We took **{own:,} items from our own stock** {bar(100 * own / items) if items else ''}, so we did not buy them twice.",
+           f"4. ✍️ {approval}", "", "### 🏭 Who we bought from, and why", "",
+           "| 🏭 Vendor | 🧩 What | 💵 Amount | 🧠 Why |", "|---|---|---|---|"]
+    for vid, v in sorted(by_vendor.items(), key=lambda kv: -kv[1]["amount"]):
+        out.append(f"| **{vendors.get(vid, vid)}** | {item_names(v['skus'])} ({v['units']:,}) | {money(v['amount'])} | "
+                   f"{' · '.join(sorted(v['why']))} |")
+    if dlines:
+        agg: dict = {}
+        for ln in dlines:
+            w = depots.get(ln["source_id"], ln["source_id"]).split(" ")[0]
+            agg.setdefault(w, {})
+            agg[w][_item_label(assets, ln["sku"])] = agg[w].get(_item_label(assets, ln["sku"]), 0) + ln["quantity"]
+        out += ["", "♻️ **From our own warehouses** (" + plural(n_tr, "move") + "): "
+                + " · ".join(f"**{w}**: " + ", ".join(f"{i} {q:,}" for i, q in items_.items()) for w, items_ in agg.items())]
+    if n_po + n_tr > 2:
+        out += ["", f"❓ **How many orders?** One purchase order per vendor and one move per warehouse: **{n_po} + {n_tr}**, all placed together."]
+    if update_sent_to:
+        out += ["", "📧 The launch team has been told by email."]
+    if failed:
+        out += ["", f"⚠️ **{len(failed)} order lines failed** and were not retried. Ask me for the status."]
+    else:
+        out += ["", "📎 The order pack PDF is in this chat. Say **Send me the order pack** for a fresh copy that lists the purchase order numbers."]
+    return "\n".join(out)
+
+
+def status_body(request_id: str, d: dict, option_name: str = "", n_po: int = 0, n_tr: int = 0, placed: bool = False,
+                    note=None) -> str:
+    """Where a request stands, in plain words: the choice, the amount, who decides, and whether the orders are placed."""
+    icon = {"PENDING": "⏳", "APPROVED": "✅", "REJECTED": "❌", "FAILED": "⚠️"}.get(d["status"], "ℹ️")
+    approved = d["status"] == "APPROVED"
+    words = {"PENDING": f"Waiting for **{d['approver_role']}** to click Approve or Reject",
+             "APPROVED": "**Approved**" if placed else "**Approved.** Placing your orders now",
+             "REJECTED": "**Rejected.** Nothing was bought and the held stock is free again",
+             "FAILED": "**The approval did not finish**"}.get(d["status"], d["status"])
+    orders = (f"{plural(n_po, 'purchase order')} + {plural(n_tr, 'warehouse move')}" if placed
+              else ("Not placed yet" if approved else "None"))
+    out = [f"### {icon} **Status of** `{request_id}`", "", "| | |", "|---|---|",
+           f"| **Choice** | {option_name or d['option_code']} |", f"| **Order value** | {money(d['amount'])} |",
+           f"| **Who decides** | {d['approver_role']} |", f"| **Status** | {icon} {words} |", f"| **Orders** | {orders} |"]
+    if note:
+        out.append(f"| **Note** | {note} |")
+    return "\n".join(out)

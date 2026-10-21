@@ -220,8 +220,8 @@ def build_requirements(request_id: str, bundles: list[BundleRequest] | None = No
            "total_units": sum(ln["quantity"] for ln in lines)}
     tips = advisor.suggestions(repo, request_id)
     out["advice_count"] = len(tips)
-    # One short ready-to-show block (two lines, then one small table): the agents copy it as it is.
-    out["display_markdown"] = presentation.bom_compact(repo, request_id, tips)
+    # One ready-to-show block (a two-line summary, the shopping list table, then the advice): the agents copy it as it is.
+    out["display_markdown"] = presentation.bom_full(repo, request_id, tips)
     if tips:
         audit(request_id, "brief_analyst_agent", "advice_given", suggestions=[t["what"] for t in tips])
     sizes, plugs = {}, {}

@@ -12,5 +12,3 @@ Call the matching tool and show its `display_markdown` exactly:
 - the stock and vendor comparison for a request: get_vendor_report
 - the catalog: get_catalog (it attaches the PDF; never list the catalog as text)
 - how the CO₂ is worked out: answer in two sentences from the carbon note in the plan
-
-Keep every reply to two short paragraphs.

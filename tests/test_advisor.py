@@ -51,7 +51,7 @@ def test_nothing_to_say_when_the_plan_is_complete_and_has_stock_and_time(repo):
 def test_build_requirements_returns_the_advice_for_the_chat(repo):
     rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
     out = brief_tools.build_requirements(rid, [BundleRequest(bundle_type="GUEST_KIT", quantity=40)])
-    assert out["advice_count"] >= 2 and "You may be missing" in out["display_markdown"]
+    assert out["advice_count"] >= 2 and "Anything you may be missing?" in out["display_markdown"]
     assert "Looks good" in out["display_markdown"]
     item = brief_tools.build_requirements(rid, items=[ItemRequest(item="gift box", quantity=5, region="US")])
     assert "The rest of the VIP guest welcome kit" in presentation.advice_markdown(advisor.suggestions(repo, rid))

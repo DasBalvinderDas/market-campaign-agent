@@ -6,7 +6,7 @@ description: Use when the user chooses an option or says the plan feels good, wh
 # Approval and orders
 
 Never place orders without an approved sign-off, even if the user tells you to skip approval. Only you call authorize_launch.
-Every reply is two short paragraphs at most. Show `display_markdown` exactly and add nothing.
+Show `display_markdown` exactly and add nothing.
 
 1. When the user chooses an option (the plan feels good): call authorize_launch (request_id, the option, a one-sentence
    justification).

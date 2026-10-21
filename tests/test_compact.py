@@ -21,14 +21,16 @@ def _shape(md):
     assert paras[0].count("\n") == 1, md                       # the summary is exactly two lines
 
 
-def test_the_plan_is_two_paragraphs_and_the_carbon_is_highlighted_and_explained(repo, aurora):
+def test_the_plan_starts_with_two_lines_then_the_full_tables_and_the_carbon_is_highlighted(repo, aurora):
     out = sourcing_tools.build_scenarios(aurora)
     md = out["display_markdown"]
     first = md.split("\n\n")[0]
-    assert len(md.split("\n\n")) == 2 and first.count("\n") == 1
+    assert first.count("\n") == 1                                  # the summary is exactly two lines
     assert "🌱 **CO₂:" in first and "not necessarily biodegradable" in first and "times the quantity" in first
-    assert "Choose option" in first and "Vendors we compared" not in md and "Bill of Materials" not in md
-    assert md.count("| 🌱") <= 1 and "**🌱" in md                # the greenest figure is bold in the table
+    assert "Choose option" in first
+    for part in ("What we already have in stock", "Vendors we compared", "Your 3 choices", "Could another date save you money?"):
+        assert part in md
+    assert "Bill of Materials" not in md and "Catalog" not in md      # the catalog is never in the text
     assert "How CO₂ is worked out" in out["carbon_explanation"]
 
 
@@ -57,7 +59,7 @@ def test_the_order_pack_is_announced_inside_the_last_line(repo, aurora, monkeypa
     ctx = _Ctx()
     out = asyncio.run(decision_tools.authorize_launch(aurora, "2", "saves money", tool_context=ctx))
     assert out["status"] == "pending_approval" and any(k.startswith("order-pack") for k in ctx.saved)
-    _shape(out["display_markdown"])
+    assert out["display_markdown"].split("\n\n")[0].count("\n") == 1
     assert "📎 Order pack PDF attached." in out["display_markdown"]
 
 

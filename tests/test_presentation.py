@@ -34,7 +34,8 @@ def test_build_requirements_returns_a_short_list_for_the_chat(repo):
     rid = brief_tools.register_launch_request("LAUNCH-SPRING", "x")["request_id"]
     out = brief_tools.build_requirements(rid, [brief_tools.BundleRequest(bundle_type="SALES_PACK", quantity=30)])
     md = out["display_markdown"]
-    assert "Leather sales folder" in md and "Product brochure" in md and len(md.split("\n\n")) == 2 and md.split("\n\n")[0].count("\n") == 1
+    assert "Leather sales folder" in md and "Product brochure" in md and "Bill of Materials" in md
+    assert md.split("\n\n")[0].count("\n") == 1
 
 
 def test_vendor_report_shows_vendors_compared_and_why_the_faster_one_was_used(repo, aurora):
@@ -63,20 +64,21 @@ def test_approval_rules_show_all_three_levels(repo):
     assert "Nobody, it is automatic" in md and "**VP Product Marketing**" in md and "**CMO**" in md
 
 
-def test_sign_off_message_names_the_approver_in_two_lines(repo, aurora):
+def test_sign_off_message_names_the_approver_and_marks_the_level(repo, aurora):
     repo.t["approvers"] = [{"approver_role": "VP Product Marketing", "email": "vp@example.com", "active": True}]
     out = decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
     md = out["display_markdown"]
-    assert "VP Product Marketing" in md and "@" not in md and "Nothing is bought until it is approved" in md and md.count("\n\n") == 1
+    assert "VP Product Marketing" in md and "@" not in md and "Nothing is bought until it is approved" in md
+    assert "👈 **this order**" in md and md.split("\n\n")[0].count("\n") == 1
 
 
-def test_order_summary_is_two_lines_and_a_short_paragraph(repo, aurora):
+def test_order_summary_has_a_two_line_summary_then_the_tables(repo, aurora):
     ex = _approved(repo, aurora)
     out = execution.execute_plan(repo, ex, aurora)
     md = out["display_markdown"]
-    first, rest = md.split("\n\n")
+    first = md.split("\n\n")[0]
     assert first.count("\n") == 1 and "All orders placed" in first and "7 purchase orders + 3 warehouse moves" in first
-    assert "CO₂" in first and "Dallas: 120 Leather sales folder" in rest
+    assert "CO₂" in first and "Who we bought from, and why" in md and "How many orders?" in md and "RapidDisplay" in md
 
 
 def test_launch_team_update_is_a_formatted_html_email(repo, aurora):

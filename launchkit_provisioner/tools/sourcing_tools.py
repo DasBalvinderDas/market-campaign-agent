@@ -51,13 +51,22 @@ def build_scenarios(request_id: str) -> dict:
                 request_id, launch, stored, policies, repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24),
                 single_item=all(ln["bundle_type"] == "SINGLE_ITEM" for ln in repo.get_requirement_lines(request_id))),
             "tldr": presentation.tldr(repo, request_id, stored, policies),
-            # Show only this to the user: two summary lines and one small table. The reports below are for follow-up questions.
-            "display_markdown": presentation.plan_markdown(repo, request_id, stored, policies,
-                                                          repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24)),
+            # Show only this to the user, exactly: a two-line summary, then the tables (stock, vendors, the 3 choices, other dates).
+            "display_markdown": _plan_text(repo, request_id, launch, stored, policies),
             "carbon_explanation": presentation.carbon_explanation(repo, request_id),
             "date_options": presentation.date_options_markdown(planner.plan_dates(repo, request_id, DATE_OFFSETS), policies),
             "stock_report": presentation.stock_report(repo, request_id),
             "vendor_report": presentation.vendor_report(repo, request_id)}
+
+
+def _plan_text(repo, request_id, launch, stored, policies) -> str:
+    min_buffer = repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24)
+    card = planner.decision_card(request_id, launch, stored, policies, min_buffer,
+                                 single_item=all(ln["bundle_type"] == "SINGLE_ITEM" for ln in repo.get_requirement_lines(request_id)))
+    dates = presentation.date_options_markdown(planner.plan_dates(repo, request_id, DATE_OFFSETS), policies)
+    parts = [presentation.plan_lead(repo, request_id, stored, policies, min_buffer), presentation.stock_report(repo, request_id),
+             presentation.vendor_report(repo, request_id), card, dates]
+    return "\n\n".join(x for x in parts if x)
 
 
 def report_vendor_delay(request_id: str, vendor: str, delay_days: int, reason: str = "") -> dict:

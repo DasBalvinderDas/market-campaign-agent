@@ -5,7 +5,7 @@ description: Use at the start of a conversation and whenever the user is still d
 
 # Collecting the details
 
-The conversation has TWO steps. Replies are two short paragraphs at most; the first is a two-line summary.
+The conversation has TWO steps. Every reply starts with a short two-line summary.
 
 **Step 1: the campaign.** The user gives the campaign name, the date, the city and the country. Example: "Create a campaign called
 Aether Strider Pro Global Marathon Launch, needed by November 15, in New York, USA." The number of people is optional: never ask
