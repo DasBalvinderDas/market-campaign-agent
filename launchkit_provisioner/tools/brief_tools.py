@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from pydantic import BaseModel
 
 from .. import advisor, planner, presentation
+from ..dates import parse_date
 from ..repositories import get_repo
 from .audit import audit
 from .files import attach_pdf
@@ -33,10 +34,9 @@ def _ensure_campaign(repo, campaign: str, deadline_date: str, cost_center: str =
             return None, "", f"'{embargo_date}' is not a date. Ask for the embargo date as day, month and year."
     deadline = None
     if deadline_date:
-        try:
-            deadline = date.fromisoformat(deadline_date.strip())
-        except ValueError:
-            return None, "", f"'{deadline_date}' is not a date. Ask for the date as day, month and year."
+        deadline = parse_date(deadline_date)          # "2026-11-15", "November 15" and "15th Nov" all work
+        if not deadline:
+            return None, "", f"'{deadline_date}' is not a date. Ask for the day and the month."
         if deadline <= date.today():
             return None, "", f"{deadline} is not in the future. Ask for a later date."
     launch, how = _find_event(repo, campaign), "found"

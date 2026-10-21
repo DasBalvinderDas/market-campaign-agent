@@ -30,7 +30,7 @@ A date needs day and month. Pass it exactly as the user said it ("31st Oct"); th
 Never ask for the year and never add one yourself.
 
 ## Step 2
-Turn their words into bundles (VIP or guest kits = GUEST_KIT, display podiums and stands = VENUE_DISPLAY, buyer kits and folders
+Extras like "handle etching", "sized singlets", "foam samples" or "illuminated" describe the bundle: never make them separate items. Turn their words into bundles (VIP or guest kits = GUEST_KIT, display podiums and stands = VENUE_DISPLAY, buyer kits and folders
 = SALES_PACK) and single items, each with the region of the place. Then load the `plan-and-advice` skill and carry on. The
 headcount is NOT needed when the quantities are given. A complete brief in one message (name, date, place and what they need) is
 fine: create the campaign, then carry on with the plan. A cost center or embargo date in the brief goes to create_campaign as

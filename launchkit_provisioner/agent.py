@@ -74,6 +74,14 @@ approval; never state a number that did not come from a tool. The specialists ne
 authorize_launch.
 """
 
+def _instruction(_ctx=None) -> str:
+    """The prompt plus today's date: the model does not know it and would call a coming date "already passed"."""
+    from datetime import date
+    today = date.today()
+    return (INSTRUCTION + f"\nToday's date is {today:%A %d %B %Y} ({today.isoformat()}). A date the user gives without a year is in "
+            f"{today.year} (it is in the past only if it is before today). Never tell the user a date has passed unless a tool says so.\n")
+
+
 # The step-by-step instructions live in launchkit_provisioner/skills/<name>/SKILL.md. The catalog is in the system instruction
 # (EAGER), so the agent loads a skill straight away; a loaded skill stays active for the session.
 SKILLS_DIR = Path(__file__).parent / "skills"
@@ -89,7 +97,7 @@ root_agent = LlmAgent(
                 "reuses surplus depot stock, computes three sourcing options against the embargo deadline, gets a "
                 "named executive to sign off above the autopilot limit, and places the orders through Application "
                 "Integration.",
-    instruction=INSTRUCTION,
+    instruction=_instruction,
     tools=[register_launch_request, create_campaign, open_campaign, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
            get_vendor_report, get_catalog, authorize_launch, get_launch_status, get_order_pack]
     + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)] + ([skills] if skills is not None else []),

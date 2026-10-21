@@ -74,3 +74,20 @@ def test_the_city_is_kept_with_the_country():
 
 def test_the_carbon_note_explains_what_green_means():
     assert "recycled or organic" in presentation.CARBON_NOTE and "biodegradable" in presentation.CARBON_NOTE
+
+
+def test_a_long_place_and_a_date_in_words_are_understood(repo):
+    from launchkit_provisioner import planner
+    assert planner.normalize_region(repo, "Javits Center, New York, USA") == "US"
+    assert planner.normalize_region(repo, "New York, USA") == "US" and planner.normalize_region(repo, "Paris, France") == "PARIS, FRANCE"
+    from datetime import timedelta
+    soon = date.today() + timedelta(days=3)
+    if soon.year == date.today().year:
+        out = asyncio.run(brief_tools.create_campaign("Words Date", f"{soon:%B} {soon.day}", 0, "Javits Center, New York, USA"))
+        assert out["status"] == "ok" and out["in_hand_by"] == soon.isoformat()
+
+
+def test_the_prompt_carries_todays_date():
+    from launchkit_provisioner import agent
+    text = agent._instruction()
+    assert date.today().isoformat() in text and "Never tell the user a date has passed" in text

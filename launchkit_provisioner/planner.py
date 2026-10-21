@@ -116,6 +116,16 @@ def normalize_region(repo, text) -> str:
     for region, words in _REGION_WORDS.items():
         if t in words:
             return region
+    # a longer place such as "Javits Center, New York, USA": try each part (the country is usually last), then any known name inside
+    parts = [p.strip() for p in t.replace("/", ",").split(",") if p.strip()]
+    for part in reversed(parts):
+        if part != t:
+            found = normalize_region(repo, part)
+            if found in ("US", "EMEA", "APAC"):
+                return found
+    for v in repo.list_venues():
+        if v["venue_name"].lower() in t or v["country"].lower() in t:
+            return v["region"]
     return t.upper()
 
 

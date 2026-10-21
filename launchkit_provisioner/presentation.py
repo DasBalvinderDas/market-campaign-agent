@@ -713,6 +713,12 @@ def audit_markdown(events: list[dict], limit: int = 40) -> str:
 
 
 # ---------------------------------------------------------------------------- compact replies (Gemini Enterprise)
+def _icon(name: str) -> str:
+    n = name.lower()
+    return ("🎁" if "kit" in n and "buyer" not in n else "📁" if any(w in n for w in ("buyer", "folder", "folio")) else
+            "🖼️" if any(w in n for w in ("podium", "stand", "display")) else "🧩")
+
+
 def bom_compact(repo, request_id: str, tips: list[dict] | None = None) -> str:
     """The shopping list as two summary lines and one small table. The advice is one line."""
     rows, total_items, _regions = bom_rows(repo, request_id)
@@ -723,7 +729,7 @@ def bom_compact(repo, request_id: str, tips: list[dict] | None = None) -> str:
     else:
         second = "✅ Nothing important is missing. Say **Looks good** to continue."
     table = ["| What | How many | Includes |", "|---|---|---|"]
-    table += [f"| **{name}** | **{qty}** | {inside or '-'} |" for name, qty, inside, _split in rows]
+    table += [f"| {_icon(name)} **{name}** | **{qty}** | {inside or '-'} |" for name, qty, inside, _split in rows]
     return two_lines(first, second) + "\n\n" + "\n".join(table)
 
 
@@ -738,7 +744,7 @@ def plan_markdown(repo, request_id: str, scenarios: list[dict], policies: list[d
     stock = (f"♻️ {own:,} of {items:,} items come from our own stock, the rest from {plural(n_vendors, 'vendor')}"
              if own else f"🛒 All {items:,} items are bought from {plural(n_vendors, 'vendor')}")
     first = (f"🎯 **Best: Option {idx}, {best['option_name']}** · **{money(best['total_cost'])}** · arrives **{day(best['delivery_date'])}** "
-             f"({spare(best['buffer_hours'], min_buffer)}) · {stock}. 👉 Say **Choose option {idx}**.")
+             f"({spare(best['buffer_hours'], min_buffer)}) · {stock} {bar(100 * own / items if items else 0)}. 👉 Say **Choose option {idx}**.")
     green = min(scenarios, key=lambda s: float(s["carbon_kg"]))
     gi = scenarios.index(green) + 1
 
