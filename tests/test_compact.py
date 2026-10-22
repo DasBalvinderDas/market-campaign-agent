@@ -29,7 +29,7 @@ def test_the_plan_starts_with_two_lines_then_the_full_tables_and_the_carbon_is_h
     assert order == sorted(order)                                    # choices, stock, vendors, our pick, dates, the question last
     first = md.split("Step 4: Our pick, in short\n")[1].split("\n\n")[0]
     assert first.count("\n") == 1                                  # the summary is exactly two lines
-    assert "🌱 **CO₂ (making + shipping):" in first and "not necessarily biodegradable" in first and "carbon dioxide" in first and "distance" in first
+    assert "🌱 **CO₂ (making + shipping):" in first and "Ask me how CO₂ is worked out" in first and "biodegradable" not in first
     assert "Choose option" in first
     for part in ("What we already have in stock", "Vendors we compared", "Your 3 choices", "Could another date save you money?"):
         assert part in md
