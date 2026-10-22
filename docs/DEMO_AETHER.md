@@ -21,12 +21,16 @@ python scripts/setup_demo_aether.py             # wipes everything, loads Aether
 
 | Part | Content |
 |---|---|
-| Vendors | 18, with two or three per item |
+| Vendors | 22, with two or three per item |
+| | 2 based in London, 2 in Singapore |
 | Items | Box, bib plate, singlet, podium, cork folio, flask, foam |
+| | Banner and tote, for London and Singapore |
 | Express offers | 3-day delivery at a higher price |
 | Our stock | 50 boxes in Boston |
 | | 100 cork folios in Portland |
 | | 0 podiums in Amsterdam |
+| | London: 40 banners, 150 totes |
+| | Singapore: 30 banners, 200 totes |
 | Packs | Athlete kit, display podium, buyer kit |
 | Athletes | A standing list of 120 with sizes |
 | Approval | Up to $5,000 automatic |

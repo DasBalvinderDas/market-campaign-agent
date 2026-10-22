@@ -64,8 +64,14 @@ def _plan_text(repo, request_id, launch, stored, policies) -> str:
     card = planner.decision_card(request_id, launch, stored, policies, min_buffer,
                                  single_item=all(ln["bundle_type"] == "SINGLE_ITEM" for ln in repo.get_requirement_lines(request_id)))
     dates = presentation.date_options_markdown(planner.plan_dates(repo, request_id, DATE_OFFSETS), policies)
-    parts = [presentation.plan_lead(repo, request_id, stored, policies, min_buffer), presentation.stock_report(repo, request_id),
-             presentation.vendor_report(repo, request_id), card, dates]
+    # What we did for the user first (the choices), then the details (stock, vendors), then our pick in short, then other dates,
+    # and the question last. The card ends with the question; it is moved to the end.
+    marker = "👉 **Does this plan feel good?**"
+    table, _, question = card.partition(marker)
+    question = marker + question if question else ""
+    pick = "### 🎯 Step 4: Our pick, in short\n" + presentation.plan_lead(repo, request_id, stored, policies, min_buffer)
+    parts = [table.rstrip(), presentation.stock_report(repo, request_id), presentation.vendor_report(repo, request_id), pick,
+             dates, question]
     return "\n\n".join(x for x in parts if x)
 
 

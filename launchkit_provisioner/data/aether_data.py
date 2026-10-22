@@ -56,7 +56,12 @@ def _assets() -> list[dict]:
                {"sku": "BINDER-CORK-ECO", "name": "Cork buyer presentation folio", "component_type": "FOLDER",
                 "ship_factor": 1.2},
                {"sku": "FOAM-CUSHION-SAMPLE", "name": "Shoe-cushion foam sample set", "component_type": "PRINT",
-                "ship_factor": 0.1}])
+                "ship_factor": 0.1},
+               # extra items, not in the demo brief: they give the London and Singapore warehouses and local vendors something to offer
+               {"sku": "BANNER-ROLLUP-AETHER", "name": "Aether roll-up event banner", "component_type": "DISPLAY",
+                "ship_factor": 3.0},
+               {"sku": "TOTE-ORGANIC-ATHLETE", "name": "Organic cotton athlete tote bag", "component_type": "GIFT",
+                "ship_factor": 0.3}])
 
 
 def _templates() -> list[dict]:
@@ -79,6 +84,9 @@ def _templates() -> list[dict]:
     ]
 
 
+# vendors based in London and Singapore: they sell the extra items (banner, tote) that are not in the demo brief
+_LOCAL_VENDORS = [("V-THAMES", "Thames Display Works", "EMEA"), ("V-ALBION", "Albion Apparel Works", "EMEA"),
+                  ("V-MERLION", "Merlion Signage", "APAC"), ("V-LIONCITY", "Lion City Textiles", "APAC")]
 _VENDORS = [
     ("V-APEXLUX", "Apex Luxury Packaging"), ("V-METRO", "Metro NYC Engraving"), ("V-APEXAPP", "Apex Technical Apparel"),
     ("V-MIDWEST", "Midwest Exhibit Fabricators"), ("V-ECOPACK", "EcoPackaging Ltd."), ("V-BIOHYDRATE", "BioHydrate Nutrition"),
@@ -126,6 +134,13 @@ def _offers() -> list[dict]:
     # the foam samples that go in every buyer kit
     add("V-QUICKFOAM", "FOAM-CUSHION-SAMPLE", "STANDARD", 2.5, 3, 0.2)
     add("V-FOAMWORKS", "FOAM-CUSHION-SAMPLE", "STANDARD", 3.1, 4, 0.2)
+    # the extra items: a local vendor in each place, and a US vendor
+    add("V-THAMES", "BANNER-ROLLUP-AETHER", "STANDARD", 88.0, 6, 14.0)
+    add("V-MERLION", "BANNER-ROLLUP-AETHER", "STANDARD", 80.0, 6, 13.0)
+    add("V-MIDWEST", "BANNER-ROLLUP-AETHER", "STANDARD", 95.0, 10, 15.0)
+    add("V-ALBION", "TOTE-ORGANIC-ATHLETE", "STANDARD", 6.8, 5, 1.2)
+    add("V-LIONCITY", "TOTE-ORGANIC-ATHLETE", "STANDARD", 6.2, 5, 1.1)
+    add("V-APEXAPP", "TOTE-ORGANIC-ATHLETE", "STANDARD", 7.5, 6, 1.4)
     return rows
 
 
@@ -148,16 +163,24 @@ def build() -> dict:
         "bundle_templates": _templates(),
         "guests": _athletes(),
         "venues": [dict(v) for v in SEED["venues"]],
-        "vendors": [{"vendor_id": v, "vendor_name": n, "home_region": "US", "active": True} for v, n in _VENDORS],
+        "vendors": ([{"vendor_id": v, "vendor_name": n, "home_region": "US", "active": True} for v, n in _VENDORS]
+                    + [{"vendor_id": v, "vendor_name": n, "home_region": r, "active": True} for v, n, r in _LOCAL_VENDORS]),
         "vendor_offers": _offers(),
         "vendor_date_pricing": [dict(r) for r in DATE_PRICING],
         "regional_split": [dict(r) for r in SEED["regional_split"]],
         "depots": [{"depot_id": "DEPOT-BOS-01", "depot_name": "Boston Distribution Hub", "region": "US"},
                    {"depot_id": "DEPOT-PDX-02", "depot_name": "Portland West Depot", "region": "US"},
-                   {"depot_id": "DEPOT-AMS-03", "depot_name": "Amsterdam EMEA Hub", "region": "EMEA"}],
+                   {"depot_id": "DEPOT-AMS-03", "depot_name": "Amsterdam EMEA Hub", "region": "EMEA"},
+                   {"depot_id": "DEPOT-LON-04", "depot_name": "London Marketing Depot", "region": "EMEA"},
+                   {"depot_id": "DEPOT-SIN-05", "depot_name": "Singapore Asia-Pacific Hub", "region": "APAC"}],
         "depot_stock": [{"depot_id": "DEPOT-BOS-01", "sku": "BOX-ACRYL-PREM-LID", "on_hand": 50},       # grade A, pristine
                         {"depot_id": "DEPOT-PDX-02", "sku": "BINDER-CORK-ECO", "on_hand": 100},          # grade A, pristine
-                        {"depot_id": "DEPOT-AMS-03", "sku": "DISP-PODIUM-CARB", "on_hand": 0}],         # depleted
+                        {"depot_id": "DEPOT-AMS-03", "sku": "DISP-PODIUM-CARB", "on_hand": 0},          # depleted
+                        # London and Singapore hold the extra items only, so the demo brief is planned as before
+                        {"depot_id": "DEPOT-LON-04", "sku": "BANNER-ROLLUP-AETHER", "on_hand": 40},
+                        {"depot_id": "DEPOT-LON-04", "sku": "TOTE-ORGANIC-ATHLETE", "on_hand": 150},
+                        {"depot_id": "DEPOT-SIN-05", "sku": "BANNER-ROLLUP-AETHER", "on_hand": 30},
+                        {"depot_id": "DEPOT-SIN-05", "sku": "TOTE-ORGANIC-ATHLETE", "on_hand": 200}],
         "transit_lanes": [dict(r) for r in SEED["transit_lanes"]],
         "planning_rules": [dict(r) for r in SEED["planning_rules"]],
         "approval_policy": [dict(r) for r in SEED["approval_policy"]],

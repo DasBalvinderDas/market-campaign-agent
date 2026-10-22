@@ -224,7 +224,7 @@ def date_options_markdown(rows: list[dict], policies: list[dict]) -> str:
         return ""
     base = next((r for r in rows if r["offset"] == 0), rows[0])["best"]["total_cost"]
     cheapest = min(rows, key=lambda r: r["best"]["total_cost"])
-    out = ["### 📅 Could another date save you money?",
+    out = ["### 📅 Step 5: Could another date save you money?",
            "Vendors charge less when you order well ahead, and more for a rush. Same list, different date:", "",
            "| 📅 In hand by | 🏷️ Price band | 💰 Best total | 💸 Compared with your date | ⏳ Spare time | ✍️ OK from |", "|---|---|---|---|---|---|"]
     for r in rows:
@@ -440,7 +440,7 @@ def decision_card(request_id: str, launch: dict, scenarios: list[dict], policies
         ("🛠️ How we get it", [_how(s) for s in scenarios]),
         ("✍️ Who has to say OK", [who(float(s["total_cost"])) for s in scenarios]),
     ]
-    out = [f"### 🎯 Step 4: Your 3 choices for {'your quick purchase' if launch['launch_name'] == 'Quick purchase' else 'the ' + launch['launch_name']}",
+    out = [f"### 🎯 Step 1: Your 3 choices for {'your quick purchase' if launch['launch_name'] == 'Quick purchase' else 'the ' + launch['launch_name']}",
            f"📅 Deadline (in our hands): **{day(launch['in_hand_by'])}**",
            f"🧾 Request number: `{request_id}`", "",
            "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
@@ -909,7 +909,7 @@ def status_markdown(request_id: str, d: dict, option_name: str = "", n_po: int =
 
 def sign_off_body(scenario: dict, policies: list[dict], policy: dict, who: str, human: bool, request_id: str) -> str:
     total = float(scenario["total_cost"])
-    out = [f"### ✍️ Step 5: Getting the OK",
+    out = [f"### ✍️ Getting the OK",
            f"You chose **{scenario['option_name']}** for **{money(total)}**.", "",
            approval_ladder(policies, total), ""]
     if human:

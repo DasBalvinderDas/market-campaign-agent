@@ -68,7 +68,20 @@ def test_the_standing_athlete_list_has_the_registry_size_curve(data):
 def test_the_surplus_stock(data):
     stock = {(s["depot_id"], s["sku"]): s["on_hand"] for s in data["depot_stock"]}
     assert stock == {("DEPOT-BOS-01", "BOX-ACRYL-PREM-LID"): 50, ("DEPOT-PDX-02", "BINDER-CORK-ECO"): 100,
-                     ("DEPOT-AMS-03", "DISP-PODIUM-CARB"): 0}
+                     ("DEPOT-AMS-03", "DISP-PODIUM-CARB"): 0,
+                     ("DEPOT-LON-04", "BANNER-ROLLUP-AETHER"): 40, ("DEPOT-LON-04", "TOTE-ORGANIC-ATHLETE"): 150,
+                     ("DEPOT-SIN-05", "BANNER-ROLLUP-AETHER"): 30, ("DEPOT-SIN-05", "TOTE-ORGANIC-ATHLETE"): 200}
+
+
+def test_every_place_has_a_warehouse_and_local_vendors(data):
+    from launchkit_provisioner import presentation
+    from launchkit_provisioner.repositories.memory_repo import MemoryRepository
+    repo = MemoryRepository()
+    repo.t.update(data)
+    rows = {r[0]: r for r in presentation.venue_rows(repo)}
+    assert "London Marketing Depot" in rows["London"][2] and "Thames Display Works" in rows["London"][1]
+    assert "Singapore Asia-Pacific Hub" in rows["Singapore"][2] and "Merlion Signage" in rows["Singapore"][1]
+    assert "Boston Distribution Hub" in rows["USA"][2]
 
 
 def test_the_catalog_prices_and_lead_times_are_the_packs(data):

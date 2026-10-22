@@ -24,7 +24,10 @@ def _shape(md):
 def test_the_plan_starts_with_two_lines_then_the_full_tables_and_the_carbon_is_highlighted(repo, aurora):
     out = sourcing_tools.build_scenarios(aurora)
     md = out["display_markdown"]
-    first = md.split("\n\n")[0]
+    assert md.startswith("### 🎯 Step 1: Your 3 choices")
+    order = [md.index(x) for x in ("Step 1:", "Step 2:", "Step 3:", "Step 4:", "Step 5:", "Does this plan feel good?")]
+    assert order == sorted(order)                                    # choices, stock, vendors, our pick, dates, the question last
+    first = md.split("Step 4: Our pick, in short\n")[1].split("\n\n")[0]
     assert first.count("\n") == 1                                  # the summary is exactly two lines
     assert "🌱 **CO₂ (making + shipping):" in first and "not necessarily biodegradable" in first and "carbon dioxide" in first and "distance" in first
     assert "Choose option" in first
