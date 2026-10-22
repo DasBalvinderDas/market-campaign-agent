@@ -774,7 +774,7 @@ def plan_markdown(repo, request_id: str, scenarios: list[dict], policies: list[d
     else:
         carbon = (f"🌱 **CO₂ (making + shipping): {kg(best)}.** The greenest is **Option {gi}** at **{kg(green)}** "
                   f"({float(best['carbon_kg']) - float(green['carbon_kg']):,.0f} kg less).")
-    second = f"{carbon} {CARBON_NOTE}"
+    second = f"{carbon} Ask me how CO₂ is worked out."
     table = ["| Option | Total | Arrives | Spare time | 🌱 CO₂ | OK from |", "|---|---|---|---|---|---|"]
     for i, s in enumerate(scenarios, start=1):
         who = _band(policies, float(s["total_cost"]))[1] or "nobody, automatic"
