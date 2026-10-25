@@ -72,10 +72,10 @@ Open **Workflow**, choose the natural language option, and paste this:
 
 > Build a workflow called "LaunchKit order approval".
 > The start form asks for a request number.
-> Step 1: run the existing agent LaunchKit-Provisioner with the instruction
+> Step 1: run the existing agent campaign_provisioner with the instruction
 > "Show my approvals for request {request number}".
 > Step 2: ask the person running the workflow to approve or reject, and show the reply of step 1.
-> If approved, Step 3: run the existing agent LaunchKit-Provisioner with the instruction
+> If approved, Step 3: run the existing agent campaign_provisioner with the instruction
 > "Approve request {request number}. Then place the orders."
 > If rejected, Step 3: run the existing agent with the instruction
 > "Reject request {request number}."
