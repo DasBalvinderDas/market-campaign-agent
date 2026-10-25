@@ -14,6 +14,7 @@ from . import config, emails, presentation
 from .repositories.base import new_id
 
 _EXEC_PREFIX = "execution:"
+_IN_APP_NOTE = "waiting for a decision in the app"
 _FINAL_OK = ("PENDING", "APPROVED")
 _SYNONYMS = {"FULL_NEW": ("FULL", "BRAND", "NEW"), "REBALANCE": ("REBAL", "SMART", "DEPOT", "SURPLUS", "REUSE"),
              "ECO": ("ECO", "SUSTAIN", "GREEN", "CARBON", "RECYCL")}
@@ -122,6 +123,19 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
     emails_to = repo.get_approver_emails(policy["approver_role"])
     repo.create_decision({**decision, "status": "PENDING", "approver_emails": ",".join(emails_to)})
     repo.create_holds(holds)
+    if config.APPROVAL_CHANNEL == "gemini":
+        # No email and no workflow: the approver decides inside the Gemini Enterprise app (My approvals).
+        repo.set_decision_note(decision["decision_id"], "PENDING", _IN_APP_NOTE)
+        _audit(repo, request_id, "orchestrator", "approval_requested_in_app", decision_id=decision["decision_id"],
+               option=scenario["option_code"], approver_role=policy["approver_role"], amount=total, tier=policy["tier"])
+        who = f"the {policy['approver_role']}"
+        return {"status": "pending_approval", "decision_id": decision["decision_id"], "tier": policy["tier"],
+                "option": scenario["option_name"], "amount": total, "approver_role": policy["approver_role"],
+                "approvers_notified": 0, "channel": "gemini",
+                "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, who, True, request_id,
+                                                                   "gemini"),
+                "next_step": "Show `display_markdown` exactly. The approver decides in this app (My approvals). "
+                             "Do NOT call the fulfilment_agent tool."}
     min_buffer = repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24)
     message = _approval_message(launch, scenario, lines, request_id, justification, min_buffer)
     try:
@@ -172,9 +186,78 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
     return {"status": "pending_approval", "decision_id": decision["decision_id"], "tier": policy["tier"],
             "option": scenario["option_name"], "amount": total, "approver_role": policy["approver_role"],
             "approvers_notified": len(sent),
-            "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, who, True, request_id),
+            "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, who, True, request_id,
+                                                               config.APPROVAL_CHANNEL),
             "next_step": "Show `display_markdown` exactly. "
                          "Never write an email address or a person's name. Do NOT call the fulfilment_agent tool."}
+
+
+# ---------------------------------------------------------------------------- deciding inside the Gemini Enterprise app
+def _allowed_roles(repo, user_id: str, roles) -> set:
+    """The roles among `roles` that this signed-in user may decide for. With APPROVAL_CHECK_USER off, every role."""
+    if not config.APPROVAL_CHECK_USER:
+        return set(roles)
+    me = (user_id or "").strip().lower()
+    return {r for r in roles if me and me in [e.lower() for e in repo.get_approver_emails(r)]}
+
+
+def my_approvals(repo, user_id: str) -> dict:
+    if config.APPROVAL_CHANNEL == "email":
+        return {"status": "off", "display_markdown": "Approvals are done by email. Open the approval email and click Approve or Reject."}
+    pending = repo.list_pending_decisions()
+    ok = _allowed_roles(repo, user_id, {d["approver_role"] for d in pending})
+    rows = []
+    for d in pending:
+        if d["approver_role"] not in ok:
+            continue
+        s = repo.get_scenario(d["scenario_id"]) or {}
+        req = repo.get_request(d["request_id"]) or {}
+        launch = repo.get_launch(req.get("launch_id")) or {}
+        rows.append({"request_id": d["request_id"], "campaign": launch.get("launch_name", ""), "option": s.get("option_name", d["option_code"]),
+                     "amount": float(d["amount"]), "arrives": s.get("delivery_date"), "buffer_hours": s.get("buffer_hours", 0),
+                     "carbon_kg": s.get("carbon_kg", 0), "role": d["approver_role"]})
+    if not rows:
+        why = ("" if not pending or not config.APPROVAL_CHECK_USER else " Requests are only shown to the approver they are meant for.")
+        return {"status": "none", "display_markdown": "✅ **You have no approvals waiting.**" + why}
+    return {"status": "ok", "count": len(rows), "display_markdown": presentation.approvals_markdown(rows)}
+
+
+def decide_in_app(repo, user_id: str, request_id: str, answer: str, comment: str = "") -> dict:
+    if config.APPROVAL_CHANNEL == "email":
+        return {"status": "error", "message": "Approvals are done by email. Ask the approver to use the buttons in the approval email."}
+    ans = {"approve": "APPROVED", "approved": "APPROVED", "reject": "REJECTED", "rejected": "REJECTED"}.get((answer or "").strip().lower())
+    if not ans:
+        return {"status": "error", "message": "Say Approve or Reject."}
+    d = repo.get_decision_for_request(request_id)
+    if not d:
+        return {"status": "error", "message": f"No sign-off was requested for '{request_id}'."}
+    if d["status"] != "PENDING":
+        return {"status": "error", "message": f"This request is already {d['status'].lower()}; it cannot be decided again."}
+    if not _allowed_roles(repo, user_id, {d["approver_role"]}):
+        _audit(repo, request_id, "orchestrator", "approval_refused", role=d["approver_role"], user=str(user_id)[:80])
+        return {"status": "error", "message": f"Only the {d['approver_role']} can decide this request, and I could not match your sign-in "
+                                              "to that role. Nothing was changed."}
+    by = f"{d['approver_role']} (in app)"
+    if not repo.decide(d["decision_id"], ans, by, (comment or "decided in the app")[:200]):
+        return {"status": "error", "message": "The sign-off has expired or was decided a moment ago. Ask for the status."}
+    if ans == "REJECTED":
+        released = repo.release_holds(request_id)
+        _audit(repo, request_id, f"human:{d['approver_role']}", "launch_rejected", decision_id=d["decision_id"],
+               depot_units_released=released, user=str(user_id)[:80], channel="gemini")
+        return {"status": "rejected", "request_id": request_id,
+                "display_markdown": two_lines_md(f"❌ **Rejected by the {d['approver_role']}.**",
+                                                 "Nothing was bought and the held stock is free again."),
+                "next_step": "Tell the requester it was rejected and offer to re-plan."}
+    _audit(repo, request_id, f"human:{d['approver_role']}", "launch_approved", decision_id=d["decision_id"],
+           amount=float(d["amount"]), option=d["option_code"], tier=d["tier"], user=str(user_id)[:80], channel="gemini")
+    return {"status": "approved", "request_id": request_id,
+            "display_markdown": two_lines_md(f"✅ **Approved by the {d['approver_role']}.** {presentation.money(d['amount'])}",
+                                             "I am placing the orders now."),
+            "next_step": "Approved. Now call the fulfilment_agent tool with the request_id to place the orders."}
+
+
+def two_lines_md(first: str, second: str) -> str:
+    return presentation.two_lines(first, second)
 
 
 # ---------------------------------------------------------------------------- reading the workflow's answer
@@ -272,7 +355,8 @@ def status(repo, request_id: str, executor=None) -> dict:
            "depot_transfers": [t["transfer_number"] for t in repo.list_transfers(request_id)]}
     scenario = repo.get_scenario(d["scenario_id"]) or {}
     placed = bool(lines) and done == len(lines)
-    shown_note = None if note in (None, "", "decided by the approver", "within the autopilot limit") else note
+    shown_note = None if note in (None, "", "decided by the approver", "decided in the app", "within the autopilot limit",
+                                  _IN_APP_NOTE) else note
     out["display_markdown"] = presentation.status_markdown(
         request_id, d, scenario.get("option_name", ""), len(repo.list_pos(request_id)), len(repo.list_transfers(request_id)),
         placed, shown_note)

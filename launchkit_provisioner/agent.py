@@ -14,6 +14,7 @@ from .sub_agents.brief_analyst_agent import brief_analyst_agent
 from .sub_agents.fulfilment_agent import fulfilment_agent
 from .sub_agents.sourcing_planner_agent import sourcing_planner_agent
 from .tools.brief_tools import create_campaign, open_campaign, register_launch_request
+from .tools.approval_tools import decide_approval, get_my_approvals
 from .tools.decision_tools import authorize_launch, get_launch_status, get_order_pack
 from .tools.orchestration_tools import (get_approval_rules, get_audit_trail, get_catalog, get_launch_overview, get_vendor_report,
                                         get_catalog, show_capabilities, show_checklist)
@@ -47,7 +48,7 @@ a user message, then follow it exactly:
   - collecting-details: the user is describing a new campaign or a quick purchase, or is still answering questions
   - existing-campaigns: adding to the London, US or Singapore campaign (or any existing one), or asking which campaigns exist
   - plan-and-advice: the details are closed and they picked what they need; changes, another date, vendor delays before approval
-  - approval-and-orders: choosing an option, approval, placing the orders, status, the order pack PDF
+  - approval-and-orders: choosing an option, approval (also "My approvals", Approve or Reject inside this app), placing the orders, status, the order pack PDF
   - quick-answers: status board, warehouse stock, what happened so far, approval levels, the vendor comparison
 If the message is only a greeting, do not load a skill: just show the greeting.
 
@@ -99,7 +100,7 @@ root_agent = LlmAgent(
                 "Integration.",
     instruction=_instruction,
     tools=[register_launch_request, create_campaign, open_campaign, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
-           get_vendor_report, get_catalog, authorize_launch, get_launch_status, get_order_pack]
+           get_vendor_report, get_catalog, authorize_launch, get_launch_status, get_order_pack, get_my_approvals, decide_approval]
     + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)] + ([skills] if skills is not None else []),
     on_tool_error_callback=on_tool_error,
     after_tool_callback=attach_pack_after_orders,

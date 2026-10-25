@@ -137,7 +137,8 @@ def execute_plan(repo, executor, request_id: str) -> dict:
     if placed_now and not remaining:
         all_pos, all_tr = repo.list_pos(request_id), repo.list_transfers(request_id)
         subject, body = _update_email(repo, launch, scenario, all_pos, all_tr, scenario["savings_usd"], request_id)
-        for email in repo.get_approver_emails(TEAM_ROLE):
+        # In "gemini" mode the confirmation is the chat reply and the order pack PDF: no launch-team email.
+        for email in ([] if config.APPROVAL_CHANNEL == "gemini" else repo.get_approver_emails(TEAM_ROLE)):
             try:
                 executor.execute(config.UPDATE_TRIGGER, {
                     "request_id": request_id, "launch_id": launch["launch_id"], "recipient_email": email,

@@ -891,9 +891,39 @@ def plan_lead(repo, request_id: str, scenarios: list[dict], policies: list[dict]
     return plan_markdown(repo, request_id, scenarios, policies, min_buffer).split("\n\n")[0]
 
 
-def sign_off_markdown(scenario: dict, policies: list[dict], policy: dict, who: str, human: bool, request_id: str) -> str:
+def sign_off_markdown(scenario: dict, policies: list[dict], policy: dict, who: str, human: bool, request_id: str,
+                      channel: str = "email") -> str:
+    """The sign-off reply. channel: "email" (approval email), "gemini" (approved in this app) or "both"."""
     body = sign_off_body(scenario, policies, policy, who, human, request_id).split("\n", 2)[2].lstrip("\n")
-    return sign_off_lead(scenario, policies, policy, who, human, request_id).split("\n\n")[0] + "\n\n" + body
+    lead = sign_off_lead(scenario, policies, policy, who, human, request_id).split("\n\n")[0]
+    out = lead + "\n\n" + body
+    if human and channel == "gemini":
+        for old, new in (
+                ("📧 An email with Approve and Reject buttons is sent. Nothing is bought until it is approved.",
+                 "📥 It waits in this app: the approver opens **My approvals** and chooses Approve or Reject. Nothing is bought until it is approved."),
+                (f"📧 **An email with Approve and Reject buttons is on its way to {who}.**",
+                 f"📥 **The request is waiting in My approvals for {who}.**"),
+                ("| 1 | Email sent to the approver | ✅ Done |", "| 1 | Request placed in My approvals | ✅ Done |"),
+                ("| 2 | Approver clicks **Approve** or **Reject** | ⏳ Waiting |",
+                 "| 2 | Approver says **Approve** or **Reject** in this app | ⏳ Waiting |")):
+            out = out.replace(old, new)
+    elif human and channel == "both":
+        out = out.replace("Nothing is bought until it is approved.", "The approver can also decide in this app: **My approvals**. "
+                          "Nothing is bought until it is approved.", 1)
+    return out
+
+
+def approvals_markdown(rows: list[dict]) -> str:
+    """The approver's list: one row per request waiting for them. rows: request_id, campaign, option, amount, arrives, buffer_hours,
+    carbon_kg, role."""
+    first = f"📥 **My approvals: {plural(len(rows), 'request')} waiting**"
+    second = "Say **Approve** or **Reject** followed by the request number, for example *Approve " + rows[0]["request_id"] + "*."
+    table = ["| 🧾 Request | 🎪 Campaign | 🛒 Choice | 💵 Amount | 📅 Arrives | ⏳ Spare time | 🌱 CO₂ (making + shipping) |",
+             "|---|---|---|---|---|---|---|"]
+    for r in rows:
+        table.append(f"| **{r['request_id']}** | {r['campaign']} | {r['option']} | **{money(r['amount'])}** | {day(r['arrives'])} | "
+                     f"{spare(r['buffer_hours'])} | {float(r['carbon_kg']):,.0f} kg |")
+    return two_lines(first, second) + "\n\n" + "\n".join(table)
 
 
 def order_summary(repo, request_id: str, scenario: dict, decision: dict, update_sent_to: list, failed: list) -> str:

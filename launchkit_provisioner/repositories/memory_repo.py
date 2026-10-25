@@ -185,6 +185,9 @@ class MemoryRepository(Repository):
         rows = [d for d in self.t["decisions"] if d["request_id"] == request_id]
         return dict(rows[-1]) if rows else None
 
+    def list_pending_decisions(self):
+        return [dict(d) for d in self.t["decisions"] if d["status"] == "PENDING" and d["expires_at"] > now()]
+
     def decide(self, decision_id, status, decided_by, note=""):
         for d in self.t["decisions"]:
             if d["decision_id"] == decision_id and d["status"] == "PENDING" and d["expires_at"] > now():

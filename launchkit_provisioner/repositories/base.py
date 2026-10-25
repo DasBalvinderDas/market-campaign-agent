@@ -62,6 +62,7 @@ class Repository:
     def create_decision(self, decision: dict) -> None: raise NotImplementedError
     def get_decision(self, decision_id: str) -> dict | None: raise NotImplementedError
     def get_decision_for_request(self, request_id: str) -> dict | None: raise NotImplementedError
+    def list_pending_decisions(self) -> list[dict]: raise NotImplementedError
     def decide(self, decision_id: str, status: str, decided_by: str, note: str = "") -> bool: raise NotImplementedError
     def set_decision_note(self, decision_id: str, status: str, note: str) -> None: raise NotImplementedError
 

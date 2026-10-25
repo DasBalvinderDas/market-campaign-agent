@@ -139,6 +139,33 @@ Ordering on 21 Oct for 15 Nov.
 - Numbers come from the data.
 - They differ from the demo pack's mock-up.
 
+## Approving inside the app
+
+Set this in `.env`, then deploy again.
+
+```
+APPROVAL_CHANNEL=gemini
+```
+
+| Value | What happens |
+|---|---|
+| email | Approval email with buttons. The default. |
+| gemini | No emails. The approver decides in the chat. |
+| both | Email and in-app. |
+
+- The approver says **My approvals**.
+- The agent lists the waiting requests.
+- The approver says **Approve REQ-…** or **Reject REQ-…**.
+- Then the agent places the orders.
+- The approver's address must be on the approver list.
+- Add it: `python scripts/setup_bigquery.py --approver-email you@example.com`
+- Set `APPROVAL_CHECK_USER=false` to skip that check.
+- Use that only for a demo.
+- No launch-team email is sent in gemini mode.
+- The reply and the order pack PDF are the confirmation.
+- This is not the Gemini Enterprise Inbox page.
+- That page shows agent tasks and workflow runs.
+
 ## Not in this demo
 
 - Cost-center budget check

@@ -250,6 +250,10 @@ class BigQueryRepository(Repository):
                          "ORDER BY created_at DESC LIMIT 1", rid=request_id)
         return rows[0] if rows else None
 
+    def list_pending_decisions(self):
+        return self._run(f"SELECT {self._DECISION_COLS} FROM `{{ds}}.decisions` WHERE status = 'PENDING' "
+                         "AND expires_at > CURRENT_TIMESTAMP() ORDER BY created_at")
+
     def decide(self, decision_id, status, decided_by, note=""):
         """Atomic: only the first decision on a PENDING, unexpired sign-off wins."""
         affected = self._dml("UPDATE `{ds}.decisions` SET status = @status, decided_by = @by, decided_at = @ts, "

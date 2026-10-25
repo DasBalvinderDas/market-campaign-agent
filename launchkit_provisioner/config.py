@@ -24,6 +24,14 @@ APPROVAL_TTL_HOURS = float(os.getenv("APPROVAL_TTL_HOURS", "72"))
 # Empty: Agent Engine's default service agent is used.
 AGENT_SERVICE_ACCOUNT = os.getenv("AGENT_SERVICE_ACCOUNT", "")
 
+# Where approvals and order confirmations go: "email" (approval email with buttons, launch-team email), "gemini" (inside the
+# Gemini Enterprise app: the approver says Approve or Reject in the agent; no emails) or "both".
+_CHANNEL = os.getenv("APPROVAL_CHANNEL", "email").strip().lower()
+APPROVAL_CHANNEL = _CHANNEL if _CHANNEL in ("email", "gemini", "both") else "email"
+# In "gemini" or "both" mode, only a signed-in user whose address is on the approver list for the role may decide.
+# Set it to false to let anyone in the chat decide (demo only).
+APPROVAL_CHECK_USER = os.getenv("APPROVAL_CHECK_USER", "true").strip().lower() not in ("false", "0", "no")
+
 # Notification emails: "Role=a@x.com,b@x.com;Other Role=c@x.com" (or just "a@x.com" for every role).
 APPROVER_EMAILS = os.getenv("APPROVER_EMAILS", "")
 

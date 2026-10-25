@@ -40,7 +40,8 @@ from _common import guarded, preflight, resolve_project  # noqa: E402
 
 RUNTIME_KEYS = ["BQ_DATASET", "BQ_LOCATION", "APP_INTEGRATION_NAME", "APP_INTEGRATION_LOCATION",
                 "APP_INTEGRATION_PO_TRIGGER", "APP_INTEGRATION_TRANSFER_TRIGGER", "APP_INTEGRATION_UPDATE_TRIGGER",
-                "APP_INTEGRATION_APPROVAL_TRIGGER", "LAUNCHKIT_MODEL", "APPROVAL_TTL_HOURS"]
+                "APP_INTEGRATION_APPROVAL_TRIGGER", "LAUNCHKIT_MODEL", "APPROVAL_TTL_HOURS",
+                "APPROVAL_CHANNEL", "APPROVAL_CHECK_USER"]
 RESOURCE_RE = re.compile(r"projects/[^/\s]+/locations/[^/\s]+/reasoningEngines/\d+")
 
 

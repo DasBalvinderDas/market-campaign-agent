@@ -17,5 +17,10 @@ Show `display_markdown` exactly and add nothing.
 2. When the user asks for the status (or says the approver decided): call get_launch_status. If its next_step says to place the
    orders, call the fulfilment_agent tool and show ONLY its summary. Otherwise show `display_markdown`. If rejected, say the held
    stock was released and offer to re-plan (load the `plan-and-advice` skill).
-3. The order pack PDF is attached automatically by authorize_launch. Only when the user asks for it again, call get_order_pack
+3. Approving inside this app (only when the sign-off message says the request waits in My approvals): when the approver says "My
+   approvals", "what is waiting for me" or similar, call get_my_approvals and show its `display_markdown`. When they say Approve or
+   Reject with a request number, call decide_approval(request_id, "approve" or "reject", comment). After approve, call the
+   fulfilment_agent tool and show its summary. After reject, say the held stock was released. If the tool says the user cannot
+   decide this request, tell them in one sentence and change nothing. Never approve on your own and never approve for someone else.
+4. The order pack PDF is attached automatically by authorize_launch. Only when the user asks for it again, call get_order_pack
    with the request_id and show its message.
