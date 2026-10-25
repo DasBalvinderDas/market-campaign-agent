@@ -59,6 +59,34 @@ The step names may differ in your console. Adjust as needed.
     *Reject request {request number}. The approver is {approver address}.*
 13. Publish and share it with the team.
 
+## Fastest way: describe it in words
+
+The console can build a workflow from a plain description.
+Open **Workflow**, choose the natural language option, and paste this:
+
+> Build a workflow called "LaunchKit order approval".
+> The start form asks for a request number and an option number.
+> Step 1: run the agent LaunchKit-Provisioner with the instruction
+> "Choose option {option} for request {request number}".
+> Step 2: ask the VP Product Marketing to approve or reject request {request number}.
+> If approved, Step 3: run the agent LaunchKit-Provisioner with the instruction
+> "Approve request {request number}. The approver is {approver address}. Then place the orders."
+> If rejected, Step 3: run the agent with the instruction
+> "Reject request {request number}. The approver is {approver address}."
+> Show the agent's last reply as the result.
+
+Then check each step in the builder and fix what is wrong.
+
+## What lives in Application Integration
+
+- This workflow is not built by `setup_application_integration.py`.
+- It is a Gemini Enterprise workflow, not an Application Integration one.
+- I found no API to create it from a script.
+- Application Integration keeps its four triggers.
+- `create_purchase_order` and `create_depot_transfer` place the orders.
+- `send_launch_update` sends the notice emails.
+- `request_approval` is used only with `APPROVAL_CHANNEL=email` or `both`.
+
 ## How the agent checks the answer
 
 - The agent reads the approver address from step 10 or 12.
