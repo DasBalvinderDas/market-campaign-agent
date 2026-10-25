@@ -105,8 +105,11 @@ def approval_waiting_email(repo, launch, scenario, request_id, approver_role) ->
     rows = [("Request", f"<b>{escape(request_id)}</b>"), ("Choice", escape(scenario["option_name"])),
             ("Total", p.money(scenario["total_cost"])), ("Everything arrives", p.day(scenario["delivery_date"])),
             ("Needs", escape(approver_role))]
-    inner = ('<p style="margin-top:0">An order is waiting for your approval. Open <b>Gemini Enterprise</b> and look in your '
-             '<b>Inbox</b> under <b>Needs input</b> to approve or reject it. Nothing is bought until it is approved.</p>' + _kv(rows))
+    steps = ('<ol style="margin:12px 0 0 18px;padding:0"><li>Open <b>Gemini Enterprise</b> and choose <b>Workflow</b>.</li>'
+             f'<li>Start <b>LaunchKit order approval</b> with the request number <b>{escape(request_id)}</b>.</li>'
+             '<li>Open your <b>Inbox</b>, look under <b>Needs input</b>, and choose <b>Approve</b> or <b>Reject</b>.</li></ol>')
+    inner = ('<p style="margin-top:0">An order is waiting for your approval. Nothing is bought until it is approved.</p>'
+             + _kv(rows) + steps)
     return subject, _page("#4338ca", "APPROVAL WAITING", launch["launch_name"], inner)
 
 

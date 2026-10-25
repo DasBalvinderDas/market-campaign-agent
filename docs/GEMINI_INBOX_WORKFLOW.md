@@ -4,11 +4,15 @@ Status: to test. The code is ready. The workflow is built in the console.
 
 ## The idea
 
-- A workflow runs our agent in two steps.
-- Between them, a human approval step asks the VP.
-- That step shows in the app Inbox as **Needs input**.
-- The VP approves or rejects there.
-- No email is needed.
+- A workflow runs our agent in three steps.
+- The person running it is the approver.
+- Between the steps, an approval step asks that person.
+- It shows in their Inbox as **Needs input**.
+- They approve or reject there.
+- A notice email gives them the request number.
+
+Found while testing: an approval step can only ask the person running the workflow.
+It cannot route to another person. So the VP starts the workflow.
 
 ## The defaults
 
@@ -37,27 +41,29 @@ APPROVAL_NOTIFY_EMAIL=true
 - It tells the user the request waits in the Inbox.
 - Later it accepts the answer from the workflow.
 
+## Who does what
+
+1. The requester chats with the assistant and chooses an option.
+2. The reply says the request waits in the Inbox.
+3. A notice email gives the VP the request number.
+4. The VP starts the workflow with that number.
+5. The VP approves or rejects in the Inbox.
+6. The workflow places the orders.
+
 ## Build the workflow in the console
 
 The step names may differ in your console. Adjust as needed.
 
 1. Open **Workflow** in the left menu.
-2. Add a start form with two fields.
-3. The fields are **Request number** and **Option**.
-4. Add an **existing agent** step. Pick the assistant.
-5. Its instruction:
-   *Choose Option {option} for request {request number} and show the reply.*
-6. Add a **human approval** step.
-7. Assign it to the VP.
-8. Its question:
-   *Approve request {request number}?*
-9. Add a second **existing agent** step.
-10. Its instruction, when approved:
-    *Approve request {request number}. The approver is {approver address}. Then place the orders.*
-11. Add a branch for rejection.
-12. Its instruction:
-    *Reject request {request number}. The approver is {approver address}.*
-13. Publish and share it with the team.
+2. Add a start form with one field: **Request number**.
+3. Add an **existing agent** step. Pick the assistant.
+4. Its instruction: *Show my approvals for request {request number}.*
+5. Add a **human approval** step. It asks the person running the workflow.
+6. Show step 3's reply in the question.
+7. Add a second **existing agent** step for approval.
+8. Its instruction: *Approve request {request number}. Then place the orders.*
+9. Add a branch for rejection with: *Reject request {request number}.*
+10. Publish and share it with the approvers.
 
 ## Fastest way: describe it in words
 
@@ -65,14 +71,14 @@ The console can build a workflow from a plain description.
 Open **Workflow**, choose the natural language option, and paste this:
 
 > Build a workflow called "LaunchKit order approval".
-> The start form asks for a request number and an option number.
-> Step 1: run the agent LaunchKit-Provisioner with the instruction
-> "Choose option {option} for request {request number}".
-> Step 2: ask the VP Product Marketing to approve or reject request {request number}.
-> If approved, Step 3: run the agent LaunchKit-Provisioner with the instruction
-> "Approve request {request number}. The approver is {approver address}. Then place the orders."
-> If rejected, Step 3: run the agent with the instruction
-> "Reject request {request number}. The approver is {approver address}."
+> The start form asks for a request number.
+> Step 1: run the existing agent LaunchKit-Provisioner with the instruction
+> "Show my approvals for request {request number}".
+> Step 2: ask the person running the workflow to approve or reject, and show the reply of step 1.
+> If approved, Step 3: run the existing agent LaunchKit-Provisioner with the instruction
+> "Approve request {request number}. Then place the orders."
+> If rejected, Step 3: run the existing agent with the instruction
+> "Reject request {request number}."
 > Show the agent's last reply as the result.
 
 Then check each step in the builder and fix what is wrong.
@@ -108,8 +114,8 @@ Not confirmed. The script `scripts/probe_workflow_api.py` finds out.
 
 ## How the agent checks the answer
 
-- The agent reads the approver address from step 10 or 12.
-- That address must be on the approver list.
+- The agent steps run as the person who started the workflow.
+- That person's sign-in must be on the approver list.
 - Otherwise the agent refuses and logs it.
 - Add the VP to the list:
   `python scripts/setup_bigquery.py --approver-email vp@example.com`

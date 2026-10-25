@@ -900,12 +900,13 @@ def sign_off_markdown(scenario: dict, policies: list[dict], policy: dict, who: s
     if human and channel == "workflow":
         for old, new in (
                 ("📧 An email with Approve and Reject buttons is sent. Nothing is bought until it is approved.",
-                 "📥 It waits in your **Gemini Enterprise Inbox** under **Needs input**. Nothing is bought until it is approved."),
+                 f"📥 The approver starts **LaunchKit order approval** in Workflow with request **{request_id}**. The approval then waits in the "
+                 "Inbox under **Needs input**. Nothing is bought until it is approved."),
                 (f"📧 **An email with Approve and Reject buttons is on its way to {who}.**",
-                 f"📥 **The request is waiting for {who} in the Inbox (Needs input).**"),
-                ("| 1 | Email sent to the approver | ✅ Done |", "| 1 | Request placed in the Inbox | ✅ Done |"),
+                 f"📥 **{who[0].upper() + who[1:]} approves in the Inbox: start the LaunchKit order approval workflow with request {request_id}.**"),
+                ("| 1 | Email sent to the approver | ✅ Done |", "| 1 | Request recorded and the approver told | ✅ Done |"),
                 ("| 2 | Approver clicks **Approve** or **Reject** | ⏳ Waiting |",
-                 "| 2 | Approver chooses **Approve** or **Reject** in the Inbox | ⏳ Waiting |")):
+                 "| 2 | Approver runs the workflow, then chooses **Approve** or **Reject** in the Inbox | ⏳ Waiting |")):
             out = out.replace(old, new)
     elif human and channel == "gemini":
         for old, new in (
