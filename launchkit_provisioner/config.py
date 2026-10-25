@@ -28,11 +28,11 @@ AGENT_SERVICE_ACCOUNT = os.getenv("AGENT_SERVICE_ACCOUNT", "")
 # Gemini Enterprise app: the approver says Approve or Reject in the agent; no emails) or "both".
 # "workflow": the approval is a human step of a Gemini Enterprise workflow, so it shows in the app's Inbox ("Needs input"); the
 # workflow's last agent step records the answer (see docs/GEMINI_INBOX_WORKFLOW.md).
-_CHANNEL = os.getenv("APPROVAL_CHANNEL", "email").strip().lower()
-APPROVAL_CHANNEL = _CHANNEL if _CHANNEL in ("email", "gemini", "both", "workflow") else "email"
-# "gemini" and "workflow" send no email. Set this to true to also send a plain notice (no buttons) to the approvers and the
-# launch team: "an approval is waiting in your Inbox" and "orders placed".
-APPROVAL_NOTIFY_EMAIL = os.getenv("APPROVAL_NOTIFY_EMAIL", "false").strip().lower() in ("true", "1", "yes")
+_CHANNEL = os.getenv("APPROVAL_CHANNEL", "workflow").strip().lower()
+APPROVAL_CHANNEL = _CHANNEL if _CHANNEL in ("email", "gemini", "both", "workflow") else "workflow"
+# "gemini" and "workflow" send no approval email with buttons. This (on by default) sends a plain notice instead, with no buttons,
+# to the approvers and the launch team: "an approval is waiting in your Inbox" and "orders placed". Set it to false for no email.
+APPROVAL_NOTIFY_EMAIL = os.getenv("APPROVAL_NOTIFY_EMAIL", "true").strip().lower() in ("true", "1", "yes")
 # In "gemini" or "both" mode, only a signed-in user whose address is on the approver list for the role may decide.
 # Set it to false to let anyone in the chat decide (demo only).
 APPROVAL_CHECK_USER = os.getenv("APPROVAL_CHECK_USER", "true").strip().lower() not in ("false", "0", "no")

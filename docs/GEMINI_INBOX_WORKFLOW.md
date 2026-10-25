@@ -10,26 +10,29 @@ Status: to test. The code is ready. The workflow is built in the console.
 - The VP approves or rejects there.
 - No email is needed.
 
-## Turn it on
+## The defaults
 
-In `.env`:
+This is how the agent ships. No `.env` lines are needed.
 
 ```
 APPROVAL_CHANNEL=workflow
-APPROVAL_NOTIFY_EMAIL=false
+APPROVAL_NOTIFY_EMAIL=true
 ```
 
-Then deploy the agent again.
-
-- `APPROVAL_NOTIFY_EMAIL=true` adds a plain notice email.
-- The notice has no buttons.
+- The approval happens in the Inbox.
+- A plain notice email goes to the approvers.
+- It has no buttons.
 - It says an approval waits in the Inbox.
-- It also sends the orders-placed email.
+- The orders-placed email goes to the launch team.
+- `APPROVAL_NOTIFY_EMAIL=false` turns all of it off.
+- `APPROVAL_CHANNEL=email` brings back the approval email with buttons.
+- If the workflow is not built yet, the VP can say **My approvals** in the chat.
+- Deploy the agent again after any change.
 
 ## What the agent does in this mode
 
 - It records the sign-off as waiting.
-- It sends no approval email.
+- It sends no approval email with buttons.
 - It starts no approval workflow.
 - It tells the user the request waits in the Inbox.
 - Later it accepts the answer from the workflow.
@@ -76,4 +79,4 @@ The step names may differ in your console. Adjust as needed.
 - Anyone who can call the agent could name an approver.
 - The list check lowers the risk. It does not remove it.
 - The email approval keeps the stronger record.
-- Keep `APPROVAL_CHANNEL=email` for anything real.
+- Use `APPROVAL_CHANNEL=email` for anything real.

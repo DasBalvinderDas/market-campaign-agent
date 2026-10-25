@@ -1,4 +1,6 @@
 """Approving inside the Gemini Enterprise app (APPROVAL_CHANNEL=gemini or both)."""
+import os
+
 import pytest
 from conftest import FakeExecutor
 from launchkit_provisioner import config, decision_flow, execution
@@ -107,3 +109,13 @@ def test_notice_email_is_optional_and_has_no_buttons(repo, aurora, workflow, mon
     body = sent[0]["email_body"]
     assert "Inbox" in body and "Needs input" in body and "Approve</a>" not in body and "href" not in body
     assert sent[0]["recipient_email"] == "vp@example.com" and "Approval waiting" in sent[0]["email_subject"]
+
+
+def test_the_shipped_defaults_are_the_inbox_workflow_with_notice_emails():
+    import subprocess
+    import sys
+    env = {k: v for k, v in os.environ.items() if not k.startswith("APPROVAL_")}
+    out = subprocess.run([sys.executable, "-c", "from launchkit_provisioner import config as c; "
+                          "print(c.APPROVAL_CHANNEL, c.APPROVAL_NOTIFY_EMAIL, c.APPROVAL_CHECK_USER)"],
+                         capture_output=True, text=True, env=env, cwd=os.path.dirname(os.path.dirname(__file__)))
+    assert out.stdout.split() == ["workflow", "True", "True"], out.stderr
