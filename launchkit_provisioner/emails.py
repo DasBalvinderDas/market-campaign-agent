@@ -98,6 +98,18 @@ def _vendors_html(repo, scenario, lines) -> str:
 
 
 # ---------------------------------------------------------------------------- the approval request
+def approval_waiting_email(repo, launch, scenario, request_id, approver_role) -> tuple[str, str]:
+    """(subject, html): a plain notice, no buttons. The approval itself is done in the Gemini Enterprise app."""
+    p = presentation
+    subject = f"Approval waiting: {launch['launch_name']}"
+    rows = [("Request", f"<b>{escape(request_id)}</b>"), ("Choice", escape(scenario["option_name"])),
+            ("Total", p.money(scenario["total_cost"])), ("Everything arrives", p.day(scenario["delivery_date"])),
+            ("Needs", escape(approver_role))]
+    inner = ('<p style="margin-top:0">An order is waiting for your approval. Open <b>Gemini Enterprise</b> and look in your '
+             '<b>Inbox</b> under <b>Needs input</b> to approve or reject it. Nothing is bought until it is approved.</p>' + _kv(rows))
+    return subject, _page("#4338ca", "APPROVAL WAITING", launch["launch_name"], inner)
+
+
 def approval_email(repo, launch, scenario, lines, request_id, justification, approver_role, url, amount_rule) -> tuple[str, str]:
     """(subject, html). Two buttons, both open the approval page where the approver confirms with one click."""
     p = presentation

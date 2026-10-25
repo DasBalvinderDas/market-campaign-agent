@@ -69,3 +69,41 @@ def test_email_mode_is_unchanged_and_refuses_in_app_decisions(repo, aurora, monk
     _vp(repo)
     assert decision_flow.my_approvals(repo, "vp@example.com")["status"] == "off"
     assert decision_flow.decide_in_app(repo, "vp@example.com", aurora, "approve")["status"] == "error"
+
+
+@pytest.fixture
+def workflow(monkeypatch):
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "workflow")
+    monkeypatch.setattr(config, "APPROVAL_CHECK_USER", True)
+    monkeypatch.setattr(config, "APPROVAL_NOTIFY_EMAIL", False)
+
+
+def test_workflow_mode_waits_in_the_inbox_with_no_email(repo, aurora, workflow):
+    _vp(repo)
+    ex = FakeExecutor()
+    out = decision_flow.authorize(repo, ex, aurora, "2", "x")
+    md = out["display_markdown"]
+    assert out["status"] == "pending_approval" and out["channel"] == "workflow" and not ex.calls
+    assert "Inbox" in md and "Needs input" in md and "@" not in md
+
+
+def test_workflow_answer_names_the_approver_who_clicked(repo, aurora, workflow):
+    _vp(repo)
+    decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
+    # the workflow's last step runs as someone else: the named approver is what counts
+    bad = decision_flow.decide_in_app(repo, "runner@example.com", aurora, "approve", approver="nobody@example.com")
+    assert bad["status"] == "error" and repo.get_decision_for_request(aurora)["status"] == "PENDING"
+    ok = decision_flow.decide_in_app(repo, "runner@example.com", aurora, "approve", approver="VP@example.com")
+    assert ok["status"] == "approved" and repo.get_decision_for_request(aurora)["decided_by"] == "VP Product Marketing (Inbox)"
+
+
+def test_notice_email_is_optional_and_has_no_buttons(repo, aurora, workflow, monkeypatch):
+    _vp(repo)
+    monkeypatch.setattr(config, "APPROVAL_NOTIFY_EMAIL", True)
+    ex = FakeExecutor()
+    out = decision_flow.authorize(repo, ex, aurora, "2", "x")
+    sent = [i for t, i in ex.calls if t.endswith("send_launch_update")]
+    assert out["approvers_notified"] == 1 and len(sent) == 1
+    body = sent[0]["email_body"]
+    assert "Inbox" in body and "Needs input" in body and "Approve</a>" not in body and "href" not in body
+    assert sent[0]["recipient_email"] == "vp@example.com" and "Approval waiting" in sent[0]["email_subject"]

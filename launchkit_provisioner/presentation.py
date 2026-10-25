@@ -897,7 +897,17 @@ def sign_off_markdown(scenario: dict, policies: list[dict], policy: dict, who: s
     body = sign_off_body(scenario, policies, policy, who, human, request_id).split("\n", 2)[2].lstrip("\n")
     lead = sign_off_lead(scenario, policies, policy, who, human, request_id).split("\n\n")[0]
     out = lead + "\n\n" + body
-    if human and channel == "gemini":
+    if human and channel == "workflow":
+        for old, new in (
+                ("📧 An email with Approve and Reject buttons is sent. Nothing is bought until it is approved.",
+                 "📥 It waits in your **Gemini Enterprise Inbox** under **Needs input**. Nothing is bought until it is approved."),
+                (f"📧 **An email with Approve and Reject buttons is on its way to {who}.**",
+                 f"📥 **The request is waiting for {who} in the Inbox (Needs input).**"),
+                ("| 1 | Email sent to the approver | ✅ Done |", "| 1 | Request placed in the Inbox | ✅ Done |"),
+                ("| 2 | Approver clicks **Approve** or **Reject** | ⏳ Waiting |",
+                 "| 2 | Approver chooses **Approve** or **Reject** in the Inbox | ⏳ Waiting |")):
+            out = out.replace(old, new)
+    elif human and channel == "gemini":
         for old, new in (
                 ("📧 An email with Approve and Reject buttons is sent. Nothing is bought until it is approved.",
                  "📥 It waits in this app: the approver opens **My approvals** and chooses Approve or Reject. Nothing is bought until it is approved."),
