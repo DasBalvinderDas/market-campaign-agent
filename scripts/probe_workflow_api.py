@@ -2,6 +2,7 @@
 """Find out if the Gemini Enterprise workflow (the Inbox approval) can be created from a script. Safe by default: it only reads.
 
   python scripts/probe_workflow_api.py --inspect                  # does the API have a create method for workflow agents?
+  python scripts/probe_workflow_api.py --inspect --schema Agent   # ...and what an agent looks like (fields and types)
   python scripts/probe_workflow_api.py --engine APP_ID --list     # the agents in your Gemini Enterprise app
   python scripts/probe_workflow_api.py --engine APP_ID --export "LaunchKit order approval" --out workflows/order_approval.json
   python scripts/probe_workflow_api.py --engine APP_ID --create workflows/order_approval.json            # dry run
@@ -66,6 +67,32 @@ def verdict(doc: dict) -> tuple[bool, list[str]]:
     return ok, lines
 
 
+def fetch_discovery(http, base: str) -> dict:
+    """The API description is public: read it without your sign-in first (your account may lack the quota-project permission),
+    then with it."""
+    import requests
+    url = f"{base}/$discovery/rest?version=v1alpha"
+    try:
+        r = requests.get(url, timeout=30)
+        if r.status_code == 200:
+            return r.json()
+    except requests.RequestException:
+        pass
+    return _show(http.get(url))
+
+
+def schema_lines(doc: dict, needle: str) -> list[str]:
+    """Schemas whose name contains `needle` (case-insensitive) with every property and its type."""
+    out = []
+    for name, s in (doc.get("schemas") or {}).items():
+        if needle.lower() in name.lower():
+            out.append(name)
+            for prop, spec in sorted((s.get("properties") or {}).items()):
+                kind = spec.get("$ref") or spec.get("type") or "?"
+                out.append(f"    {prop}: {kind}" + (f"  ({spec['description'][:70]})" if spec.get("description") else ""))
+    return out or [f"no schema name contains '{needle}'"]
+
+
 def clean_for_create(agent: dict) -> dict:
     return {k: v for k, v in agent.items() if k not in OUTPUT_ONLY}
 
@@ -94,9 +121,11 @@ def run(args, project=""):
     did = False
     if args.inspect:
         did = True
-        doc = _show(http.get(f"{base}/$discovery/rest?version=v1alpha"))
+        doc = fetch_discovery(http, base)
         for line in verdict(doc)[1]:
             print(line)
+        if args.schema:
+            print("\n".join(schema_lines(doc, args.schema)))
     if args.engine and (args.list or args.export):
         path = agents_path(project, args.location, args.engine)
         agents = _show(http.get(f"{base}/{path}")).get("agents", [])
@@ -136,6 +165,7 @@ if __name__ == "__main__":
     ap.add_argument("--location", default=os.getenv("GE_LOCATION", "global"))
     ap.add_argument("--engine", default=os.getenv("GE_ENGINE_ID"), help="the Gemini Enterprise app id")
     ap.add_argument("--inspect", action="store_true", help="check the API description for a create method")
+    ap.add_argument("--schema", metavar="NAME", help="with --inspect: print the schemas whose name contains NAME (for example Agent)")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--export", metavar="NAME", help="save one agent's definition as JSON")
     ap.add_argument("--out", metavar="FILE")

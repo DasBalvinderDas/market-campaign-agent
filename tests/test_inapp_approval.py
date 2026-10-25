@@ -137,3 +137,14 @@ def test_the_workflow_probe_reads_a_discovery_document():
     assert p.clean_for_create({"name": "x", "displayName": "A", "state": "PUBLISHED", "definition": {"a": 1}}) == {"displayName": "A", "definition": {"a": 1}}
     assert p.host("global") == "discoveryengine.googleapis.com" and p.host("us").startswith("us-")
     assert p.agents_path("p", "global", "e").endswith("/engines/e/assistants/default_assistant/agents")
+
+
+def test_the_probe_prints_the_fields_of_a_schema():
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+    import probe_workflow_api as p
+
+    doc = {"schemas": {"V1alphaAgent": {"properties": {"displayName": {"type": "string"}, "workflowSpec": {"$ref": "WorkflowSpec"}}}}}
+    lines = p.schema_lines(doc, "agent")
+    assert lines[0] == "V1alphaAgent" and any("workflowSpec: WorkflowSpec" in x for x in lines)
+    assert "no schema name contains" in p.schema_lines(doc, "zzz")[0]
