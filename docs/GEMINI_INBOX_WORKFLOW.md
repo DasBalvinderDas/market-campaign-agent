@@ -77,11 +77,30 @@ Open **Workflow**, choose the natural language option, and paste this:
 
 Then check each step in the builder and fix what is wrong.
 
+## Can it be automated?
+
+Not confirmed. The script `scripts/probe_workflow_api.py` finds out.
+
+1. Check the API for a create method:
+   `python scripts/probe_workflow_api.py --inspect`
+2. It prints RESULT. Either a create method exists, or not.
+3. If it exists, build the workflow once in the console.
+4. Save it:
+   `python scripts/probe_workflow_api.py --engine APP_ID --export "LaunchKit order approval" --out workflows/order_approval.json`
+5. Rebuild it anywhere:
+   `python scripts/probe_workflow_api.py --engine APP_ID --create workflows/order_approval.json --yes`
+
+- APP_ID is your Gemini Enterprise app id.
+- `--list` shows the agents in the app.
+- Without `--yes`, `--create` only prints what it would send.
+- Run it in Cloud Shell. It needs your sign-in.
+- The agents API is v1alpha, so names may change.
+
 ## What lives in Application Integration
 
 - This workflow is not built by `setup_application_integration.py`.
 - It is a Gemini Enterprise workflow, not an Application Integration one.
-- I found no API to create it from a script.
+- Whether an API can create it is not confirmed.
 - Application Integration keeps its four triggers.
 - `create_purchase_order` and `create_depot_transfer` place the orders.
 - `send_launch_update` sends the notice emails.

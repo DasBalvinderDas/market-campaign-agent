@@ -119,3 +119,21 @@ def test_the_shipped_defaults_are_the_inbox_workflow_with_notice_emails():
                           "print(c.APPROVAL_CHANNEL, c.APPROVAL_NOTIFY_EMAIL, c.APPROVAL_CHECK_USER)"],
                          capture_output=True, text=True, env=env, cwd=os.path.dirname(os.path.dirname(__file__)))
     assert out.stdout.split() == ["workflow", "True", "True"], out.stderr
+
+
+def test_the_workflow_probe_reads_a_discovery_document():
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+    import probe_workflow_api as p
+
+    doc = {"resources": {"projects": {"resources": {"locations": {"resources": {"agents": {"methods": {"get": {}, "list": {}}}}}}}},
+           "schemas": {"GoogleCloudDiscoveryengineV1alphaAgent": {"properties": {"displayName": {}, "workflowAgentDefinition": {}}},
+                       "WorkflowSpec": {"properties": {"steps": {}}}}}
+    ok, lines = p.verdict(doc)
+    assert not ok and "no create method" in lines[-1] and "WorkflowSpec: steps" in " ".join(lines)
+    doc["resources"]["projects"]["resources"]["locations"]["resources"]["agents"]["methods"]["create"] = {}
+    assert p.verdict(doc)[0]
+    assert p.verdict({})[0] is False
+    assert p.clean_for_create({"name": "x", "displayName": "A", "state": "PUBLISHED", "definition": {"a": 1}}) == {"displayName": "A", "definition": {"a": 1}}
+    assert p.host("global") == "discoveryengine.googleapis.com" and p.host("us").startswith("us-")
+    assert p.agents_path("p", "global", "e").endswith("/engines/e/assistants/default_assistant/agents")
