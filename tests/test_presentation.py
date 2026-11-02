@@ -122,9 +122,10 @@ def test_nothing_known_asks_for_name_date_city_and_country():
 
 
 def test_a_natural_first_message_is_enough_and_the_next_question_is_the_name():
-    out = orchestration_tools.checklist("campaign", "", 300, "31st Oct")
+    d, text = _soon_text()
+    out = orchestration_tools.checklist("campaign", "", 300, text)
     md = out["display_markdown"]
-    assert "300" in md and out["date_iso"].endswith("-10-31") and "campaign name" in md and "What is the campaign called?" in md
+    assert "300" in md and out["date_iso"] == d.isoformat() and "campaign name" in md and "What is the campaign called?" in md
     assert "city and country" in md and "Dallas" not in md        # no vendors, warehouses or catalog as text
 
 
@@ -203,8 +204,9 @@ def test_no_name_ideas_once_a_name_is_given():
 
 def test_a_date_without_a_year_is_this_year():
     from datetime import date
-    md = orchestration_tools.checklist("campaign", "", 300, "31st Oct")["display_markdown"]
-    assert f"31 Oct {date.today().year}" in md
+    d, text = _soon_text()
+    md = orchestration_tools.checklist("campaign", "", 300, text)["display_markdown"]
+    assert f"{d.day} {d:%b} {date.today().year}" in md
 
 
 def test_facts_given_without_a_mode_are_not_asked_again():
@@ -229,3 +231,13 @@ def test_new_york_usa_is_the_usa_and_other_cities_are_recognised():
         assert orchestration_tools.checklist("campaign", "X", 0, _iso(25), text)["venue_name"] == venue
 
 
+
+
+def _soon_text():
+    """A day-and-month a few days ahead in this year, as a person would say it ("3 Nov"); skips at the very end of the year."""
+    from datetime import date, timedelta
+    d = date.today() + timedelta(days=5)
+    if d.year != date.today().year:
+        import pytest
+        pytest.skip("too close to the end of the year for a date without a year")
+    return d, f"{d.day} {d:%b}"

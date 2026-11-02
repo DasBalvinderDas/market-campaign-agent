@@ -67,8 +67,9 @@ def test_the_order_pack_is_announced_inside_the_last_line(repo, aurora, monkeypa
 
 
 def test_a_date_without_a_year_is_the_current_year():
-    md = orchestration_tools.checklist("campaign", "X", 0, "31st Oct", "New York, USA")
-    assert md["date_iso"] == f"{date.today().year}-10-31" and md["region"] == "US"
+    d, text = _soon_text()
+    md = orchestration_tools.checklist("campaign", "X", 0, text, "New York, USA")
+    assert md["date_iso"] == d.isoformat() and md["region"] == "US"
 
 
 def test_the_city_is_kept_with_the_country():
@@ -176,3 +177,24 @@ def test_shipping_is_added_to_every_vendor_line_by_weight_and_distance(repo):
     far = planner._ship_carbon(ctx, 10, 2.0, "US", "APAC")
     assert near == 10 * 2.0 * 1.5 * 0.1 and far == 10 * 2.0 * 12 * 0.1 and far > near
     assert planner._ship_carbon(ctx, 10, 2.0, "US", "MARS") == 0
+
+
+def _soon_text():
+    """A day-and-month a few days ahead in this year, as a person would say it ("3 Nov"); skips at the very end of the year."""
+    from datetime import date, timedelta
+    d = date.today() + timedelta(days=5)
+    if d.year != date.today().year:
+        import pytest
+        pytest.skip("too close to the end of the year for a date without a year")
+    return d, f"{d.day} {d:%b}"
+
+
+def test_the_inbox_test_answers_without_showing_who_you_are(repo):
+    from launchkit_provisioner.tools.inbox_test import inbox_test
+    ctx = type("C", (), {"user_id": "VP@example.com"})()
+    out = inbox_test(ctx)
+    md = out["display_markdown"]
+    assert out["status"] == "ok" and out["is_approver"] is True and out["signed_in_as"] == "an email address"
+    assert "Inbox test OK" in md and "@" not in md and "UTC" in md
+    other = inbox_test(type("C", (), {"user_id": "someone@example.com"})())
+    assert other["is_approver"] is False and inbox_test(None)["signed_in_as"] == "nothing"
