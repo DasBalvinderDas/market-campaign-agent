@@ -10,6 +10,7 @@ Goal: see one notification in the Gemini Enterprise Inbox.
 - It replies with the time it ran.
 - It says what sign-in the agent sees.
 - It says if that sign-in is on the approver list.
+- It shows a masked form of each address.
 - It never prints an email address.
 
 ## Steps
@@ -45,8 +46,7 @@ If the agent is not found, add it with the puzzle-piece icon.
 In a normal chat, type: `Run the inbox test`.
 You should see two lines.
 
-## Next steps (not built yet)
+## Result
 
-- One notification for a real approval.
-- Then the order-placed notification.
-- Then the email notices.
+Tested. The Inbox showed **Needs input**.
+See `GEMINI_INBOX_WORKFLOW.md` for the real approval.

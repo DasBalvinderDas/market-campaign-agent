@@ -148,3 +148,37 @@ def test_the_probe_prints_the_fields_of_a_schema():
     lines = p.schema_lines(doc, "agent")
     assert lines[0] == "V1alphaAgent" and any("workflowSpec: WorkflowSpec" in x for x in lines)
     assert "no schema name contains" in p.schema_lines(doc, "zzz")[0]
+
+
+def test_notices_go_to_one_address_and_approval_to_the_sign_in(repo, aurora, monkeypatch):
+    """Notice email to the hcltech address; only the labgtm sign-in may approve."""
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "workflow")
+    monkeypatch.setattr(config, "APPROVAL_NOTIFY_EMAIL", True)
+    repo.t["approvers"] = [
+        {"approver_role": "VP Product Marketing", "email": "me@hcltech.com", "signin_email": "me@labgtm.com", "active": True},
+        {"approver_role": "Launch Team", "email": "me@hcltech.com", "signin_email": None, "active": True}]
+    ex = FakeExecutor()
+    out = decision_flow.authorize(repo, ex, aurora, "2", "x")
+    sent = [i for t, i in ex.calls if t.endswith("send_launch_update")]
+    assert out["status"] == "pending_approval" and [i["recipient_email"] for i in sent] == ["me@hcltech.com"]
+    assert "href" not in sent[0]["email_body"] and "Approve</a>" not in sent[0]["email_body"]
+    assert decision_flow.my_approvals(repo, "me@hcltech.com")["status"] == "none"          # the notice address cannot approve
+    assert decision_flow.decide_in_app(repo, "me@hcltech.com", aurora, "approve")["status"] == "error"
+    assert decision_flow.my_approvals(repo, "ME@labgtm.com")["status"] == "ok"
+    assert decision_flow.decide_in_app(repo, "me@labgtm.com", aurora, "approve")["status"] == "approved"
+    out = execution.execute_plan(repo, ex, aurora)                                          # the orders-placed email: hcltech only
+    placed = [i for t, i in ex.calls if t.endswith("send_launch_update") and "Orders placed" in i["email_subject"]]
+    assert out["status"] == "executed" and [i["recipient_email"] for i in placed] == ["me@hcltech.com"]
+
+
+def test_set_approvers_pairs_a_notice_address_with_a_sign_in():
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+    import set_approvers as sa
+    rows = sa.build_rows(["Me@hcltech.com=me@labgtm.com", "me@hcltech.com=me@labgtm.com"])
+    assert len(rows) == 3 and {r["email"] for r in rows} == {"me@hcltech.com"}
+    by = {r["approver_role"]: r["signin_email"] for r in rows}
+    assert by == {"VP Product Marketing": "me@labgtm.com", "CMO": "me@labgtm.com", "Launch Team": None}
+    assert sa.build_rows(["a@x.com"])[0]["signin_email"] is None
+    with pytest.raises(ValueError):
+        sa.build_rows(["a@x.com=nope"])

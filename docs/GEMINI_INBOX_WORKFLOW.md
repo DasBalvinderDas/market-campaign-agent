@@ -1,135 +1,122 @@
 # Approval in the Gemini Enterprise Inbox
 
-Status: to test. The code is ready. The workflow is built in the console.
+Tested: a workflow step shows in the Inbox as **Needs input**.
 
-## The idea
+## How it works
 
-- A workflow runs our agent in three steps.
-- The person running it is the approver.
-- Between the steps, an approval step asks that person.
-- It shows in their Inbox as **Needs input**.
-- They approve or reject there.
-- A notice email gives them the request number.
+1. The requester chats with the assistant and chooses an option.
+2. The assistant records the sign-off as waiting.
+3. A notice email goes to the approver.
+4. The email has no Approve or Reject button.
+5. It gives the request number and three steps.
+6. The approver starts the **LaunchKit order approval** workflow.
+7. The approval question shows in their Inbox under **Needs input**.
+8. They choose Approve or Reject there.
+9. The workflow places the orders.
 
-Found while testing: an approval step can only ask the person running the workflow.
-It cannot route to another person. So the VP starts the workflow.
+An approval step can only ask the person running the workflow.
+So the approver starts it.
 
 ## The defaults
 
-This is how the agent ships. No `.env` lines are needed.
+No `.env` lines are needed.
 
 ```
 APPROVAL_CHANNEL=workflow
 APPROVAL_NOTIFY_EMAIL=true
 ```
 
-- The approval happens in the Inbox.
-- A plain notice email goes to the approvers.
-- It has no buttons.
-- It says an approval waits in the Inbox.
-- The orders-placed email goes to the launch team.
-- `APPROVAL_NOTIFY_EMAIL=false` turns all of it off.
+- `APPROVAL_NOTIFY_EMAIL=false` turns the notice emails off.
 - `APPROVAL_CHANNEL=email` brings back the approval email with buttons.
-- If the workflow is not built yet, the VP can say **My approvals** in the chat.
+- `APPROVAL_CHANNEL=gemini` approves in the chat only.
 - Deploy the agent again after any change.
 
-## What the agent does in this mode
+## Two addresses per person
 
-- It records the sign-off as waiting.
-- It sends no approval email with buttons.
-- It starts no approval workflow.
-- It tells the user the request waits in the Inbox.
-- Later it accepts the answer from the workflow.
+The approver table keeps two addresses.
 
-## Who does what
+| Address | Used for |
+|---|---|
+| Notice email | Approval notice and orders-placed email |
+| Sign-in | Who may approve in Gemini Enterprise |
 
-1. The requester chats with the assistant and chooses an option.
-2. The reply says the request waits in the Inbox.
-3. A notice email gives the VP the request number.
-4. The VP starts the workflow with that number.
-5. The VP approves or rejects in the Inbox.
-6. The workflow places the orders.
+They can differ. For now:
 
-## Build the workflow in the console
+```
+python scripts/set_approvers.py dasbalvinder.das@hcltech.com=dasbalvinder.das@labgtm.com
+```
 
-The step names may differ in your console. Adjust as needed.
+- Emails go to the hcltech.com address.
+- Only the labgtm.com sign-in may approve.
+- Add more people by listing more pairs.
+- Leave out `=sign-in` when both are the same.
+- `--show` prints the table.
+- Check a sign-in: say **Run the inbox test** in the chat.
 
-1. Open **Workflow** in the left menu.
-2. Add a start form with one field: **Request number**.
-3. Add an **existing agent** step. Pick the assistant.
-4. Its instruction: *Show my approvals for request {request number}.*
-5. Add a **human approval** step. It asks the person running the workflow.
-6. Show step 3's reply in the question.
-7. Add a second **existing agent** step for approval.
-8. Its instruction: *Approve request {request number}. Then place the orders.*
-9. Add a branch for rejection with: *Reject request {request number}.*
-10. Publish and share it with the approvers.
+## Build the workflow
 
-## Fastest way: describe it in words
-
-The console can build a workflow from a plain description.
-Open **Workflow**, choose the natural language option, and paste this:
+Open **Workflow** in the left menu.
+Paste this into the box and press the arrow:
 
 > Build a workflow called "LaunchKit order approval".
-> The start form asks for a request number.
-> Step 1: run the existing agent launchkit_provisioner with the instruction
-> "Show my approvals for request {request number}".
+> It has one start field, the request number.
+> Step 1: run the existing agent LaunchKit-Provisioner with the instruction "Show my approvals".
 > Step 2: ask the person running the workflow to approve or reject, and show the reply of step 1.
-> If approved, Step 3: run the existing agent launchkit_provisioner with the instruction
-> "Approve request {request number}. Then place the orders."
-> If rejected, Step 3: run the existing agent with the instruction
-> "Reject request {request number}."
+> If approved, Step 3: run the existing agent LaunchKit-Provisioner with the instruction "Approve request {request number}. Then place the orders."
+> If rejected, Step 3: run the existing agent with the instruction "Reject request {request number}."
 > Show the agent's last reply as the result.
 
-Then check each step in the builder and fix what is wrong.
+- Check each step in the draft.
+- If the agent is not found, add it with the puzzle-piece icon.
+- Click **Turn on** to publish.
+- Run it from the Workflow list.
+- Test runs may not reach the Inbox. Real runs do.
 
-## Can it be automated?
+## Try it
 
-Not confirmed. The script `scripts/probe_workflow_api.py` finds out.
-
-1. Check the API for a create method:
-   `python scripts/probe_workflow_api.py --inspect`
-2. It prints RESULT. Either a create method exists, or not.
-3. If it exists, build the workflow once in the console.
-4. Save it:
-   `python scripts/probe_workflow_api.py --engine APP_ID --export "LaunchKit order approval" --out workflows/order_approval.json`
-5. Rebuild it anywhere:
-   `python scripts/probe_workflow_api.py --engine APP_ID --create workflows/order_approval.json --yes`
-
-- APP_ID is your Gemini Enterprise app id.
-- `--list` shows the agents in the app.
-- Without `--yes`, `--create` only prints what it would send.
-- Run it in Cloud Shell. It needs your sign-in.
-- The agents API is v1alpha, so names may change.
-
-## What lives in Application Integration
-
-- This workflow is not built by `setup_application_integration.py`.
-- It is a Gemini Enterprise workflow, not an Application Integration one.
-- Whether an API can create it is not confirmed.
-- Application Integration keeps its four triggers.
-- `create_purchase_order` and `create_depot_transfer` place the orders.
-- `send_launch_update` sends the notice emails.
-- `request_approval` is used only with `APPROVAL_CHANNEL=email` or `both`.
+1. In the chat, plan an order above $5,000.
+2. Say **Choose option 2**.
+3. Note the request number.
+4. Check the notice email.
+5. Start the workflow with that number.
+6. Open the **Inbox**.
+7. Open the item under **Needs input**.
+8. Choose Approve.
+9. The orders are placed.
 
 ## How the agent checks the answer
 
 - The agent steps run as the person who started the workflow.
-- That person's sign-in must be on the approver list.
+- That sign-in must be on the approver list.
 - Otherwise the agent refuses and logs it.
-- Add the VP to the list:
-  `python scripts/setup_bigquery.py --approver-email vp@example.com`
+- The first decision wins.
 
-## Things to confirm while testing
+## What is not automated
 
-- Can the assistant be picked in an existing agent step?
-- Does the approval step show in the Inbox?
-- Does it give the approver's address to the next step?
-- Does the final reply show as the run result?
+- The workflow itself is built in the console.
+- The approver starts it by hand.
+- The workflow editor has an **App event** trigger.
+- It may start the workflow from the notice email.
+- That is a later experiment.
+
+## Can the workflow be created by a script?
+
+Not confirmed. `scripts/probe_workflow_api.py` checks.
+
+- `python scripts/probe_workflow_api.py --inspect --schema Agent`
+- `--list` shows the agents in the app.
+- `--export NAME` saves one as JSON.
+- `--create FILE --yes` creates one from JSON.
+- The agents API is v1alpha, so names may change.
+
+## What stays in Application Integration
+
+- `create_purchase_order` and `create_depot_transfer` place the orders.
+- `send_launch_update` sends the notice emails.
+- `request_approval` is used only with `APPROVAL_CHANNEL=email` or `both`.
 
 ## Limits
 
-- Anyone who can call the agent could name an approver.
-- The list check lowers the risk. It does not remove it.
-- The email approval keeps the stronger record.
+- Anyone who can call the agent could try to approve.
+- The sign-in check lowers the risk. It does not remove it.
 - Use `APPROVAL_CHANNEL=email` for anything real.

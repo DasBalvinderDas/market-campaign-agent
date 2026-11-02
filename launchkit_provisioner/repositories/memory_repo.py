@@ -174,6 +174,9 @@ class MemoryRepository(Repository):
     def get_approver_emails(self, role):
         return [a["email"] for a in self.t["approvers"] if a["approver_role"] == role and a["active"]]
 
+    def get_approver_signins(self, role):
+        return [a.get("signin_email") or a["email"] for a in self.t["approvers"] if a["approver_role"] == role and a["active"]]
+
     def create_decision(self, decision):
         self.t["decisions"].append({"status": "PENDING", "decided_by": None, "decided_at": None,
                                     "decision_note": None, "created_at": now(), **decision})

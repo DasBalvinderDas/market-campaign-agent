@@ -59,6 +59,7 @@ class Repository:
     def get_policy(self, amount: float) -> dict: raise NotImplementedError
     def list_policies(self) -> list[dict]: raise NotImplementedError
     def get_approver_emails(self, role: str) -> list[str]: raise NotImplementedError
+    def get_approver_signins(self, role: str) -> list[str]: raise NotImplementedError   # who may approve (the Gemini Enterprise sign-in)
     def create_decision(self, decision: dict) -> None: raise NotImplementedError
     def get_decision(self, decision_id: str) -> dict | None: raise NotImplementedError
     def get_decision_for_request(self, request_id: str) -> dict | None: raise NotImplementedError

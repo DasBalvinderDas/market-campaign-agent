@@ -22,7 +22,7 @@ def inbox_test(tool_context=None) -> dict:
     try:
         repo = get_repo()
         for r in _ROLES:
-            listed += [e.lower() for e in repo.get_approver_emails(r)]
+            listed += [e.lower() for e in repo.get_approver_signins(r)]
         known = bool(me) and me in listed
     except Exception:  # noqa: BLE001 - the test must answer even if the data cannot be read
         pass
@@ -31,7 +31,7 @@ def inbox_test(tool_context=None) -> dict:
     first = f"📬 **Inbox test OK.** The agent ran at {when}."
     second = (f"🔐 Sign-in seen by the agent: **{shape}** ({_mask(me)}) · on the approver list: **{'yes' if known else 'no'}** · "
               f"approvals: **{config.APPROVAL_CHANNEL}**")
-    third = ("🧾 Approver list (VP and CMO), masked: " + (", ".join(sorted({_mask(e) for e in listed})) or "empty")
+    third = ("🧾 Sign-ins allowed to approve (VP and CMO), masked: " + (", ".join(sorted({_mask(e) for e in listed})) or "empty")
              + f" · the sign-in is {len(me)} characters long")
     return {"status": "ok", "ran_at": when, "signed_in_as": shape, "is_approver": known, "channel": config.APPROVAL_CHANNEL,
             "display_markdown": f"{first}  \n{second}\n\n{third}"}

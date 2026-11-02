@@ -235,6 +235,15 @@ class BigQueryRepository(Repository):
                          role=role)
         return [r["email"] for r in rows]
 
+    def get_approver_signins(self, role):
+        """The sign-in addresses that may approve. Falls back to the notice emails while the table has no signin_email column."""
+        try:
+            rows = self._run("SELECT COALESCE(NULLIF(signin_email, ''), email) AS who FROM `{ds}.approvers` "
+                             "WHERE approver_role = @role AND active ORDER BY who", role=role)
+            return [r["who"] for r in rows]
+        except Exception:  # noqa: BLE001 - an older table without the column
+            return self.get_approver_emails(role)
+
     _DECISION_COLS = ("decision_id, request_id, scenario_id, option_code, tier, approver_role, approver_emails, amount, "
                       "justification, status, created_at, expires_at, decided_by, decided_at, decision_note")
 

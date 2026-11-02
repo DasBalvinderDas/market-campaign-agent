@@ -209,7 +209,7 @@ def _allowed_roles(repo, user_id: str, roles) -> set:
     if not config.APPROVAL_CHECK_USER:
         return set(roles)
     me = (user_id or "").strip().lower()
-    return {r for r in roles if me and me in [e.lower() for e in repo.get_approver_emails(r)]}
+    return {r for r in roles if me and me in [e.lower() for e in repo.get_approver_signins(r)]}
 
 
 def my_approvals(repo, user_id: str) -> dict:

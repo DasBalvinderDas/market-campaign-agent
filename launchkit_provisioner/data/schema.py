@@ -153,8 +153,9 @@ TABLES = {
         "description": "Email addresses per approver role (configurable). Role 'Launch Team' receives tracking updates.",
         "columns": [
             ("approver_role", "STRING", "REQUIRED", ""),
-            ("email", "STRING", "REQUIRED", ""),
+            ("email", "STRING", "REQUIRED", "Where notice emails go"),
             ("active", "BOOL", "REQUIRED", ""),
+            ("signin_email", "STRING", "NULLABLE", "The address this person signs in to Gemini Enterprise with, used to approve. Empty = same as email"),
         ],
     },
     # ------------------------------------------------------------------ transactions
