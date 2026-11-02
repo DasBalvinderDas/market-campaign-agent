@@ -7,20 +7,31 @@ from ..repositories import get_repo
 _ROLES = ("VP Product Marketing", "CMO")
 
 
+def _mask(address: str) -> str:
+    """da***@hcltech.com: enough to compare two addresses by eye, never the whole address."""
+    name, _, domain = address.partition("@")
+    return (name[:2] + "***" + ("@" + domain if domain else "")) if name else "(empty)"
+
+
 def inbox_test(tool_context=None) -> dict:
     """The Inbox test. Call it when the user says "run the inbox test" (a Gemini Enterprise workflow sends this). It changes
     nothing. Show `display_markdown` exactly.
     """
     me = str(getattr(tool_context, "user_id", "") or "").strip().lower()
-    known = False
+    known, listed = False, []
     try:
         repo = get_repo()
-        known = bool(me) and any(me in [e.lower() for e in repo.get_approver_emails(r)] for r in _ROLES)
+        for r in _ROLES:
+            listed += [e.lower() for e in repo.get_approver_emails(r)]
+        known = bool(me) and me in listed
     except Exception:  # noqa: BLE001 - the test must answer even if the data cannot be read
         pass
     when = datetime.now(timezone.utc).strftime("%d %b %Y, %H:%M UTC")
     shape = "an email address" if "@" in me else ("something else" if me else "nothing")
     first = f"📬 **Inbox test OK.** The agent ran at {when}."
-    second = f"🔐 Sign-in seen by the agent: **{shape}** · on the approver list: **{'yes' if known else 'no'}** · approvals: **{config.APPROVAL_CHANNEL}**"
+    second = (f"🔐 Sign-in seen by the agent: **{shape}** ({_mask(me)}) · on the approver list: **{'yes' if known else 'no'}** · "
+              f"approvals: **{config.APPROVAL_CHANNEL}**")
+    third = ("🧾 Approver list (VP and CMO), masked: " + (", ".join(sorted({_mask(e) for e in listed})) or "empty")
+             + f" · the sign-in is {len(me)} characters long")
     return {"status": "ok", "ran_at": when, "signed_in_as": shape, "is_approver": known, "channel": config.APPROVAL_CHANNEL,
-            "display_markdown": f"{first}  \n{second}"}
+            "display_markdown": f"{first}  \n{second}\n\n{third}"}

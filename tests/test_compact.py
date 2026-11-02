@@ -1,5 +1,8 @@
 """Gemini Enterprise replies: two short paragraphs, a two-line summary, the catalog as a PDF, the carbon explained."""
 import asyncio
+import os
+
+import pytest
 from datetime import date
 
 from conftest import FakeExecutor
@@ -195,6 +198,19 @@ def test_the_inbox_test_answers_without_showing_who_you_are(repo):
     out = inbox_test(ctx)
     md = out["display_markdown"]
     assert out["status"] == "ok" and out["is_approver"] is True and out["signed_in_as"] == "an email address"
-    assert "Inbox test OK" in md and "@" not in md and "UTC" in md
+    assert "Inbox test OK" in md and "vp@example.com" not in md.lower() and "UTC" in md
+    assert "vp***@example.com" in md.replace("VP", "vp") or "VP***@example.com" in md or "vp***" in md.lower()
     other = inbox_test(type("C", (), {"user_id": "someone@example.com"})())
     assert other["is_approver"] is False and inbox_test(None)["signed_in_as"] == "nothing"
+
+
+def test_set_approvers_builds_every_role_for_every_address():
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+    import set_approvers as sa
+    rows = sa.build_rows(["A@x.com", "b@x.com", "a@x.com"])
+    assert len(rows) == 6 and {r["email"] for r in rows} == {"a@x.com", "b@x.com"}
+    assert {r["approver_role"] for r in rows} == {"VP Product Marketing", "CMO", "Launch Team"}
+    for bad in (["nope"], [], ["a@b"]):
+        with pytest.raises(ValueError):
+            sa.build_rows(bad)
