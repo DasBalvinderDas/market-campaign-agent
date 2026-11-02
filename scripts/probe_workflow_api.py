@@ -3,6 +3,7 @@
 
   python scripts/probe_workflow_api.py --inspect                  # does the API have a create method for workflow agents?
   python scripts/probe_workflow_api.py --inspect --schema Agent   # ...and what an agent looks like (fields and types)
+  python scripts/probe_workflow_api.py --inspect --find stream    # methods that could START a run (try: run, execute, trigger)
   python scripts/probe_workflow_api.py --engine APP_ID --list     # the agents in your Gemini Enterprise app
   python scripts/probe_workflow_api.py --engine APP_ID --export "LaunchKit order approval" --out workflows/order_approval.json
   python scripts/probe_workflow_api.py --engine APP_ID --create workflows/order_approval.json            # dry run
@@ -93,6 +94,21 @@ def schema_lines(doc: dict, needle: str) -> list[str]:
     return out or [f"no schema name contains '{needle}'"]
 
 
+def find_methods(doc: dict, word: str) -> list[str]:
+    """Every API method whose id, path or description mentions `word` (for example run, stream, execute, trigger)."""
+    out = []
+
+    def walk(resources):
+        for res in (resources or {}).values():
+            for name, m in (res.get("methods") or {}).items():
+                text = " ".join([name, m.get("id", ""), m.get("path", ""), m.get("description", "")]).lower()
+                if word.lower() in text:
+                    out.append(f"{m.get('httpMethod', '?'):<6} {m.get('path', '')}   [{m.get('id', name)}] {m.get('description', '')[:90]}")
+            walk(res.get("resources"))
+    walk(doc.get("resources"))
+    return out or [f"no method mentions '{word}'"]
+
+
 def clean_for_create(agent: dict) -> dict:
     return {k: v for k, v in agent.items() if k not in OUTPUT_ONLY}
 
@@ -126,6 +142,8 @@ def run(args, project=""):
             print(line)
         if args.schema:
             print("\n".join(schema_lines(doc, args.schema)))
+        if args.find:
+            print("\n".join(find_methods(doc, args.find)))
     if args.engine and (args.list or args.export):
         path = agents_path(project, args.location, args.engine)
         agents = _show(http.get(f"{base}/{path}")).get("agents", [])
@@ -166,6 +184,7 @@ if __name__ == "__main__":
     ap.add_argument("--engine", default=os.getenv("GE_ENGINE_ID"), help="the Gemini Enterprise app id")
     ap.add_argument("--inspect", action="store_true", help="check the API description for a create method")
     ap.add_argument("--schema", metavar="NAME", help="with --inspect: print the schemas whose name contains NAME (for example Agent)")
+    ap.add_argument("--find", metavar="WORD", help="with --inspect: list the API methods that mention WORD (run, stream, execute, trigger)")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--export", metavar="NAME", help="save one agent's definition as JSON")
     ap.add_argument("--out", metavar="FILE")

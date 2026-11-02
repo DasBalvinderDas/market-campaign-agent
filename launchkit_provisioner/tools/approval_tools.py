@@ -16,6 +16,14 @@ async def get_my_approvals(tool_context=None) -> dict:
     return await asyncio.to_thread(decision_flow.my_approvals, get_repo(), _user(tool_context))
 
 
+async def next_approval(tool_context=None) -> dict:
+    """For the scheduled approval workflow: the next waiting request for the signed-in approver that was not offered yet. Reply
+    with `display_markdown` EXACTLY and nothing else: it is either NONE or one line starting with the request number. Each
+    request is returned only once.
+    """
+    return await asyncio.to_thread(decision_flow.next_approval, get_repo(), _user(tool_context))
+
+
 async def decide_approval(request_id: str, decision: str, comment: str = "", approver: str = "", tool_context=None) -> dict:
     """Record the signed-in approver's decision on a request: "approve" or "reject". Call it only when the user clearly says
     Approve or Reject with a request number. After approve, call the fulfilment_agent tool to place the orders.

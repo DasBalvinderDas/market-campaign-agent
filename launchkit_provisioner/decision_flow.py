@@ -15,6 +15,7 @@ from .repositories.base import new_id
 
 _EXEC_PREFIX = "execution:"
 _IN_APP_NOTE = "waiting for a decision in the app"
+_OFFERED = "offered at "
 _FINAL_OK = ("PENDING", "APPROVED")
 _SYNONYMS = {"FULL_NEW": ("FULL", "BRAND", "NEW"), "REBALANCE": ("REBAL", "SMART", "DEPOT", "SURPLUS", "REUSE"),
              "ECO": ("ECO", "SUSTAIN", "GREEN", "CARBON", "RECYCL")}
@@ -233,6 +234,25 @@ def my_approvals(repo, user_id: str) -> dict:
     return {"status": "ok", "count": len(rows), "display_markdown": presentation.approvals_markdown(rows)}
 
 
+def next_approval(repo, user_id: str, now: datetime | None = None) -> dict:
+    """For a scheduled workflow: the oldest waiting request that was not offered yet, or NONE. Each request is offered ONCE, so a
+    request makes one Inbox item however often the workflow runs. The text is "NONE" or "REQ-... · choice · amount · arrives"."""
+    if config.APPROVAL_CHANNEL == "email":
+        return {"status": "off", "display_markdown": "NONE"}
+    pending = [d for d in repo.list_pending_decisions() if (d.get("decision_note") or "") == _IN_APP_NOTE]
+    ok = _allowed_roles(repo, user_id, {d["approver_role"] for d in pending})
+    mine = sorted((d for d in pending if d["approver_role"] in ok), key=lambda d: d["created_at"])
+    if not mine:
+        return {"status": "none", "display_markdown": "NONE"}
+    d = mine[0]
+    repo.set_decision_note(d["decision_id"], "PENDING", _OFFERED + (now or datetime.now(timezone.utc)).isoformat(timespec="seconds"))
+    s = repo.get_scenario(d["scenario_id"]) or {}
+    _audit(repo, d["request_id"], "orchestrator", "approval_offered", approver_role=d["approver_role"], user=str(user_id)[:80])
+    text = (f"{d['request_id']} · {s.get('option_name', d['option_code'])} · {presentation.money(d['amount'])}"
+            + (f" · arrives {presentation.day(s['delivery_date'])}" if s.get("delivery_date") else ""))
+    return {"status": "ok", "request_id": d["request_id"], "display_markdown": text}
+
+
 def decide_in_app(repo, user_id: str, request_id: str, answer: str, comment: str = "", approver: str = "") -> dict:
     if config.APPROVAL_CHANNEL == "email":
         return {"status": "error", "message": "Approvals are done by email. Ask the approver to use the buttons in the approval email."}
@@ -368,8 +388,8 @@ def status(repo, request_id: str, executor=None) -> dict:
            "depot_transfers": [t["transfer_number"] for t in repo.list_transfers(request_id)]}
     scenario = repo.get_scenario(d["scenario_id"]) or {}
     placed = bool(lines) and done == len(lines)
-    shown_note = None if note in (None, "", "decided by the approver", "decided in the app", "within the autopilot limit",
-                                  _IN_APP_NOTE) else note
+    shown_note = None if (note in (None, "", "decided by the approver", "decided in the app", "within the autopilot limit",
+                           _IN_APP_NOTE) or str(note).startswith(_OFFERED)) else note
     out["display_markdown"] = presentation.status_markdown(
         request_id, d, scenario.get("option_name", ""), len(repo.list_pos(request_id)), len(repo.list_transfers(request_id)),
         placed, shown_note)

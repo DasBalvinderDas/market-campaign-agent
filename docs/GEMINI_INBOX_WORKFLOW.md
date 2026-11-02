@@ -91,13 +91,47 @@ Paste this into the box and press the arrow:
 - Otherwise the agent refuses and logs it.
 - The first decision wins.
 
-## What is not automated
+## Start it without a manual run
 
-- The workflow itself is built in the console.
-- The approver starts it by hand.
-- The workflow editor has an **App event** trigger.
-- It may start the workflow from the notice email.
-- That is a later experiment.
+Goal: the Inbox item appears when a new request is created.
+
+The idea: a second workflow runs on a schedule and asks the agent
+for the next waiting request. Our table decides, not the schedule.
+
+- The agent tool `next_approval` returns **NONE** or one line.
+- The line starts with the request number.
+- Each request is returned only once.
+- So a request makes one Inbox item, however often the schedule runs.
+- The request stays in **My approvals** in the chat.
+
+Prompt for the builder:
+
+> Build a workflow called "LaunchKit approval check".
+> It runs on a schedule, every 5 minutes or the shortest interval offered.
+> Step 1: run the existing agent LaunchKit-Provisioner with the instruction "next approval".
+> If the reply of step 1 is exactly NONE, stop the workflow.
+> Otherwise Step 2: ask the person running the workflow to approve or reject, and show the reply of step 1.
+> If approved, Step 3: run the existing agent LaunchKit-Provisioner with the instruction "Approve request {reply of step 1}. Then place the orders."
+> If rejected, Step 3: run the existing agent with the instruction "Reject request {reply of step 1}."
+> Show the agent's last reply as the result.
+
+Check the draft:
+- The trigger is **Schedule**.
+- A condition stops the run when the reply is NONE.
+- The approve and reject steps use the reply of step 1.
+
+Open question to test:
+- Does a run that stops at NONE show in the Inbox?
+- If it does, the Inbox fills with empty items.
+- Then we need another way to start the workflow.
+- Turn off the manual workflow if you use this one.
+
+If empty runs show up:
+- An outside scheduler could start the workflow only for new requests.
+- It needs a way to start a run as the approver.
+- Find out: `python scripts/probe_workflow_api.py --inspect --find stream`
+- Try the words run, execute and trigger too.
+- It would also use a new Google service. Ask first.
 
 ## Can the workflow be created by a script?
 

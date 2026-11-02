@@ -182,3 +182,28 @@ def test_set_approvers_pairs_a_notice_address_with_a_sign_in():
     assert sa.build_rows(["a@x.com"])[0]["signin_email"] is None
     with pytest.raises(ValueError):
         sa.build_rows(["a@x.com=nope"])
+
+
+def test_the_probe_finds_methods_by_word():
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+    import probe_workflow_api as p
+    doc = {"resources": {"assistants": {"methods": {"streamAssist": {"id": "x.streamAssist", "httpMethod": "POST", "path": "v1alpha/{name}:streamAssist",
+                                                                   "description": "Runs an agent"}}, "resources": {}}}}
+    assert "streamAssist" in p.find_methods(doc, "stream")[0] and "no method" in p.find_methods(doc, "zzz")[0]
+
+
+def test_each_request_is_offered_once_to_the_scheduled_workflow(repo, aurora, monkeypatch):
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "workflow")
+    monkeypatch.setattr(config, "APPROVAL_CHECK_USER", True)
+    repo.t["approvers"] = [{"approver_role": "VP Product Marketing", "email": "me@hcltech.com", "signin_email": "me@labgtm.com", "active": True}]
+    assert decision_flow.next_approval(repo, "me@labgtm.com")["display_markdown"] == "NONE"          # nothing waiting yet
+    decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
+    assert decision_flow.next_approval(repo, "other@labgtm.com")["display_markdown"] == "NONE"      # not for them
+    first = decision_flow.next_approval(repo, "me@labgtm.com")
+    assert first["status"] == "ok" and first["display_markdown"].startswith(aurora + " · ") and "$" in first["display_markdown"]
+    assert decision_flow.next_approval(repo, "me@labgtm.com")["display_markdown"] == "NONE"         # offered once: no second Inbox item
+    assert decision_flow.my_approvals(repo, "me@labgtm.com")["status"] == "ok"                      # still listed in My approvals
+    assert decision_flow.decide_in_app(repo, "me@labgtm.com", aurora, "approve")["status"] == "approved"
+    shown = decision_flow.status(repo, aurora, executor=FakeExecutor())["display_markdown"]
+    assert "offered at" not in shown
