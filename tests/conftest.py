@@ -10,6 +10,14 @@ from launchkit_provisioner.repositories.memory_repo import MemoryRepository
 
 
 @pytest.fixture(autouse=True)
+def _email_channel(monkeypatch):
+    """The shipped default is the Inbox workflow with notice emails; most tests cover the email approval, so they start there."""
+    from launchkit_provisioner import config
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "email")
+    monkeypatch.setattr(config, "APPROVAL_NOTIFY_EMAIL", False)
+
+
+@pytest.fixture(autouse=True)
 def repo():
     r = MemoryRepository()
     # approvers for the two sign-off roles (the launch team is added by the tests that need it)

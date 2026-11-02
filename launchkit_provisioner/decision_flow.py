@@ -123,18 +123,29 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
     emails_to = repo.get_approver_emails(policy["approver_role"])
     repo.create_decision({**decision, "status": "PENDING", "approver_emails": ",".join(emails_to)})
     repo.create_holds(holds)
-    if config.APPROVAL_CHANNEL == "gemini":
-        # No email and no workflow: the approver decides inside the Gemini Enterprise app (My approvals).
+    if config.APPROVAL_CHANNEL in ("gemini", "workflow"):
+        # No approval email and no Application Integration approval: the approver decides in the Gemini Enterprise app
+        # (My approvals in the chat, or the Inbox when a workflow runs the approval step).
         repo.set_decision_note(decision["decision_id"], "PENDING", _IN_APP_NOTE)
         _audit(repo, request_id, "orchestrator", "approval_requested_in_app", decision_id=decision["decision_id"],
                option=scenario["option_code"], approver_role=policy["approver_role"], amount=total, tier=policy["tier"])
         who = f"the {policy['approver_role']}"
+        notified = 0
+        if config.APPROVAL_NOTIFY_EMAIL:
+            subject, html = emails.approval_waiting_email(repo, launch, scenario, request_id, policy["approver_role"])
+            for address in emails_to:
+                try:
+                    executor.execute(config.UPDATE_TRIGGER, {"request_id": request_id, "launch_id": req["launch_id"],
+                                                             "recipient_email": address, "email_subject": subject, "email_body": html})
+                    notified += 1
+                except Exception as exc:  # noqa: BLE001 - the notice is optional
+                    _audit(repo, request_id, "orchestrator", "approval_notice_failed", error=str(exc)[:200])
         return {"status": "pending_approval", "decision_id": decision["decision_id"], "tier": policy["tier"],
                 "option": scenario["option_name"], "amount": total, "approver_role": policy["approver_role"],
-                "approvers_notified": 0, "channel": "gemini",
+                "approvers_notified": notified, "channel": config.APPROVAL_CHANNEL,
                 "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, who, True, request_id,
-                                                                   "gemini"),
-                "next_step": "Show `display_markdown` exactly. The approver decides in this app (My approvals). "
+                                                                   config.APPROVAL_CHANNEL),
+                "next_step": "Show `display_markdown` exactly. The approver decides in the Gemini Enterprise app. "
                              "Do NOT call the fulfilment_agent tool."}
     min_buffer = repo.get_planning_rules().get("MIN_BUFFER_HOURS", 24)
     message = _approval_message(launch, scenario, lines, request_id, justification, min_buffer)
@@ -222,7 +233,7 @@ def my_approvals(repo, user_id: str) -> dict:
     return {"status": "ok", "count": len(rows), "display_markdown": presentation.approvals_markdown(rows)}
 
 
-def decide_in_app(repo, user_id: str, request_id: str, answer: str, comment: str = "") -> dict:
+def decide_in_app(repo, user_id: str, request_id: str, answer: str, comment: str = "", approver: str = "") -> dict:
     if config.APPROVAL_CHANNEL == "email":
         return {"status": "error", "message": "Approvals are done by email. Ask the approver to use the buttons in the approval email."}
     ans = {"approve": "APPROVED", "approved": "APPROVED", "reject": "REJECTED", "rejected": "REJECTED"}.get((answer or "").strip().lower())
@@ -233,11 +244,13 @@ def decide_in_app(repo, user_id: str, request_id: str, answer: str, comment: str
         return {"status": "error", "message": f"No sign-off was requested for '{request_id}'."}
     if d["status"] != "PENDING":
         return {"status": "error", "message": f"This request is already {d['status'].lower()}; it cannot be decided again."}
-    if not _allowed_roles(repo, user_id, {d["approver_role"]}):
+    # In "workflow" mode the answer comes from a workflow step, which names the approver who clicked in the Inbox.
+    who_decides = approver if (config.APPROVAL_CHANNEL == "workflow" and approver) else user_id
+    if not _allowed_roles(repo, who_decides, {d["approver_role"]}):
         _audit(repo, request_id, "orchestrator", "approval_refused", role=d["approver_role"], user=str(user_id)[:80])
         return {"status": "error", "message": f"Only the {d['approver_role']} can decide this request, and I could not match your sign-in "
                                               "to that role. Nothing was changed."}
-    by = f"{d['approver_role']} (in app)"
+    by = f"{d['approver_role']} ({'Inbox' if config.APPROVAL_CHANNEL == 'workflow' else 'in app'})"
     if not repo.decide(d["decision_id"], ans, by, (comment or "decided in the app")[:200]):
         return {"status": "error", "message": "The sign-off has expired or was decided a moment ago. Ask for the status."}
     if ans == "REJECTED":

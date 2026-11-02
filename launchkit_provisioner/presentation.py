@@ -897,7 +897,18 @@ def sign_off_markdown(scenario: dict, policies: list[dict], policy: dict, who: s
     body = sign_off_body(scenario, policies, policy, who, human, request_id).split("\n", 2)[2].lstrip("\n")
     lead = sign_off_lead(scenario, policies, policy, who, human, request_id).split("\n\n")[0]
     out = lead + "\n\n" + body
-    if human and channel == "gemini":
+    if human and channel == "workflow":
+        for old, new in (
+                ("📧 An email with Approve and Reject buttons is sent. Nothing is bought until it is approved.",
+                 f"📥 The approver starts **LaunchKit order approval** in Workflow with request **{request_id}**. The approval then waits in the "
+                 "Inbox under **Needs input**. Nothing is bought until it is approved."),
+                (f"📧 **An email with Approve and Reject buttons is on its way to {who}.**",
+                 f"📥 **{who[0].upper() + who[1:]} approves in the Inbox: start the LaunchKit order approval workflow with request {request_id}.**"),
+                ("| 1 | Email sent to the approver | ✅ Done |", "| 1 | Request recorded and the approver told | ✅ Done |"),
+                ("| 2 | Approver clicks **Approve** or **Reject** | ⏳ Waiting |",
+                 "| 2 | Approver runs the workflow, then chooses **Approve** or **Reject** in the Inbox | ⏳ Waiting |")):
+            out = out.replace(old, new)
+    elif human and channel == "gemini":
         for old, new in (
                 ("📧 An email with Approve and Reject buttons is sent. Nothing is bought until it is approved.",
                  "📥 It waits in this app: the approver opens **My approvals** and chooses Approve or Reject. Nothing is bought until it is approved."),
