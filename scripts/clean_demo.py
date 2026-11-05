@@ -70,4 +70,5 @@ if __name__ == "__main__":
     ap.add_argument("--location", default=os.getenv("BQ_LOCATION", "US"))
     ap.add_argument("--yes", action="store_true")
     ap.add_argument("--keep-campaigns", action="store_true")
-    run(ap.parse_args(), project=resolve_project(ap.parse_args().project))
+    a = ap.parse_args()
+    run(a, project=resolve_project(a.project))
