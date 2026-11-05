@@ -285,3 +285,14 @@ def test_offered_requests_can_be_offered_again_for_testing(repo, aurora, monkeyp
     again = decision_flow.reoffer(repo, "me@labgtm.com")
     assert again["count"] == 1 and aurora in again["display_markdown"]
     assert decision_flow.next_approval(repo, "me@labgtm.com")["display_markdown"].startswith(aurora)
+
+
+def test_the_clean_script_empties_working_data_and_keeps_reference_data():
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+    import clean_demo as cd
+    names = cd.tables_to_empty()
+    assert "launches" in names and "decisions" in names and "purchase_orders" in names and "audit_log" in names
+    for kept in ("approvers", "guests", "vendors", "assets", "depot_stock", "vendor_offers", "planning_rules"):
+        assert kept not in names
+    assert "launches" not in cd.tables_to_empty(keep_campaigns=True)
