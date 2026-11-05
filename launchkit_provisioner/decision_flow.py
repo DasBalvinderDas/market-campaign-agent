@@ -237,18 +237,34 @@ def my_approvals(repo, user_id: str) -> dict:
     return {"status": "ok", "count": len(rows), "display_markdown": presentation.approvals_markdown(rows)}
 
 
+def _offered_to(note: str) -> list[str]:
+    """The sign-ins a request was already offered to: the note is "offered at <time> | a@x,b@y"."""
+    note = str(note or "")
+    if not note.startswith(_OFFERED):
+        return []
+    return [u for u in note.partition(" | ")[2].split(",") if u]
+
+
+def _offered_note(users: list[str], now: datetime) -> str:
+    return _OFFERED + now.isoformat(timespec="seconds") + " | " + ",".join(users)
+
+
 def next_approval(repo, user_id: str, now: datetime | None = None) -> dict:
-    """For a scheduled workflow: the oldest waiting request that was not offered yet, or NONE. Each request is offered ONCE, so a
-    request makes one Inbox item however often the workflow runs. The text is "NONE" or "REQ-... · choice · amount · arrives"."""
+    """For a scheduled workflow: the oldest waiting request that was not offered to THIS approver yet, or NONE. Each request is
+    offered once to each approver, so it makes one Inbox item per approver. The text is "NONE" or "REQ-... · choice · amount"."""
     if config.APPROVAL_CHANNEL == "email":
         return {"status": "off", "display_markdown": "NONE"}
-    pending = [d for d in repo.list_pending_decisions() if (d.get("decision_note") or "") == _IN_APP_NOTE]
+    me = (user_id or "").strip().lower()
+    pending = [d for d in repo.list_pending_decisions()
+               if (d.get("decision_note") or "") == _IN_APP_NOTE or str(d.get("decision_note") or "").startswith(_OFFERED)]
     ok = _allowed_roles(repo, user_id, {d["approver_role"] for d in pending})
-    mine = sorted((d for d in pending if d["approver_role"] in ok), key=lambda d: d["created_at"])
+    mine = sorted((d for d in pending if d["approver_role"] in ok and me not in _offered_to(d.get("decision_note"))),
+                  key=lambda d: d["created_at"])
     if not mine:
         return {"status": "none", "display_markdown": "NONE"}
     d = mine[0]
-    repo.set_decision_note(d["decision_id"], "PENDING", _OFFERED + (now or datetime.now(timezone.utc)).isoformat(timespec="seconds"))
+    when = now or datetime.now(timezone.utc)
+    repo.set_decision_note(d["decision_id"], "PENDING", _offered_note(_offered_to(d.get("decision_note")) + [me], when))
     s = repo.get_scenario(d["scenario_id"]) or {}
     _audit(repo, d["request_id"], "orchestrator", "approval_offered", approver_role=d["approver_role"], user=str(user_id)[:80])
     text = (f"{d['request_id']} · {s.get('option_name', d['option_code'])} · {presentation.money(d['amount'])}"
@@ -257,13 +273,15 @@ def next_approval(repo, user_id: str, now: datetime | None = None) -> dict:
 
 
 def reoffer(repo, user_id: str) -> dict:
-    """Make the waiting requests that were already offered available to the scheduled workflow again (for testing, or after a
-    cancelled run)."""
-    pending = [d for d in repo.list_pending_decisions() if str(d.get("decision_note") or "").startswith(_OFFERED)]
+    """Offer this approver's waiting requests to the scheduled workflow again (for testing, or after a cancelled run). Other
+    approvers' offers stay as they are."""
+    me = (user_id or "").strip().lower()
+    pending = [d for d in repo.list_pending_decisions() if me in _offered_to(d.get("decision_note"))]
     ok = _allowed_roles(repo, user_id, {d["approver_role"] for d in pending})
     mine = [d for d in pending if d["approver_role"] in ok]
     for d in mine:
-        repo.set_decision_note(d["decision_id"], "PENDING", _IN_APP_NOTE)
+        rest = [u for u in _offered_to(d.get("decision_note")) if u != me]
+        repo.set_decision_note(d["decision_id"], "PENDING", _offered_note(rest, datetime.now(timezone.utc)) if rest else _IN_APP_NOTE)
     text = (f"🔁 **{len(mine)} request(s) will be offered again** to the next scheduled check: "
             + ", ".join(f"**{d['request_id']}**" for d in mine)) if mine else "No offered request is waiting."
     return {"status": "ok", "count": len(mine), "requests": [d["request_id"] for d in mine], "display_markdown": text}

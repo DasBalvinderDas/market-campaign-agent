@@ -100,8 +100,8 @@ for the next waiting request. Our table decides, not the schedule.
 
 - The agent tool `next_approval` returns **NONE** or one line.
 - The line starts with the request number.
-- Each request is returned only once.
-- So a request makes one Inbox item, however often the schedule runs.
+- Each request is returned once per approver.
+- So a request makes one Inbox item for each approver.
 - The request stays in **My approvals** in the chat.
 
 Prompt for the builder:
@@ -119,6 +119,17 @@ Check the draft:
 - The trigger is **Schedule**.
 - A condition stops the run when the reply is NONE.
 - The approve and reject steps use the reply of step 1.
+
+Items in another approver's Inbox:
+- An Inbox item belongs to the person whose account runs the workflow.
+- We cannot push one into another person's Inbox.
+- Each approver runs the workflow in their own account.
+- Share the agent and the workflow with them.
+- They paste the same builder prompt, or copy the shared workflow.
+- Their sign-in must be on the approver list.
+- Each request is offered once to each approver.
+- The first decision wins.
+- The other approver's item then fails with "already decided".
 
 Test plan:
 1. Pause the manual **LaunchKit order approval** workflow.

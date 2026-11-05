@@ -296,3 +296,19 @@ def test_the_clean_script_empties_working_data_and_keeps_reference_data():
     for kept in ("approvers", "guests", "vendors", "assets", "depot_stock", "vendor_offers", "planning_rules"):
         assert kept not in names
     assert "launches" not in cd.tables_to_empty(keep_campaigns=True)
+
+
+def test_each_approver_is_offered_a_request_once(repo, aurora, monkeypatch):
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "workflow")
+    repo.t["approvers"] = [
+        {"approver_role": "VP Product Marketing", "email": "a@hcltech.com", "signin_email": "a@labgtm.com", "active": True},
+        {"approver_role": "VP Product Marketing", "email": "b@labgtm.com", "signin_email": "b@labgtm.com", "active": True}]
+    decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
+    assert decision_flow.next_approval(repo, "a@labgtm.com")["display_markdown"].startswith(aurora)
+    assert decision_flow.next_approval(repo, "a@labgtm.com")["display_markdown"] == "NONE"        # once for her
+    assert decision_flow.next_approval(repo, "b@labgtm.com")["display_markdown"].startswith(aurora)  # and once for the other approver
+    assert decision_flow.next_approval(repo, "b@labgtm.com")["display_markdown"] == "NONE"
+    assert decision_flow.reoffer(repo, "b@labgtm.com")["count"] == 1                           # only b's offer is reset
+    assert decision_flow.next_approval(repo, "a@labgtm.com")["display_markdown"] == "NONE"
+    assert decision_flow.next_approval(repo, "b@labgtm.com")["display_markdown"].startswith(aurora)
+    assert "offered at" not in decision_flow.status(repo, aurora, executor=FakeExecutor())["display_markdown"]
