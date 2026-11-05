@@ -133,6 +133,61 @@ If empty runs show up:
 - Try the words run, execute and trigger too.
 - It would also use a new Google service. Ask first.
 
+## Start it from a file in a bucket
+
+The agent drops one small file per request that waits for approval.
+A workflow can start on that new file. No manual run, no schedule.
+
+Why the agent writes the file:
+- It records the request and drops the file in the same moment.
+- Nothing needs to watch BigQuery.
+- One request makes one file, so one Inbox item.
+- The file holds the request, choice, amount and arrival date.
+- It holds no email addresses or names.
+
+Set it up once:
+
+1. Check what the bucket script would do:
+   `python scripts/setup_trigger_bucket.py`
+2. Create it: `python scripts/setup_trigger_bucket.py --yes --test`
+3. Add the printed line to `.env`:
+   `APPROVAL_TRIGGER_BUCKET=<bucket name>`
+4. Deploy the agent again.
+5. In the workflow editor, set the trigger to **App event**.
+6. Look for **Cloud Storage** and the event for a new file.
+7. Choose the bucket and the `approvals/` folder.
+
+The bucket script:
+- Creates a private bucket.
+- Lets the agent's service account add files only.
+- Deletes files after 30 days.
+- Needs the Cloud Storage API.
+- Needs permission to create buckets.
+
+Workflow prompt, if the editor offers the file event:
+
+> Build a workflow called "LaunchKit approval from file".
+> It starts when a new file appears in the bucket.
+> The file name is the request number plus .json.
+> Step 1: run the existing agent LaunchKit-Provisioner with the instruction "Show my approvals".
+> Step 2: ask the person running the workflow to approve or reject, and show the reply of step 1.
+> If approved, Step 3: run the existing agent LaunchKit-Provisioner with the instruction "Approve the request named in the file {file name}. Then place the orders."
+> If rejected, Step 3: run the existing agent with the instruction "Reject the request named in the file {file name}."
+> Show the agent's last reply as the result.
+
+Not confirmed yet:
+- Whether the editor offers Cloud Storage in **App event**.
+- Docs mention Drive, Gmail and Confluence events.
+- Whether the trigger gives the file name to the steps.
+- If Cloud Storage is missing, a Drive folder could work the same way.
+- That would need the Drive API. Ask first.
+
+Test the file alone:
+- Create a request in the chat and choose option 2.
+- Open the bucket in the console.
+- Look for `approvals/REQ-....json`.
+- If it is there, the agent side works.
+
 ## Can the workflow be created by a script?
 
 Not confirmed. `scripts/probe_workflow_api.py` checks.

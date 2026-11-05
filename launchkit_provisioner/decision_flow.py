@@ -10,7 +10,7 @@ The amount, the options and the recipients all come from BigQuery; the model onl
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
-from . import config, emails, presentation
+from . import config, emails, presentation, trigger_drop
 from .repositories.base import new_id
 
 _EXEC_PREFIX = "execution:"
@@ -141,9 +141,12 @@ def authorize(repo, executor, request_id: str, option: str, justification: str =
                     notified += 1
                 except Exception as exc:  # noqa: BLE001 - the notice is optional
                     _audit(repo, request_id, "orchestrator", "approval_notice_failed", error=str(exc)[:200])
+        dropped = trigger_drop.drop(trigger_drop.build_payload(request_id, launch, scenario, total, policy["approver_role"], now))
+        if dropped:
+            _audit(repo, request_id, "orchestrator", "approval_trigger_dropped", bucket=config.APPROVAL_TRIGGER_BUCKET, file=dropped)
         return {"status": "pending_approval", "decision_id": decision["decision_id"], "tier": policy["tier"],
                 "option": scenario["option_name"], "amount": total, "approver_role": policy["approver_role"],
-                "approvers_notified": notified, "channel": config.APPROVAL_CHANNEL,
+                "approvers_notified": notified, "channel": config.APPROVAL_CHANNEL, "trigger_file": dropped,
                 "display_markdown": presentation.sign_off_markdown(scenario, repo.list_policies(), policy, who, True, request_id,
                                                                    config.APPROVAL_CHANNEL),
                 "next_step": "Show `display_markdown` exactly. The approver decides in the Gemini Enterprise app. "

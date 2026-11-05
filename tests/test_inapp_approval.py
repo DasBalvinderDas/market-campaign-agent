@@ -207,3 +207,69 @@ def test_each_request_is_offered_once_to_the_scheduled_workflow(repo, aurora, mo
     assert decision_flow.decide_in_app(repo, "me@labgtm.com", aurora, "approve")["status"] == "approved"
     shown = decision_flow.status(repo, aurora, executor=FakeExecutor())["display_markdown"]
     assert "offered at" not in shown
+
+
+class _Blob:
+    def __init__(self, store, name):
+        self.store, self.name = store, name
+
+    def upload_from_string(self, data, content_type=None, if_generation_match=None):
+        if if_generation_match == 0 and self.name in self.store:
+            raise RuntimeError("412 already exists")
+        self.store[self.name] = data
+
+
+class _Bucket:
+    def __init__(self, store):
+        self.store = store
+
+    def blob(self, name):
+        return _Blob(self.store, name)
+
+
+class _Storage:
+    def __init__(self):
+        self.store = {}
+
+    def bucket(self, name):
+        assert name == "b1"
+        return _Bucket(self.store)
+
+
+def test_a_waiting_request_drops_one_file_without_addresses(repo, aurora, monkeypatch):
+    import json
+    from launchkit_provisioner import trigger_drop
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "workflow")
+    monkeypatch.setattr(config, "APPROVAL_TRIGGER_BUCKET", "b1")
+    monkeypatch.setattr(config, "APPROVAL_TRIGGER_PREFIX", "approvals/")
+    repo.t["approvers"] = [{"approver_role": "VP Product Marketing", "email": "me@hcltech.com", "signin_email": "me@labgtm.com", "active": True}]
+    fake = _Storage()
+    monkeypatch.setattr(trigger_drop, "_client", lambda: fake)
+    out = decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
+    assert out["trigger_file"] == f"approvals/{aurora}.json" and list(fake.store) == [f"approvals/{aurora}.json"]
+    data = json.loads(fake.store[out["trigger_file"]])
+    assert data["request_id"] == aurora and data["event"] == "approval_waiting" and data["amount_usd"] > 5000
+    assert "@" not in fake.store[out["trigger_file"]]
+    assert trigger_drop.drop(data, client=fake) == ""                        # the same request never writes a second file
+    assert any(a["action"] == "approval_trigger_dropped" for a in repo.list_audit())
+
+
+def test_the_drop_is_off_by_default_and_never_breaks_the_sign_off(repo, aurora, monkeypatch):
+    from launchkit_provisioner import trigger_drop
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "workflow")
+    repo.t["approvers"] = [{"approver_role": "VP Product Marketing", "email": "me@hcltech.com", "active": True}]
+    monkeypatch.setattr(config, "APPROVAL_TRIGGER_BUCKET", "")
+    assert trigger_drop.drop({"request_id": "REQ-1"}, client=_Storage()) == ""                  # off: nothing is written
+    monkeypatch.setattr(config, "APPROVAL_TRIGGER_BUCKET", "b1")
+    monkeypatch.setattr(trigger_drop, "_client", lambda: (_ for _ in ()).throw(RuntimeError("no storage")))
+    out = decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
+    assert out["status"] == "pending_approval" and out["trigger_file"] == ""
+
+
+def test_the_bucket_script_plans_before_it_acts():
+    import sys
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scripts"))
+    import setup_trigger_bucket as sb
+    steps = sb.plan("p", "p-launchkit-approvals", "US", "svc@p.iam.gserviceaccount.com", 30)
+    assert any("objectCreator" in s and "svc@p" in s for s in steps) and any("30 days" in s for s in steps)
+    assert "AGENT_SERVICE_ACCOUNT is empty" in sb.plan("p", "b", "US", "", 30)[-1]

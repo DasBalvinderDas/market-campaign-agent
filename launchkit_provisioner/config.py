@@ -35,6 +35,11 @@ APPROVAL_CHANNEL = _CHANNEL if _CHANNEL in ("email", "gemini", "both", "workflow
 APPROVAL_NOTIFY_EMAIL = os.getenv("APPROVAL_NOTIFY_EMAIL", "true").strip().lower() in ("true", "1", "yes")
 # In "gemini" or "both" mode, only a signed-in user whose address is on the approver list for the role may decide.
 # Set it to false to let anyone in the chat decide (demo only).
+# A Cloud Storage bucket: for every request that waits for approval a small file is dropped there, so a Gemini Enterprise workflow
+# can start on the new file. Empty = off.
+APPROVAL_TRIGGER_BUCKET = os.getenv("APPROVAL_TRIGGER_BUCKET", "").strip()
+_PREFIX = os.getenv("APPROVAL_TRIGGER_PREFIX", "approvals/").strip().lstrip("/")
+APPROVAL_TRIGGER_PREFIX = _PREFIX if (not _PREFIX or _PREFIX.endswith("/")) else _PREFIX + "/"
 APPROVAL_CHECK_USER = os.getenv("APPROVAL_CHECK_USER", "true").strip().lower() not in ("false", "0", "no")
 
 # Notification emails: "Role=a@x.com,b@x.com;Other Role=c@x.com" (or just "a@x.com" for every role).
