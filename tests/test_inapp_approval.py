@@ -273,3 +273,15 @@ def test_the_bucket_script_plans_before_it_acts():
     steps = sb.plan("p", "p-launchkit-approvals", "US", "svc@p.iam.gserviceaccount.com", 30)
     assert any("objectCreator" in s and "svc@p" in s for s in steps) and any("30 days" in s for s in steps)
     assert "AGENT_SERVICE_ACCOUNT is empty" in sb.plan("p", "b", "US", "", 30)[-1]
+
+
+def test_offered_requests_can_be_offered_again_for_testing(repo, aurora, monkeypatch):
+    monkeypatch.setattr(config, "APPROVAL_CHANNEL", "workflow")
+    repo.t["approvers"] = [{"approver_role": "VP Product Marketing", "email": "me@hcltech.com", "signin_email": "me@labgtm.com", "active": True}]
+    decision_flow.authorize(repo, FakeExecutor(), aurora, "2", "x")
+    assert decision_flow.next_approval(repo, "me@labgtm.com")["status"] == "ok"
+    assert decision_flow.next_approval(repo, "me@labgtm.com")["display_markdown"] == "NONE"
+    assert decision_flow.reoffer(repo, "other@labgtm.com")["count"] == 0                      # not theirs
+    again = decision_flow.reoffer(repo, "me@labgtm.com")
+    assert again["count"] == 1 and aurora in again["display_markdown"]
+    assert decision_flow.next_approval(repo, "me@labgtm.com")["display_markdown"].startswith(aurora)

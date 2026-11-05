@@ -14,7 +14,7 @@ from .sub_agents.brief_analyst_agent import brief_analyst_agent
 from .sub_agents.fulfilment_agent import fulfilment_agent
 from .sub_agents.sourcing_planner_agent import sourcing_planner_agent
 from .tools.brief_tools import create_campaign, open_campaign, register_launch_request
-from .tools.approval_tools import decide_approval, get_my_approvals, next_approval
+from .tools.approval_tools import decide_approval, get_my_approvals, next_approval, reoffer_approvals
 from .tools.inbox_test import inbox_test
 from .tools.decision_tools import authorize_launch, get_launch_status, get_order_pack
 from .tools.orchestration_tools import (get_approval_rules, get_audit_trail, get_catalog, get_launch_overview, get_vendor_report,
@@ -41,6 +41,8 @@ the carbon dioxide released to make and ship the items (making is the vendor's f
 eco means recycled or organic material, not necessarily biodegradable.
 
 Next approval: if the user says "next approval", call next_approval and reply with its `display_markdown` EXACTLY and nothing else (it is NONE or one line).
+
+Re-offer: if the user says "re-offer my approvals", call reoffer_approvals and show its `display_markdown` exactly.
 
 Inbox test: if the user says "run the inbox test", call inbox_test and show its `display_markdown` exactly. Nothing else.
 
@@ -105,7 +107,7 @@ root_agent = LlmAgent(
                 "Integration.",
     instruction=_instruction,
     tools=[register_launch_request, create_campaign, open_campaign, show_capabilities, show_checklist, get_launch_overview, get_audit_trail, get_approval_rules,
-           get_vendor_report, get_catalog, authorize_launch, get_launch_status, get_order_pack, get_my_approvals, decide_approval, next_approval, inbox_test]
+           get_vendor_report, get_catalog, authorize_launch, get_launch_status, get_order_pack, get_my_approvals, decide_approval, next_approval, reoffer_approvals, inbox_test]
     + [AgentTool(agent=a) for a in (brief_analyst_agent, sourcing_planner_agent, fulfilment_agent)] + ([skills] if skills is not None else []),
     on_tool_error_callback=on_tool_error,
     after_tool_callback=attach_pack_after_orders,

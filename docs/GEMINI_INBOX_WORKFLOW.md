@@ -120,6 +120,20 @@ Check the draft:
 - A condition stops the run when the reply is NONE.
 - The approve and reject steps use the reply of step 1.
 
+Test plan:
+1. Pause the manual **LaunchKit order approval** workflow.
+2. Turn on **LaunchKit approval check**.
+3. Wait for two scheduled runs with no waiting request.
+4. Open the Inbox. Count the items.
+5. Create a request in the chat. Choose option 2.
+6. Wait for the next run.
+7. Open the Inbox. The approval item should appear once.
+8. Wait for another run. No second item should appear.
+9. Approve it in the Inbox.
+
+Say **Re-offer my approvals** in the chat to offer a waiting request again.
+Use it after a cancelled run.
+
 Open question to test:
 - Does a run that stops at NONE show in the Inbox?
 - If it does, the Inbox fills with empty items.

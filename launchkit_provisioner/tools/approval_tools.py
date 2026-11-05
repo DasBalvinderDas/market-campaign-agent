@@ -24,6 +24,13 @@ async def next_approval(tool_context=None) -> dict:
     return await asyncio.to_thread(decision_flow.next_approval, get_repo(), _user(tool_context))
 
 
+async def reoffer_approvals(tool_context=None) -> dict:
+    """Offer the signed-in approver's waiting requests again to the scheduled approval workflow. Call it when the user says
+    "re-offer my approvals" (for testing, or after a cancelled workflow run). Show `display_markdown` exactly.
+    """
+    return await asyncio.to_thread(decision_flow.reoffer, get_repo(), _user(tool_context))
+
+
 async def decide_approval(request_id: str, decision: str, comment: str = "", approver: str = "", tool_context=None) -> dict:
     """Record the signed-in approver's decision on a request: "approve" or "reject". Call it only when the user clearly says
     Approve or Reject with a request number. After approve, call the fulfilment_agent tool to place the orders.

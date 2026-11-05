@@ -256,6 +256,19 @@ def next_approval(repo, user_id: str, now: datetime | None = None) -> dict:
     return {"status": "ok", "request_id": d["request_id"], "display_markdown": text}
 
 
+def reoffer(repo, user_id: str) -> dict:
+    """Make the waiting requests that were already offered available to the scheduled workflow again (for testing, or after a
+    cancelled run)."""
+    pending = [d for d in repo.list_pending_decisions() if str(d.get("decision_note") or "").startswith(_OFFERED)]
+    ok = _allowed_roles(repo, user_id, {d["approver_role"] for d in pending})
+    mine = [d for d in pending if d["approver_role"] in ok]
+    for d in mine:
+        repo.set_decision_note(d["decision_id"], "PENDING", _IN_APP_NOTE)
+    text = (f"🔁 **{len(mine)} request(s) will be offered again** to the next scheduled check: "
+            + ", ".join(f"**{d['request_id']}**" for d in mine)) if mine else "No offered request is waiting."
+    return {"status": "ok", "count": len(mine), "requests": [d["request_id"] for d in mine], "display_markdown": text}
+
+
 def decide_in_app(repo, user_id: str, request_id: str, answer: str, comment: str = "", approver: str = "") -> dict:
     if config.APPROVAL_CHANNEL == "email":
         return {"status": "error", "message": "Approvals are done by email. Ask the approver to use the buttons in the approval email."}
